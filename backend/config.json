@@ -1,0 +1,19 @@
+{
+  "hotelId": 1,
+  "printers": {
+    "billing": {
+      "type": "usb",
+      "printerName": "EPSON TM-T88V Receipt",
+      "ip": "",
+      "port": 9100,
+      "paperSize": "80mm"
+    },
+    "kitchen": {
+      "type": "usb",
+      "printerName": "EPSON TM-T88V Receipt",
+      "ip": "",
+      "port": 9100,
+      "paperSize": "80mm"
+    }
+  }
+}

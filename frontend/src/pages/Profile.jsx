@@ -1,0 +1,800 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+import { toast } from 'react-hot-toast';
+import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
+const Profile = () => {
+    const { user, updateUser } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const isOwner = user?.role === 'owner';
+    const themeColor = isAdmin ? '#10b981' : '#0ea5e9';
+    const serverUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'https://bestbill-backend-174132084209.us-central1.run.app';
+
+    const [formData, setFormData] = useState({
+        name: user?.name || '',
+        email: user?.email || '',
+        password: '',
+        confirmPassword: ''
+    });
+
+    const [hotelData, setHotelData] = useState({
+        name: user?.hotel_name || '',
+        address: user?.hotel_address || '',
+        upi_id: user?.upi_id || '',
+        gst_percentage: user?.gst_percentage || 0,
+        billing_method: user?.billing_method || 'qz',
+        logo_url: ''
+    });
+
+    const [staff, setStaff] = useState([]);
+    const [staffForm, setStaffForm] = useState({ name: '', email: '', password: '' });
+    const [hiring, setHiring] = useState(false);
+    const [showPass, setShowPass] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [printerConfig, setPrinterConfig] = useState({
+        billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm' },
+        kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm' }
+    });
+    const [installedPrinters, setInstalledPrinters] = useState([]);
+    const [availableIps, setAvailableIps] = useState([]);
+    const [selectedGuestIp, setSelectedGuestIp] = useState('');
+    const [billingCustomActive, setBillingCustomActive] = useState(false);
+    const [kitchenCustomActive, setKitchenCustomActive] = useState(false);
+    const [lodgingEnabled, setLodgingEnabled] = useState(false);
+    const [showLodgingModal, setShowLodgingModal] = useState(false);
+    const [lodgingPassword, setLodgingPassword] = useState('');
+    const [lodgingModalMode, setLodgingModalMode] = useState('enable');
+
+    useEffect(() => {
+        if (isOwner) {
+            fetchStaff();
+            fetchHotelDetails();
+            fetchPrinterConfig();
+            fetchInstalledPrinters();
+            fetchAvailableIps();
+            fetchLodgingStatus();
+        }
+    }, [isOwner]);
+
+    const fetchLodgingStatus = async () => {
+        try {
+            const res = await api.get('/hotel/lodging-status');
+            setLodgingEnabled(res.data.lodgingEnabled);
+            updateUser({ lodgingEnabled: res.data.lodgingEnabled });
+        } catch (err) {
+            console.error('Failed to fetch lodging status', err);
+        }
+    };
+
+    const handleToggleLodging = (shouldEnable) => {
+        if (shouldEnable) {
+            setLodgingModalMode('enable');
+            setLodgingPassword('');
+            setShowLodgingModal(true);
+        } else {
+            setLodgingModalMode('disable');
+            setLodgingPassword('');
+            setShowLodgingModal(true);
+        }
+    };
+
+    const handleLodgingModalSubmit = async () => {
+        if (lodgingModalMode === 'enable') {
+            if (!lodgingPassword) {
+                toast.error("Password cannot be blank");
+                return;
+            }
+            try {
+                const res = await api.post('/hotel/toggle-lodging', { enabled: true, passcode: lodgingPassword });
+                if (res.data.success) {
+                    setLodgingEnabled(true);
+                    updateUser({ lodgingEnabled: true });
+                    toast.success("Premium Lodging module unlocked and activated!");
+                    setShowLodgingModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect activation password");
+            }
+        } else {
+            try {
+                await api.post('/hotel/toggle-lodging', { enabled: false });
+                setLodgingEnabled(false);
+                updateUser({ lodgingEnabled: false });
+                toast.success("Lodging module deactivated successfully.");
+                setShowLodgingModal(false);
+            } catch (err) {
+                toast.error("Failed to deactivate lodging module.");
+            }
+        }
+    };
+
+    const fetchInstalledPrinters = async () => {
+        try {
+            const res = await api.get('/hotel/installed-printers');
+            setInstalledPrinters(res.data || []);
+        } catch (err) {
+            console.error('Failed to fetch installed printers', err);
+        }
+    };
+
+    const fetchAvailableIps = async () => {
+        if (window.bestbillDesktop?.getLanIps) {
+            try {
+                const ips = await window.bestbillDesktop.getLanIps();
+                setAvailableIps(ips || []);
+            } catch (err) {
+                console.error('Failed to fetch LAN IPs from desktop app', err);
+            }
+        } else {
+            setAvailableIps(['127.0.0.1', '192.168.1.100']);
+        }
+    };
+
+    const fetchPrinterConfig = async () => {
+        try {
+            const res = await api.get('/hotel/printers-config');
+            if (res.data) {
+                setPrinterConfig({
+                    billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', ...(res.data.printers?.billing || {}) },
+                    kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', ...(res.data.printers?.kitchen || {}) }
+                });
+                setSelectedGuestIp(res.data.guestIp || '');
+            }
+        } catch (err) {
+            console.error('Failed to load configs', err);
+        }
+    };
+
+    const handlePrinterConfigSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            await api.post('/hotel/printers-config', {
+                billing: printerConfig.billing,
+                kitchen: printerConfig.kitchen,
+                guestIp: selectedGuestIp
+            });
+            toast.success('Configurations updated successfully!');
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update configurations');
+        }
+    };
+
+    const fetchHotelDetails = async () => {
+        try {
+            const res = await api.get('/hotel');
+            setHotelData({
+                name: res.data.name || '',
+                address: res.data.location || '',
+                upi_id: res.data.upi_id || '',
+                gst_percentage: res.data.gst_percentage || 0,
+                printer_size: res.data.printer_size || '80mm',
+                billing_method: res.data.billing_method || 'qz',
+                logo_url: res.data.logo_url || ''
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const fetchStaff = async () => {
+        try {
+            const res = await api.get('/hotel/waiters');
+            setStaff(res.data);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleHiring = async (e) => {
+        e.preventDefault();
+        setHiring(true);
+        const t = toast.loading('Onboarding staff member...');
+        try {
+            await api.post('/hotel/waiters', staffForm);
+            toast.success(`${staffForm.name} added to waitstaff!`, { id: t });
+            setStaffForm({ name: '', email: '', password: '' });
+            fetchStaff();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Hiring failed', { id: t });
+        } finally {
+            setHiring(false);
+        }
+    };
+
+    const removeStaff = async (id) => {
+        try {
+            await api.delete(`/hotel/waiters/${id}`);
+            toast.success('Staff access revoked');
+            fetchStaff();
+        } catch (err) {
+            toast.error('Removal failed');
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (formData.password && formData.password !== formData.confirmPassword) {
+            return toast.error('Passcodes do not match!');
+        }
+        setLoading(true);
+        const t = toast.loading('Syncing security updates...');
+        try {
+            const updatePayload = { name: formData.name, email: formData.email };
+            if (formData.password) updatePayload.password = formData.password;
+            const res = await api.put('/profile', updatePayload);
+            updateUser(res.data.user);
+            toast.success('Personal credentials updated!', { id: t });
+            setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
+        } catch (err) {
+            toast.error('Failed to update credentials', { id: t });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleHotelSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        const t = toast.loading('Persisting hotel configuration...');
+        try {
+            const res = await api.put('/hotel', hotelData);
+            updateUser({ 
+                ...user, 
+                hotel_name: res.data.name, 
+                hotel_address: res.data.address,
+                upi_id: res.data.upi_id, 
+                gst_percentage: res.data.gst_percentage,
+                printer_size: res.data.printer_size,
+                billing_method: res.data.billing_method
+            });
+            toast.success('Hotel configuration persisted!', { id: t });
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to update hotel settings. Check all fields.', { id: t });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+    <div style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '64px', paddingBottom: '100px', overflow: 'hidden' }}>
+            
+            <div className="responsive-grid-12" style={{ gap: '48px' }}>
+                {/* Personal Section */}
+                <div style={{ gridColumn: isOwner ? 'span 6' : 'span 12', maxWidth: isOwner ? '100%' : '600px', margin: isOwner ? '0' : '0 auto', width: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                        <UserCircle size={32} style={{ color: themeColor }} />
+                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Security Core</h2>
+                    </div>
+                    <div style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column' }}>
+                        <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', justifyContent: 'space-between' }}>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <label style={{ fontSize: '11px', fontWeight: 900, color: '#475569' }}>IDENTITY NAME</label>
+                              <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                           </div>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <label style={{ fontSize: '11px', fontWeight: 900, color: '#475569' }}>EMAIL PROTOCOL</label>
+                              <input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                           </div>
+                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                               <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="New Passcode" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white' }} />
+                               <input type="password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} placeholder="Confirm" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white' }} />
+                           </div>
+                           <button type="submit" style={{ backgroundColor: themeColor, color: 'white', padding: '16px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none', boxShadow: `0 10px 20px ${themeColor}20` }}>Update Credentials</button>
+                        </form>
+                    </div>
+                </div>
+
+                {/* Hotel Management (Owner only) */}
+                {isOwner && (
+                    <div style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                            <LayoutPanelLeft size={32} style={{ color: '#0ea5e9' }} />
+                            <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Hotel Profile</h2>
+                        </div>
+                        <div style={{ flex: 1, backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column' }}>
+                            
+                            <form onSubmit={handleHotelSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>HOTEL LEGAL NAME</label>
+                                        <input value={hotelData.name} onChange={e => setHotelData({...hotelData, name: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>GST %</label>
+                                        <input type="number" value={hotelData.gst_percentage} onChange={e => setHotelData({...hotelData, gst_percentage: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: '#10b981', fontWeight: 1000 }} />
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PHYSICAL ADDRESS</label>
+                                    <input value={hotelData.address} onChange={e => setHotelData({...hotelData, address: e.target.value})} placeholder="Full location address" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>UPI ID (MERCHANT)</label>
+                                    <input value={hotelData.upi_id} onChange={e => setHotelData({...hotelData, upi_id: e.target.value})} placeholder="merchant@bank" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                                </div>
+
+                                <button type="submit" style={{ backgroundColor: '#0ea5e9', color: 'white', padding: '16px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none', marginTop: '8px' }}>Save Profile Settings</button>
+                            </form>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Physical Offline Printers Management */}
+            {isOwner && (
+                <div style={{ width: '100%', marginTop: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                        <Printer size={32} style={{ color: '#10b981' }} />
+                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Offline Physical Printers</h2>
+                    </div>
+                    <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+                                    
+                                    {/* Billing Printer Form */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: '#020617', border: '1px solid #1e293b' }}>
+                                        <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+                                            Cashier Billing Printer
+                                        </h3>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>CONNECTION TYPE</label>
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <select 
+                                                    value={printerConfig.billing.type} 
+                                                    onChange={e => setPrinterConfig({
+                                                        ...printerConfig,
+                                                        billing: { ...printerConfig.billing, type: e.target.value }
+                                                    })}
+                                                    style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                >
+                                                    <option value="usb">USB / Windows Spooled</option>
+                                                    <option value="network">Network (LAN/Wi-Fi)</option>
+                                                </select>
+                                                <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                            </div>
+                                        </div>
+                                        {printerConfig.billing.type === 'usb' ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>WINDOWS SHARED / PORT NAME</label>
+                                                
+                                                {!billingCustomActive ? (
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <select 
+                                                            value={printerConfig.billing.printerName} 
+                                                            onChange={e => {
+                                                                if (e.target.value === '__custom__') {
+                                                                    setBillingCustomActive(true);
+                                                                    setPrinterConfig({
+                                                                        ...printerConfig,
+                                                                        billing: { ...printerConfig.billing, printerName: '' }
+                                                                    });
+                                                                } else {
+                                                                    setPrinterConfig({
+                                                                        ...printerConfig,
+                                                                        billing: { ...printerConfig.billing, printerName: e.target.value }
+                                                                    });
+                                                                }
+                                                            }}
+                                                            style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                        >
+                                                            <option value="">-- Select Installed Printer --</option>
+                                                            {installedPrinters.map(p => (
+                                                                <option key={p} value={p}>{p}</option>
+                                                            ))}
+                                                            {printerConfig.billing.printerName && !installedPrinters.includes(printerConfig.billing.printerName) && (
+                                                                <option value={printerConfig.billing.printerName}>{printerConfig.billing.printerName} (Saved)</option>
+                                                            )}
+                                                            <option value="__custom__">⌨️ Type Custom Printer Name...</option>
+                                                        </select>
+                                                        <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <input 
+                                                            value={printerConfig.billing.printerName} 
+                                                            onChange={e => setPrinterConfig({
+                                                                ...printerConfig,
+                                                                billing: { ...printerConfig.billing, printerName: e.target.value }
+                                                            })}
+                                                            placeholder="Type printer name (e.g. billing-printer)" 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setBillingCustomActive(false)}
+                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                                                        >
+                                                            ◀ Select from detected list
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>IP ADDRESS</label>
+                                                    <input 
+                                                        value={printerConfig.billing.ip} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            billing: { ...printerConfig.billing, ip: e.target.value }
+                                                        })}
+                                                        placeholder="e.g. 192.168.1.100" 
+                                                        style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} 
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PORT</label>
+                                                    <input 
+                                                        type="number"
+                                                        value={printerConfig.billing.port} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            billing: { ...printerConfig.billing, port: parseInt(e.target.value) || 9100 }
+                                                        })}
+                                                        placeholder="9100" 
+                                                        style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PAPER ROLL SIZE</label>
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <select 
+                                                    value={printerConfig.billing.paperSize || '80mm'} 
+                                                    onChange={e => setPrinterConfig({
+                                                        ...printerConfig,
+                                                        billing: { ...printerConfig.billing, paperSize: e.target.value }
+                                                    })}
+                                                    style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                >
+                                                    <option value="80mm">Standard Receipt (80mm)</option>
+                                                    <option value="58mm">Compact Receipt (58mm)</option>
+                                                </select>
+                                                <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                            </div>
+                                            <span style={{ fontSize: '10px', color: '#475569', fontWeight: 700 }}>Receipt column alignment is auto-calculated based on selected paper width</span>
+                                        </div>
+                                    </div>
+ 
+                                    {/* Kitchen Printer Form */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: '#020617', border: '1px solid #1e293b' }}>
+                                        <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }}></span>
+                                            Kitchen KOT Printer
+                                        </h3>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>CONNECTION TYPE</label>
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <select 
+                                                    value={printerConfig.kitchen.type} 
+                                                    onChange={e => setPrinterConfig({
+                                                        ...printerConfig,
+                                                        kitchen: { ...printerConfig.kitchen, type: e.target.value }
+                                                    })}
+                                                    style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                >
+                                                    <option value="usb">USB / Windows Spooled</option>
+                                                    <option value="network">Network (LAN/Wi-Fi)</option>
+                                                </select>
+                                                <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                            </div>
+                                        </div>
+                                        {printerConfig.kitchen.type === 'usb' ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>WINDOWS SHARED / PORT NAME</label>
+                                                
+                                                {!kitchenCustomActive ? (
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <select 
+                                                            value={printerConfig.kitchen.printerName} 
+                                                            onChange={e => {
+                                                                if (e.target.value === '__custom__') {
+                                                                    setKitchenCustomActive(true);
+                                                                    setPrinterConfig({
+                                                                        ...printerConfig,
+                                                                        kitchen: { ...printerConfig.kitchen, printerName: '' }
+                                                                    });
+                                                                } else {
+                                                                    setPrinterConfig({
+                                                                        ...printerConfig,
+                                                                        kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
+                                                                    });
+                                                                }
+                                                            }}
+                                                            style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                        >
+                                                            <option value="">-- Select Installed Printer --</option>
+                                                            {installedPrinters.map(p => (
+                                                                <option key={p} value={p}>{p}</option>
+                                                            ))}
+                                                            {printerConfig.kitchen.printerName && !installedPrinters.includes(printerConfig.kitchen.printerName) && (
+                                                                <option value={printerConfig.kitchen.printerName}>{printerConfig.kitchen.printerName} (Saved)</option>
+                                                            )}
+                                                            <option value="__custom__">⌨️ Type Custom Printer Name...</option>
+                                                        </select>
+                                                        <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <input 
+                                                            value={printerConfig.kitchen.printerName} 
+                                                            onChange={e => setPrinterConfig({
+                                                                ...printerConfig,
+                                                                kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
+                                                            })}
+                                                            placeholder="Type printer name (e.g. kitchen-printer)" 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setKitchenCustomActive(false)}
+                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                                                        >
+                                                            ◀ Select from detected list
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>IP ADDRESS</label>
+                                                    <input 
+                                                        value={printerConfig.kitchen.ip} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            kitchen: { ...printerConfig.kitchen, ip: e.target.value }
+                                                        })}
+                                                        placeholder="e.g. 192.168.1.101" 
+                                                        style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} 
+                                                    />
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PORT</label>
+                                                    <input 
+                                                        type="number"
+                                                        value={printerConfig.kitchen.port} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            kitchen: { ...printerConfig.kitchen, port: parseInt(e.target.value) || 9100 }
+                                                        })}
+                                                        placeholder="9100" 
+                                                        style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} 
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PAPER ROLL SIZE</label>
+                                            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                <select 
+                                                    value={printerConfig.kitchen.paperSize || '80mm'} 
+                                                    onChange={e => setPrinterConfig({
+                                                        ...printerConfig,
+                                                        kitchen: { ...printerConfig.kitchen, paperSize: e.target.value }
+                                                    })}
+                                                    style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                >
+                                                    <option value="80mm">Standard Receipt (80mm)</option>
+                                                    <option value="58mm">Compact Receipt (58mm)</option>
+                                                </select>
+                                                <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                            </div>
+                                            <span style={{ fontSize: '10px', color: '#475569', fontWeight: 700 }}>KOT column alignment is auto-calculated based on selected paper width</span>
+                                        </div>
+                                    </div>
+                                </div>
+ 
+                                {/* Local Network & Staff Config Section */}
+                                <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.05)', paddingTop: '32px', marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                    <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <Globe size={20} style={{ color: '#0ea5e9' }} />
+                                        Local Network & Staff Configuration
+                                    </h3>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '40px', alignItems: 'start' }}>
+                                        {/* Left Column: IP dropdown */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                            <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                                                Select the LAN IP address of this computer. Guests on your hotel Wi-Fi scan the room QR codes to open the guest ordering app. 
+                                                Waiters can also scan the staff QR code on the right to access the login page directly from their mobile phones.
+                                            </p>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>GUEST PORTAL LOCAL IP</label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <select 
+                                                        value={selectedGuestIp} 
+                                                        onChange={e => setSelectedGuestIp(e.target.value)}
+                                                        style={{ width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    >
+                                                        <option value="">-- Select Active Local IP (Autodetect) --</option>
+                                                        {availableIps.map(ip => (
+                                                            <option key={ip} value={ip}>{ip}</option>
+                                                        ))}
+                                                    </select>
+                                                    <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: '#64748b', pointerEvents: 'none' }} />
+                                                </div>
+                                                {selectedGuestIp && (
+                                                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '8px' }}>
+                                                        Target URL: <strong style={{ color: '#0ea5e9' }}>http://{selectedGuestIp}:5000/#/guest/order/{user?.hotel_id || '1'}</strong>
+                                                    </span>
+                                                )}
+                                                <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '14px 28px', borderRadius: '14px', fontWeight: 1000, cursor: 'pointer', border: 'none', boxShadow: '0 8px 16px rgba(16, 185, 129, 0.2)', width: 'fit-content', marginTop: '12px' }}>Save Configurations</button>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Column: Waiter Login QR Code */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: '#020617', border: '1px solid #1e293b', textAlign: 'center' }}>
+                                            <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '16px', display: 'inline-block' }}>
+                                                <QRCodeCanvas 
+                                                    id="staff-login-qr"
+                                                    value={`http://${selectedGuestIp || '127.0.0.1'}:5000`}
+                                                    size={140}
+                                                    level="H"
+                                                    includeMargin={false}
+                                                />
+                                            </div>
+                                            <div>
+                                                <h4 style={{ fontSize: '14px', fontWeight: 900, color: 'white', margin: '0 0 4px 0' }}>Staff Login QR</h4>
+                                                <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 600, margin: 0 }}>Scan to login from waiter phone/tablet</p>
+                                            </div>
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    const canvas = document.getElementById('staff-login-qr');
+                                                    if (!canvas) return;
+                                                    const url = canvas.toDataURL('image/png');
+                                                    const link = document.createElement('a');
+                                                    link.download = `Staff_Login_QR.png`;
+                                                    link.href = url;
+                                                    link.click();
+                                                    toast.success('Staff Login QR Downloaded');
+                                                }}
+                                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer' }}
+                                            >
+                                                <Download size={16} /> Download Staff QR
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                </div>
+            )}
+            {/* Staff Section */}
+            {isOwner && (
+                <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                        <Users size={32} style={{ color: '#f59e0b' }} />
+                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Staff Command</h2>
+                    </div>
+                    <div className="responsive-grid-12" style={{ gap: '48px' }}>
+                        <div style={{ gridColumn: 'span 5', backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <h3 style={{ fontSize: '15px', fontWeight: 900, color: 'white', marginBottom: '24px' }}>Hire New Staff</h3>
+                            <form onSubmit={handleHiring} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <input required placeholder="Staff Name" value={staffForm.name} onChange={e => setStaffForm({...staffForm, name: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white' }} />
+                                <input required type="email" placeholder="Login Email" value={staffForm.email} onChange={e => setStaffForm({...staffForm, email: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white' }} />
+                                <input required type="password" placeholder="Initial Passcode" value={staffForm.password} onChange={e => setStaffForm({...staffForm, password: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white' }} />
+                                <button type="submit" disabled={hiring} style={{ backgroundColor: '#f59e0b', color: 'white', padding: '16px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none' }}>Onboard Staff</button>
+                            </form>
+                        </div>
+                        <div style={{ gridColumn: 'span 7', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            {staff.length === 0 ? (
+                                <div style={{ padding: '48px', textAlign: 'center', color: '#475569', backgroundColor: '#0f172a', borderRadius: '24px', border: '2px dashed #1e293b' }}>No active waitstaff protocol</div>
+                            ) : (
+                                staff.map(s => (
+                                    <div key={s.id} style={{ padding: '24px', backgroundColor: '#0f172a', borderRadius: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.03)' }}>
+                                        <div>
+                                            <div style={{ color: 'white', fontWeight: 900, fontSize: '16px' }}>{s.name}</div>
+                                            <div style={{ color: '#475569', fontSize: '13px' }}>{s.email}</div>
+                                        </div>
+                                        <button onClick={() => removeStaff(s.id)} style={{ color: '#f43f5e', padding: '12px', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={24} /></button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* System Add-ons Section */}
+            {isOwner && (
+                <div style={{ width: '100%', marginTop: '48px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                        <ShieldCheck size={32} style={{ color: '#f43f5e' }} />
+                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>System Modules & Licensing</h2>
+                    </div>
+                    <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0 }}>Lodging & Room Management</h3>
+                                <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable room configurations, lodging layouts, and guest digital room-service ordering portals. 
+                                    This module requires a premium license passcode to unlock.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: '#020617', padding: '12px 24px', borderRadius: '16px', border: '1px solid #1e293b' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'white', fontWeight: 800, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="lodgingModule"
+                                        checked={!lodgingEnabled} 
+                                        onChange={() => handleToggleLodging(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'white', fontWeight: 800, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="lodgingModule"
+                                        checked={lodgingEnabled} 
+                                        onChange={() => handleToggleLodging(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div style={{ textAlign: 'center', marginTop: '32px' }}>
+                 <p style={{ color: '#475569', fontSize: '12px', fontWeight: 800 }}>BestBill Identity Protection — Secure Role-Based Access Control Active</p>
+            </div>
+
+            {/* Lodging Activation Modal */}
+            {showLodgingModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowLodgingModal(false)}>
+                    <div style={{ backgroundColor: '#0f172a', borderRadius: '24px', padding: '36px', border: '1px solid #1e293b', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: lodgingModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>
+                                {lodgingModalMode === 'enable' ? 'Activate Lodging Module' : 'Deactivate Lodging Module'}
+                            </h3>
+                        </div>
+                        <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            {lodgingModalMode === 'enable'
+                                ? 'Enter the Premium Activation License Password to unlock Lodging & Room Management.'
+                                : 'Are you sure you want to deactivate Lodging & Room Management? Rooms and guest portals will be hidden.'
+                            }
+                        </p>
+                        {lodgingModalMode === 'enable' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>ACTIVATION PASSWORD</label>
+                                <input
+                                    type="password"
+                                    value={lodgingPassword}
+                                    onChange={e => setLodgingPassword(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleLodgingModalSubmit()}
+                                    placeholder="Enter license password"
+                                    autoFocus
+                                    style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                                />
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowLodgingModal(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: '#1e293b', color: '#94a3b8', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleLodgingModalSubmit}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: lodgingModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'white', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: lodgingModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                            >{lodgingModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default Profile;
