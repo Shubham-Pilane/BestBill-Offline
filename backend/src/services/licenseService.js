@@ -84,9 +84,33 @@ function isLicenseValid() {
   return key === SECRET_KEY;
 }
 
+/**
+ * Writes the given activation key to the license file.
+ */
+function setLicenseKey(key) {
+  try {
+    ensureLicenseFileExists();
+    let content = fs.readFileSync(licenseFilePath, 'utf8');
+    
+    // Replace existing key or append it
+    if (content.includes('ACTIVATION_KEY=')) {
+      content = content.replace(/ACTIVATION_KEY=.*/g, `ACTIVATION_KEY=${key}`);
+    } else {
+      content += `\nACTIVATION_KEY=${key}\n`;
+    }
+    
+    fs.writeFileSync(licenseFilePath, content, 'utf8');
+    return true;
+  } catch (err) {
+    console.error(`[LICENSE ERROR] Failed to set license key:`, err.message);
+    return false;
+  }
+}
+
 module.exports = {
   ensureLicenseFileExists,
   getLicenseKey,
   isLicenseValid,
+  setLicenseKey,
   licenseFilePath
 };

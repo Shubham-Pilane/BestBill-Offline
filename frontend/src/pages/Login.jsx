@@ -18,6 +18,7 @@ const Login = () => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [licenseKey, setLicenseKey] = useState('');
   
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -71,6 +72,19 @@ const Login = () => {
     }
   };
 
+  const handleActivateLicense = async () => {
+    if (!licenseKey) return toast.error('Please enter a license key');
+    const loadingToast = toast.loading('Verifying license...');
+    try {
+      await api.post('/auth/activate-license', { licenseKey });
+      toast.success('License activated successfully! Please login again.', { id: loadingToast });
+      setBlockedInfo(null);
+      setLicenseKey('');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Invalid license key', { id: loadingToast });
+    }
+  };
+
   // --- Blocked / Expired Full-Screen ---
   if (blockedInfo) {
     return (
@@ -93,11 +107,15 @@ const Login = () => {
             <div style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: '80px', height: '80px', background: 'linear-gradient(135deg, #f43f5e, #e11d48)',
-              borderRadius: '24px', marginBottom: '24px',
+              borderRadius: '24px', marginBottom: '20px',
               boxShadow: '0 10px 30px rgba(244, 63, 94, 0.4)'
             }}>
               <AlertTriangle style={{ color: 'white' }} size={40} />
             </div>
+
+            <p style={{ color: '#38bdf8', fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>
+              Licensed to: Shubham Pilane
+            </p>
 
             <h1 style={{ color: 'white', fontSize: '26px', fontWeight: 900, margin: '0 0 8px 0' }}>
               {blockedInfo.type === 'PLAN_EXPIRED' ? 'Plan Expired' : 'Service Suspended'}
@@ -133,6 +151,40 @@ const Login = () => {
                 </div>
               </div>
             </div>
+
+            {blockedInfo.type === 'PLAN_EXPIRED' && (
+              <div style={{
+                backgroundColor: '#020617', borderRadius: '24px', padding: '24px',
+                border: '1px solid rgba(255,255,255,0.05)', textAlign: 'left',
+                marginTop: '16px'
+              }}>
+                <span style={{ fontSize: '11px', fontWeight: 950, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Have an Activation Key?</span>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                  <input
+                    type="text"
+                    placeholder="Enter Key"
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                    style={{
+                      flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'white', padding: '12px 16px', borderRadius: '12px', outline: 'none',
+                      fontSize: '14px', fontWeight: 700, letterSpacing: '2px'
+                    }}
+                  />
+                  <button
+                    onClick={handleActivateLicense}
+                    style={{
+                      backgroundColor: '#0ea5e9', color: 'white', border: 'none',
+                      padding: '12px 20px', borderRadius: '12px', fontWeight: 800,
+                      cursor: 'pointer', transition: 'all 0.2s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    Activate
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={() => setBlockedInfo(null)}

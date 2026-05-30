@@ -161,4 +161,26 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+// Activate License
+router.post('/activate-license', async (req, res) => {
+  const { licenseKey } = req.body;
+  if (!licenseKey) {
+    return res.status(400).json({ message: 'License key is required' });
+  }
+
+  const { setLicenseKey, isLicenseValid } = require('../services/licenseService');
+  
+  // Set it
+  setLicenseKey(licenseKey);
+
+  // Validate it
+  if (isLicenseValid()) {
+    return res.json({ message: 'License activated successfully!' });
+  } else {
+    // Revert to trial mode if invalid to be safe
+    setLicenseKey('TRIAL_MODE');
+    return res.status(400).json({ message: 'Invalid license key. Please try again.' });
+  }
+});
+
 module.exports = router;
