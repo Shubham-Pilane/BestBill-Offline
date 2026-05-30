@@ -75,8 +75,9 @@ router.get('/items', auth, async (req, res) => {
     const params = [req.user.hotel_id];
 
     if (search) {
-      params.push(`%${search.toLowerCase()}%`);
-      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length} OR LOWER(c.name) LIKE $${params.length})`;
+      const searchParam = `%${search.toLowerCase()}%`;
+      params.push(searchParam, searchParam);
+      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
     }
 
     if (category_id && category_id !== 'all') {
@@ -100,8 +101,9 @@ router.get('/items', auth, async (req, res) => {
     `;
     const countParams = [req.user.hotel_id];
     if (search) {
-      countParams.push(`%${search.toLowerCase()}%`);
-      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length} OR LOWER(c.name) LIKE $${countParams.length})`;
+      const searchParam = `%${search.toLowerCase()}%`;
+      countParams.push(searchParam, searchParam);
+      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
     }
     if (category_id && category_id !== 'all') {
       countParams.push(parseInt(category_id));
@@ -180,6 +182,58 @@ router.delete('/items/:id', auth, async (req, res) => {
       return res.json({ message: 'Item removed (archived to preserve billing history)' });
     }
     res.status(500).json({ message: 'Delete failed' });
+  }
+});
+
+// Bulk import menu items
+router.post('/items/bulk', auth, async (req, res) => {
+  const { items } = req.body;
+  const hotelId = req.user.hotel_id;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'No items provided' });
+  }
+
+  try {
+    // 1. Get existing categories
+    const categoriesResult = await db.query('SELECT * FROM categories WHERE hotel_id = $1', [hotelId]);
+    const categoriesMap = new Map();
+    categoriesResult.rows.forEach(c => {
+      categoriesMap.set(c.name.toLowerCase().trim(), c.id);
+    });
+
+    let importedCount = 0;
+
+    for (const item of items) {
+      if (!item.name || !item.price || !item.category) continue;
+      
+      const catName = item.category.trim();
+      const catKey = catName.toLowerCase();
+      let categoryId = categoriesMap.get(catKey);
+
+      // 2. Create category if it doesn't exist
+      if (!categoryId) {
+        const newCat = await db.query(
+          'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING id',
+          [hotelId, catName]
+        );
+        categoryId = newCat.rows[0].id;
+        categoriesMap.set(catKey, categoryId);
+      }
+
+      // 3. Insert the item
+      const lowercaseName = item.name.trim().toLowerCase();
+      await db.query(
+        'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6)',
+        [hotelId, categoryId, lowercaseName, item.price, item.description || '', true]
+      );
+      importedCount++;
+    }
+
+    res.status(201).json({ message: `Successfully imported ${importedCount} items`, importedCount });
+  } catch (err) {
+    console.error('[BULK IMPORT ERROR]', err);
+    res.status(500).json({ message: 'Server error importing items' });
   }
 });
 

@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Save, Search } from 'lucide-react';
+import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Save, Search, UploadCloud } from 'lucide-react';
 
 const MenuManagement = () => {
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
   const [newCatName, setNewCatName] = useState('');
+  const fileInputRef = useRef(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -47,6 +48,55 @@ const MenuManagement = () => {
   useEffect(() => {
     fetchData(currentPage, searchTerm);
   }, [currentPage, searchTerm]);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split(/\r?\n/);
+      const importedItems = [];
+      
+      let startIdx = 0;
+      if (lines.length > 0 && (lines[0].toLowerCase().includes('category') || lines[0].toLowerCase().includes('price'))) {
+        startIdx = 1;
+      }
+
+      for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const parts = line.split(',');
+        if (parts.length >= 3) {
+          importedItems.push({
+            category: parts[0].trim(),
+            name: parts[1].trim(),
+            price: parseFloat(parts[2].trim())
+          });
+        }
+      }
+
+      if (importedItems.length === 0) {
+        toast.error('No valid items found in CSV');
+        return;
+      }
+
+      const loadingToast = toast.loading(`Importing ${importedItems.length} items...`);
+      try {
+        const res = await api.post('/menu/items/bulk', { items: importedItems });
+        toast.success(res.data.message || 'Menu imported successfully', { id: loadingToast });
+        fetchData(1, '');
+        setCurrentPage(1);
+      } catch (err) {
+        toast.error('Failed to import menu', { id: loadingToast });
+      }
+      
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
 
   const addCategory = async (e) => {
     e.preventDefault();
@@ -249,11 +299,17 @@ const MenuManagement = () => {
       {/* Item Management Column */}
       <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '40px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-            <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-               <Utensils size={22} style={{ color: '#10b981' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                 <Utensils size={22} style={{ color: '#10b981' }} />
+              </div>
+              <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>Add To Live Menu</h2>
             </div>
-            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>Add To Live Menu</h2>
+            <button onClick={() => fileInputRef.current?.click()} type="button" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}>
+              <UploadCloud size={18} /> Import CSV
+            </button>
+            <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
           </div>
 
           <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
