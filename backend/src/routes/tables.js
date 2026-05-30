@@ -100,7 +100,7 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, mi.name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
@@ -117,10 +117,28 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       return res.status(404).json({ message: 'No active order to print' });
     }
 
+    // Filter items to calculate incremental items to print
+    const printItems = orderRes.rows
+      .filter(item => item.quantity > (item.printed_quantity || 0))
+      .map(item => ({
+        name: item.name,
+        quantity: item.quantity - (item.printed_quantity || 0)
+      }));
+
+    if (printItems.length === 0) {
+      return res.json({ success: false, message: 'No new item added to cart' });
+    }
+
     // Update waiter name, notes, KOT timestamp and reset preparation status for kitchen queue
     await db.query(
       "UPDATE orders SET waiter_name = $1, guest_note = $2, is_prepared = false, kot_sent_at = CURRENT_TIMESTAMP WHERE id = $3", 
       [waiter || req.user.name, notes || '', orderRes.rows[0].order_id]
+    );
+
+    // Update printed_quantity = quantity for all order items of this active order
+    await db.query(
+      "UPDATE order_items SET printed_quantity = quantity WHERE order_id = $1",
+      [orderRes.rows[0].order_id]
     );
 
     const printService = require('../services/printService');
@@ -128,10 +146,7 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       hotelId: req.user.hotel_id,
       table: tableRes.rows[0]?.table_number || tableId,
       waiter: waiter || req.user.name,
-      items: orderRes.rows.map(item => ({
-        name: item.name,
-        quantity: item.quantity
-      })),
+      items: printItems,
       notes: notes || ''
     });
     return res.json({ success: true, message: 'KOT printed successfully' });
@@ -227,10 +242,10 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
   const { itemId, tableId } = req.params;
   
   try {
-    // 1. Delete the item and get its order_id
-    const deleteRes = await db.query('DELETE FROM order_items WHERE id = $1 RETURNING order_id', [itemId]);
+    // 1. Delete the item or reset quantity if it was printed
+    const itemCheck = await db.query('SELECT order_id, printed_quantity FROM order_items WHERE id = $1', [itemId]);
     
-    if (deleteRes.rows.length === 0) {
+    if (itemCheck.rows.length === 0) {
       // Already deleted, check if order still exists
       const orderCheck = await db.query('SELECT id FROM orders WHERE table_id = $1 AND status = $2', [tableId, 'active']);
       if (orderCheck.rows.length === 0) return res.json({ items: [], order_deleted: true });
@@ -238,26 +253,33 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
       const currentItems = await db.query(`
         SELECT oi.*, mi.name, mi.price FROM order_items oi 
         JOIN menu_items mi ON oi.menu_item_id = mi.id 
-        WHERE oi.order_id = $1 ORDER BY oi.created_at ASC
+        WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
       `, [orderCheck.rows[0].id]);
       return res.json({ items: currentItems.rows, order_deleted: false });
     }
 
-    const orderId = deleteRes.rows[0].order_id;
+    const orderId = itemCheck.rows[0].order_id;
+    const printedQty = parseInt(itemCheck.rows[0].printed_quantity || 0);
+    
+    if (printedQty > 0) {
+      await db.query('UPDATE order_items SET quantity = 0 WHERE id = $1', [itemId]);
+    } else {
+      await db.query('DELETE FROM order_items WHERE id = $1', [itemId]);
+    }
 
-    // 2. Atomic check and cleanup of the order if empty
-    const remainingRes = await db.query('SELECT count(*) as count FROM order_items WHERE order_id = $1', [orderId]);
-    const remainingCount = parseInt(remainingRes.rows[0].count || 0);
+    // 2. Atomic check and cleanup of the order if empty (or all items have quantity = 0)
+    const remainingRes = await db.query('SELECT COALESCE(SUM(quantity), 0) as total_qty FROM order_items WHERE order_id = $1', [orderId]);
+    const totalQty = parseInt(remainingRes.rows[0].total_qty || 0);
 
-    let deletedOrderId = null;
-    if (remainingCount === 0) {
-      const deleteOrderRes = await db.query('DELETE FROM orders WHERE id = $1 RETURNING id', [orderId]);
-      if (deleteOrderRes.rows.length > 0) {
-        deletedOrderId = deleteOrderRes.rows[0].id;
+    let isOrderCleared = false;
+    if (totalQty === 0) {
+      const updateOrderRes = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 RETURNING id", [orderId]);
+      if (updateOrderRes.rows.length > 0) {
+        isOrderCleared = true;
       }
     }
     
-    if (deletedOrderId || remainingCount === 0) {
+    if (isOrderCleared || totalQty === 0) {
       notifyUpdate(req.user.hotel_id, 'table-update');
       return res.json({ items: [], order_deleted: true });
     }
@@ -265,7 +287,7 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
     const updatedItems = await db.query(`
       SELECT oi.*, mi.name, mi.price FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1 ORDER BY oi.created_at ASC
+      WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
     `, [orderId]);
 
     notifyUpdate(req.user.hotel_id, 'table-update');

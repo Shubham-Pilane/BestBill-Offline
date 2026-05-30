@@ -207,13 +207,25 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
     if (orderItems.length === 0) return toast.error('No items to send');
     const t = toast.loading('Sending KOT to kitchen...');
     try {
-      await api.post(`/tables/${table.id}/order/kot`, {
+      const res = await api.post(`/tables/${table.id}/order/kot`, {
         waiter: user?.name || 'Waiter',
         notes: ''
       });
+      
+      if (res.data && res.data.success === false) {
+          toast.error(res.data.message || 'No new item added to cart', { id: t });
+          return;
+      }
+      
       toast.success('KOT sent to kitchen successfully!', { id: t });
+      onClose();
+      // Force navigation to dashboard just in case the user feels they are not redirected
+      if (window.location.hash !== '#/') {
+          window.location.hash = '#/';
+      }
     } catch (err) {
-      toast.error('Failed to print KOT', { id: t });
+      const errorMsg = err.response?.data?.message || 'Failed to print KOT';
+      toast.error(errorMsg, { id: t });
     }
   };
   const printBill = async () => {

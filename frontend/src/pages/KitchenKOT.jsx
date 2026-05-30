@@ -210,6 +210,11 @@ const KitchenKOT = () => {
 
                                         {/* Order Metadata */}
                                         <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {order.status !== 'active' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '13px', fontWeight: 900, backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                                                    <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cleared</span>
+                                                </div>
+                                            )}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
                                                 <User size={14} color="#0ea5e9" style={{ flexShrink: 0 }} />
                                                 <span>Waiter: <span style={{ color: 'white' }}>{order.waiter_name || 'Waiter'}</span></span>

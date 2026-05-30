@@ -22,8 +22,9 @@ router.get('/orders', auth, async (req, res) => {
        FROM orders o
        JOIN tables t ON o.table_id = t.id
        WHERE t.hotel_id = $1
-         AND o.status = 'active'
+         AND o.status IN ('active', 'completed', 'cancelled')
          AND o.kot_sent_at IS NOT NULL
+         AND DATE(o.kot_sent_at) = CURRENT_DATE
          AND COALESCE(o.is_prepared, false) = false
        ORDER BY o.kot_sent_at DESC`,
       [req.user.hotel_id]

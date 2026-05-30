@@ -94,6 +94,7 @@ const syncSchema = async () => {
                 order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
                 menu_item_id INTEGER REFERENCES menu_items(id),
                 quantity INTEGER NOT NULL,
+                printed_quantity INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE (order_id, menu_item_id)
             )`,
@@ -141,6 +142,7 @@ const syncSchema = async () => {
 
         // 3. Schema Evolution (Column Checks)
         const migrations = [
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS printed_quantity INTEGER DEFAULT 0",
             "WITH duplicates AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY order_id, menu_item_id ORDER BY created_at) as rn FROM order_items) DELETE FROM order_items WHERE id IN (SELECT id FROM duplicates WHERE rn > 1)",
             "ALTER TABLE order_items ADD CONSTRAINT unique_order_item UNIQUE (order_id, menu_item_id)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'",

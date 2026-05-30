@@ -232,7 +232,7 @@ router.post('/:roomId/order/kot', auth, async (req, res) => {
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT room_number FROM rooms WHERE id = $1', [roomId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, mi.name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
@@ -249,10 +249,28 @@ router.post('/:roomId/order/kot', auth, async (req, res) => {
       return res.status(404).json({ message: 'No active order to print' });
     }
 
+    // Filter items to calculate incremental items to print
+    const printItems = orderRes.rows
+      .filter(item => item.quantity > (item.printed_quantity || 0))
+      .map(item => ({
+        name: item.name,
+        quantity: item.quantity - (item.printed_quantity || 0)
+      }));
+
+    if (printItems.length === 0) {
+      return res.status(400).json({ message: 'No new items to send to kitchen' });
+    }
+
     // Update waiter name, notes, KOT timestamp and reset preparation status for kitchen queue
     await db.query(
       "UPDATE orders SET waiter_name = $1, guest_note = $2, is_prepared = false, kot_sent_at = CURRENT_TIMESTAMP WHERE id = $3", 
       [waiter || req.user.name, notes || '', orderRes.rows[0].order_id]
+    );
+
+    // Update printed_quantity = quantity for all order items of this active order
+    await db.query(
+      "UPDATE order_items SET printed_quantity = quantity WHERE order_id = $1",
+      [orderRes.rows[0].order_id]
     );
 
     const printService = require('../services/printService');
@@ -260,10 +278,7 @@ router.post('/:roomId/order/kot', auth, async (req, res) => {
       hotelId: req.user.hotel_id,
       table: `Room ${roomRes.rows[0]?.room_number || roomId}`,
       waiter: waiter || req.user.name,
-      items: orderRes.rows.map(item => ({
-        name: item.name,
-        quantity: item.quantity
-      })),
+      items: printItems,
       notes: notes || ''
     });
     return res.json({ success: true, message: 'KOT printed successfully' });
