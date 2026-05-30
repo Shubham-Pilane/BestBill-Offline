@@ -39,7 +39,8 @@ const syncSchema = async () => {
                 id SERIAL PRIMARY KEY,
                 hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
                 name VARCHAR(100) NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_deleted BOOLEAN DEFAULT false
             )`,
             `CREATE TABLE IF NOT EXISTS menu_items (
                 id SERIAL PRIMARY KEY,
@@ -50,7 +51,8 @@ const syncSchema = async () => {
                 price DECIMAL(10,2) NOT NULL,
                 description TEXT,
                 is_available BOOLEAN DEFAULT true,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_deleted BOOLEAN DEFAULT false
             )`,
             `CREATE TABLE IF NOT EXISTS rooms (
                 id SERIAL PRIMARY KEY, 
@@ -167,6 +169,8 @@ const syncSchema = async () => {
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_prepared BOOLEAN DEFAULT false",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS waiter_name VARCHAR(100)",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_sent_at TIMESTAMP",
+            "ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false",
+            "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

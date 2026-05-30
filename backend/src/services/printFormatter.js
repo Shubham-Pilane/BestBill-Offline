@@ -4,7 +4,7 @@
 const ESC = 0x1B;
 const GS = 0x1D;
 
-const CMD_INIT = Buffer.from([ESC, 0x40, ESC, 0x47, 0x01]); // Initialize and enable double-strike printing for darker text
+const CMD_INIT = Buffer.from([ESC, 0x40, ESC, 0x45, 0x00, ESC, 0x47, 0x00]); // Initialize, Emphasized OFF, Double-strike OFF
 const CMD_ALIGN_LEFT = Buffer.from([ESC, 0x61, 0x00]);
 const CMD_ALIGN_CENTER = Buffer.from([ESC, 0x61, 0x01]);
 const CMD_ALIGN_RIGHT = Buffer.from([ESC, 0x61, 0x02]);
@@ -13,8 +13,8 @@ const CMD_TEXT_NORMAL = Buffer.from([GS, 0x21, 0x00]);
 const CMD_TEXT_DOUBLE = Buffer.from([GS, 0x21, 0x11]); // Double width + double height
 const CMD_TEXT_LARGE = Buffer.from([GS, 0x21, 0x01]); // Double height
 
-const CMD_BOLD_ON = Buffer.from([ESC, 0x45, 0x01]);
-const CMD_BOLD_OFF = Buffer.from([ESC, 0x45, 0x00]);
+const CMD_BOLD_ON = Buffer.from([ESC, 0x45, 0x01, ESC, 0x47, 0x01]); // Emphasized + Double-strike
+const CMD_BOLD_OFF = Buffer.from([ESC, 0x45, 0x00, ESC, 0x47, 0x00]);
 
 const CMD_CUT = Buffer.from([GS, 0x56, 0x41, 0x03]); // Full cut with feed
 
@@ -90,8 +90,8 @@ class EscposBuilder {
  */
 function formatKOT(data) {
   const is58mm = data.printerSize === '58mm';
-  const LINE_WIDTH = is58mm ? 30 : 42;
-  const mg = is58mm ? '          ' : ''; // 10 spaces visual margin offset centering for 58mm
+  const LINE_WIDTH = is58mm ? 31 : 42;
+  const mg = '';
   
   const builder = new EscposBuilder();
   const dateStr = new Date().toLocaleString();
@@ -105,18 +105,29 @@ function formatKOT(data) {
     .line('=', LINE_WIDTH)
     .alignLeft()
     .bold()
-    .text(mg + `TABLE: ${data.table}`)
-    .text(mg + `WAITER: ${data.waiter}`)
-    .bold(false)
+    .text(mg + `TABLE: ${data.table}`);
+    
+  if (data.waiter && data.waiter.toLowerCase() !== 'owner') {
+    builder.text(mg + `WAITER: ${data.waiter}`);
+  }
+
+  builder.bold(false)
     .text(mg + `DATE: ${dateStr}`)
     .line('-', LINE_WIDTH)
-    .setFontLarge()
-    .bold();
+    .setFontNormal();
 
   // Print items
+  const qtyLen = is58mm ? 4 : 6;
+  const itemLen = LINE_WIDTH - qtyLen - 1;
+  
+  builder.bold(true).text(mg + padText('ITEM', itemLen) + ' ' + padText('QTY', qtyLen, 'right')).bold(false);
+  builder.line('-', LINE_WIDTH);
+
   data.items.forEach(item => {
     const qty = item.quantity || item.qty || 1;
-    builder.text(mg + `${qty} x ${item.name}`);
+    let name = item.name;
+    if (name.length > itemLen) name = name.substring(0, itemLen - 2) + '..';
+    builder.text(mg + padText(name, itemLen) + ' ' + padText(qty, qtyLen, 'right'));
   });
 
   builder.setFontNormal()
@@ -131,7 +142,7 @@ function formatKOT(data) {
       .line('-', LINE_WIDTH);
   }
 
-  builder.feed(4)
+  builder.feed(5)
     .cut();
 
   return builder.build();
@@ -180,9 +191,8 @@ function formatBill(data) {
   const hPhone = data.hotelPhone || '';
   
   const is58mm = data.printerSize === '58mm';
-  const LINE_WIDTH = is58mm ? 30 : 42; 
-  const mg = is58mm ? '          ' : ''; // 10 spaces visual margin offset centering for 58mm
-  const divider = mg + '-'.repeat(LINE_WIDTH) + '\n';
+  const LINE_WIDTH = is58mm ? 31 : 42; 
+  const mg = '';
   
   const builder = new EscposBuilder();
   
@@ -200,10 +210,10 @@ function formatBill(data) {
   }
   
   builder.alignLeft();
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  builder.line('-', LINE_WIDTH);
   builder.alignCenter().bold(true).text(mg + padText('INVOICE', LINE_WIDTH, 'center')).bold(false);
   builder.alignLeft();
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  builder.line('-', LINE_WIDTH);
   
   if (data.table) {
     let tStr = '';
@@ -223,20 +233,20 @@ function formatBill(data) {
                   d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
   
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  builder.line('-', LINE_WIDTH);
   
-  const ACTUAL_ITEM_LEN = is58mm ? 14 : 19;
-  const PRC_LEN = is58mm ? 6 : 8;
-  const QTY_LEN = is58mm ? 2 : 4;
+  const ACTUAL_ITEM_LEN = is58mm ? 15 : 19;
+  const PRC_LEN = is58mm ? 5 : 8;
+  const QTY_LEN = is58mm ? 3 : 4;
   const TOT_LEN = is58mm ? 5 : 8;
   
-  builder.text(
+  builder.bold(true).text(
     mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
     padText('PRICE', PRC_LEN, 'right') + ' ' + 
     padText('QTY', QTY_LEN, 'right') + ' ' + 
     padText('TOTAL', TOT_LEN, 'right')
-  );
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  ).bold(false);
+  builder.line('-', LINE_WIDTH);
 
   if (data.room_charge > 0) {
     const rDays = data.booking_days || 1;
@@ -261,26 +271,31 @@ function formatBill(data) {
     );
   });
   
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  builder.line('-', LINE_WIDTH);
   
   const subtotalVal = parseFloat(data.subtotal || 0);
   const gstVal = parseFloat(data.gst || 0);
   const finalAmount = parseFloat(data.finalAmount || data.total || 0);
   
+  let addedSubItems = false;
   if (gstVal > 0) {
     builder.text(mg + padText(`GST (${data.gst_percentage || 5}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
+    addedSubItems = true;
   }
   
   if (data.discountPercentage > 0) {
     const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
     builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+    addedSubItems = true;
   }
   
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  if (addedSubItems) {
+    builder.line('-', LINE_WIDTH);
+  }
   
   const totalText = 'TOTAL: Rs ' + Math.round(finalAmount);
   builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
-  builder.bufferList.push(Buffer.from(divider, 'utf8'));
+  builder.line('-', LINE_WIDTH);
   
   builder.alignLeft();
   builder.text(mg + padText('Thank You! Visit Again!', LINE_WIDTH, 'center'));
@@ -293,7 +308,7 @@ function formatBill(data) {
     builder.bufferList.push(qrBuffer);
   }
   
-  builder.feed(1)
+  builder.feed(5)
     .cut();
      
   return builder.build();

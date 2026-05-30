@@ -70,7 +70,8 @@ CREATE TABLE public.categories (
     id integer NOT NULL,
     hotel_id integer,
     name character varying(100) NOT NULL,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    is_deleted boolean DEFAULT false
 );
 
 
@@ -153,7 +154,8 @@ CREATE TABLE public.menu_items (
     price numeric(10,2) NOT NULL,
     description text,
     is_available boolean DEFAULT true,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    is_deleted boolean DEFAULT false
 );
 
 

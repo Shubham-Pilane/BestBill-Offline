@@ -129,10 +129,21 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       return res.json({ success: false, message: 'No new item added to cart' });
     }
 
+    let tableNumber = tableRes.rows[0]?.table_number || tableId;
+    let finalWaiter = waiter || req.user.name;
+
+    if (req.user.role === 'owner') {
+      if (String(tableNumber).toLowerCase().includes('parcel')) {
+        finalWaiter = 'Parcel from Counter';
+      } else {
+        finalWaiter = 'Owner';
+      }
+    }
+
     // Update waiter name, notes, KOT timestamp and reset preparation status for kitchen queue
     await db.query(
       "UPDATE orders SET waiter_name = $1, guest_note = $2, is_prepared = false, kot_sent_at = CURRENT_TIMESTAMP WHERE id = $3", 
-      [waiter || req.user.name, notes || '', orderRes.rows[0].order_id]
+      [finalWaiter, notes || '', orderRes.rows[0].order_id]
     );
 
     // Update printed_quantity = quantity for all order items of this active order
@@ -144,8 +155,8 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
     const printService = require('../services/printService');
     printService.sendKOT({
       hotelId: req.user.hotel_id,
-      table: tableRes.rows[0]?.table_number || tableId,
-      waiter: waiter || req.user.name,
+      table: tableNumber,
+      waiter: finalWaiter,
       items: printItems,
       notes: notes || ''
     });

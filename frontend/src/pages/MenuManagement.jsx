@@ -67,12 +67,12 @@ const MenuManagement = () => {
       message: 'This will permanently delete this group and all its menu items. This action cannot be undone.',
       onConfirm: async () => {
         try {
-          await api.delete(`/menu/categories/${id}`);
+          const res = await api.delete(`/menu/categories/${id}`);
           fetchData(currentPage, searchTerm);
-          toast.success('Group purged');
+          toast.success(res.data?.message || 'Group purged');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
-          toast.error('Purge failed');
+          toast.error(err.response?.data?.message || 'Purge failed');
         }
       }
     });
@@ -111,12 +111,12 @@ const MenuManagement = () => {
       message: 'Are you sure you want to remove this dish from your active menu?',
       onConfirm: async () => {
         try {
-          await api.delete(`/menu/items/${id}`);
+          const res = await api.delete(`/menu/items/${id}`);
           fetchData(currentPage, searchTerm);
-          toast.success('Dish removed');
+          toast.success(res.data?.message || 'Dish removed');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
-          toast.error('Removal failed');
+          toast.error(err.response?.data?.message || 'Removal failed');
         }
       }
     });

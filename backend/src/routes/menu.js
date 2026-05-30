@@ -6,7 +6,7 @@ const router = express.Router();
 // Get categories
 router.get('/categories', auth, async (req, res) => {
   try {
-    const categories = await db.query('SELECT * FROM categories WHERE hotel_id = $1 ORDER BY name ASC', [req.user.hotel_id]);
+    const categories = await db.query('SELECT * FROM categories WHERE hotel_id = $1 AND is_deleted = 0 ORDER BY name ASC', [req.user.hotel_id]);
     res.json(categories.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error fetching categories' });
@@ -49,6 +49,11 @@ router.delete('/categories/:id', auth, async (req, res) => {
     await db.query('DELETE FROM categories WHERE id = $1 AND hotel_id = $2', [id, req.user.hotel_id]);
     res.json({ message: 'Category deleted' });
   } catch (err) {
+    if (err.message && err.message.includes('FOREIGN KEY constraint failed')) {
+      // Soft delete if referenced
+      await db.query('UPDATE categories SET is_deleted = 1 WHERE id = $1 AND hotel_id = $2', [id, req.user.hotel_id]);
+      return res.json({ message: 'Category removed (archived to preserve billing history)' });
+    }
     res.status(500).json({ message: 'Delete failed' });
   }
 });
@@ -65,7 +70,7 @@ router.get('/items', auth, async (req, res) => {
       SELECT mi.*, c.name as category_name 
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
     `;
     const params = [req.user.hotel_id];
 
@@ -91,7 +96,7 @@ router.get('/items', auth, async (req, res) => {
       SELECT COUNT(*) AS count
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
     `;
     const countParams = [req.user.hotel_id];
     if (search) {
@@ -169,6 +174,11 @@ router.delete('/items/:id', auth, async (req, res) => {
     await db.query('DELETE FROM menu_items WHERE id = $1', [id]);
     res.json({ message: 'Item deleted' });
   } catch (err) {
+    if (err.message && err.message.includes('FOREIGN KEY constraint failed')) {
+      // Soft delete to preserve history
+      await db.query('UPDATE menu_items SET is_deleted = 1 WHERE id = $1', [id]);
+      return res.json({ message: 'Item removed (archived to preserve billing history)' });
+    }
     res.status(500).json({ message: 'Delete failed' });
   }
 });
