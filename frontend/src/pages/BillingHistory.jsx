@@ -14,6 +14,7 @@ const BillingHistory = () => {
     const [customerPhone, setCustomerPhone] = useState('');
     const [filterMonth, setFilterMonth] = useState('All');
     const [filterYear, setFilterYear] = useState('All');
+    const [filterDate, setFilterDate] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
@@ -81,9 +82,13 @@ const BillingHistory = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterMonth, filterYear]);
+    }, [searchTerm, filterMonth, filterYear, filterDate]);
 
-    const uniqueYears = ['All', ...new Set(bills.map(b => new Date(b.created_at).getFullYear().toString()))].sort((a, b) => b - a);
+    const earliestYear = bills.length > 0 ? Math.min(...bills.map(b => new Date(b.created_at).getFullYear())) : 2024;
+    const uniqueYears = ['All'];
+    for (let i = 2099; i >= earliestYear; i--) {
+        uniqueYears.push(i.toString());
+    }
 
     const monthsList = [
         { value: 'All', label: 'All Months' },
@@ -109,7 +114,15 @@ const BillingHistory = () => {
         const matchesMonth = filterMonth === 'All' || billDate.getMonth().toString() === filterMonth;
         const matchesYear = filterYear === 'All' || billDate.getFullYear().toString() === filterYear;
         
-        return matchesSearch && matchesMonth && matchesYear;
+        let matchesDate = true;
+        if (filterDate) {
+            const [y, m, d] = filterDate.split('-');
+            matchesDate = billDate.getFullYear() === parseInt(y) && 
+                          billDate.getMonth() + 1 === parseInt(m) && 
+                          billDate.getDate() === parseInt(d);
+        }
+        
+        return matchesSearch && matchesMonth && matchesYear && matchesDate;
     });
 
     const totalPages = Math.ceil(filteredBills.length / itemsPerPage);
@@ -193,10 +206,36 @@ const BillingHistory = () => {
                         />
                     </div>
 
+                    {/* DATE FILTER */}
+                    <div style={{ position: 'relative' }}>
+                        <input 
+                            type="date"
+                            value={filterDate}
+                            onChange={(e) => {
+                                setFilterDate(e.target.value);
+                                if (e.target.value) {
+                                    setFilterMonth('All');
+                                    setFilterYear('All');
+                                }
+                            }}
+                            style={{ 
+                                backgroundColor: '#0f172a', 
+                                border: '2px solid #1e293b', 
+                                color: filterDate ? 'white' : '#94a3b8', 
+                                padding: '10px 16px', 
+                                borderRadius: '16px', 
+                                outline: 'none', 
+                                fontWeight: 600, 
+                                fontSize: '14px', 
+                                cursor: 'pointer',
+                            }}
+                        />
+                    </div>
+
                     {/* MONTH FILTER */}
                     <select
                         value={filterMonth}
-                        onChange={(e) => setFilterMonth(e.target.value)}
+                        onChange={(e) => { setFilterMonth(e.target.value); setFilterDate(''); }}
                         style={{ 
                             backgroundColor: '#0f172a', 
                             border: '2px solid #1e293b', 
@@ -218,7 +257,7 @@ const BillingHistory = () => {
                     {/* YEAR FILTER */}
                     <select
                         value={filterYear}
-                        onChange={(e) => setFilterYear(e.target.value)}
+                        onChange={(e) => { setFilterYear(e.target.value); setFilterDate(''); }}
                         style={{ 
                             backgroundColor: '#0f172a', 
                             border: '2px solid #1e293b', 

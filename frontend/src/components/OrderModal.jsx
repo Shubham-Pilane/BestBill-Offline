@@ -218,10 +218,13 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
       }
       
       toast.success('KOT sent to kitchen successfully!', { id: t });
-      onClose();
-      // Force navigation to dashboard just in case the user feels they are not redirected
-      if (window.location.hash !== '#/') {
-          window.location.hash = '#/';
+      
+      if (table.table_number !== 'Parcel Counter') {
+        onClose();
+        // Force navigation to dashboard just in case the user feels they are not redirected
+        if (window.location.hash !== '#/') {
+            window.location.hash = '#/';
+        }
       }
     } catch (err) {
       const errorMsg = err.response?.data?.message || 'Failed to print KOT';
@@ -341,7 +344,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
         <div className="order-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             <div style={{ width: '64px', height: '64px', backgroundColor: table.active_order_id ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 900, fontSize: '28px' }}>
-              {table.table_number}
+              {table.table_number === 'Parcel Counter' ? 'PC' : table.table_number}
             </div>
             <div>
               <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'white', margin: 0 }}>Position Summary</h2>
@@ -559,6 +562,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                 >
                   SEND TO KITCHEN
                 </button>
+              ) : table.table_number === 'Parcel Counter' ? (
+                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                  <button disabled={orderItems.length === 0} onClick={sendToKitchen} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SEND TO KITCHEN</button>
+                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                </div>
               ) : (
                 <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
               )}

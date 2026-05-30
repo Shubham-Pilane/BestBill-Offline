@@ -158,13 +158,42 @@ const Dashboard = () => {
     }
   };
 
+  const createParcelCounter = async (e) => {
+    e.preventDefault();
+    if (!isOwner) return;
+    try {
+      await api.post('/tables/batch', { tableNumbers: ['Parcel Counter'], floor: 'Counter' });
+      toast.success('Parcel Counter activated!');
+      fetchTables();
+    } catch (err) {
+      toast.error('Failed to create Parcel Counter');
+    }
+  };
+
   // Group tables by floor - Memoized for performance
-  const groupedTables = useMemo(() => (tables || []).reduce((acc, table) => {
-    const floor = table.floor || 'Floor 1';
-    if (!acc[floor]) acc[floor] = [];
-    acc[floor].push(table);
-    return acc;
-  }, {}), [tables]);
+  const groupedTables = useMemo(() => {
+    const groups = (tables || []).reduce((acc, table) => {
+      if (!isOwner && table.table_number === 'Parcel Counter') {
+        return acc;
+      }
+      let floor = table.floor || 'Floor 1';
+      if (table.table_number === 'Parcel Counter') {
+        floor = 'Floor 1';
+      }
+      if (!acc[floor]) acc[floor] = [];
+      acc[floor].push(table);
+      return acc;
+    }, {});
+
+    if (groups['Floor 1']) {
+      const pcIndex = groups['Floor 1'].findIndex(t => t.table_number === 'Parcel Counter');
+      if (pcIndex !== -1) {
+        const pc = groups['Floor 1'].splice(pcIndex, 1)[0];
+        groups['Floor 1'].unshift(pc);
+      }
+    }
+    return groups;
+  }, [tables, isOwner]);
 
   const floorOrder = (name) => {
     if (name.startsWith('Floor ')) return parseInt(name.replace('Floor ', '')) || 99;
@@ -246,27 +275,49 @@ const Dashboard = () => {
           </div>
         </div>
         {isOwner && (
-          <button
-            onClick={() => setAddTableOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              backgroundColor: '#0ea5e9',
-              color: 'white',
-              padding: '14px 28px',
-              borderRadius: '16px',
-              fontWeight: 800,
-              fontSize: '15px',
-              cursor: 'pointer',
-              border: 'none',
-              boxShadow: '0 8px 16px rgba(14, 165, 233, 0.2)',
-              transition: 'all 0.2s'
-            }}
-          >
-            <PlusCircle size={20} />
-            Create New Tables
-          </button>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button
+              onClick={createParcelCounter}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                backgroundColor: 'transparent',
+                border: '2px solid #0ea5e9',
+                color: '#0ea5e9',
+                padding: '12px 24px',
+                borderRadius: '16px',
+                fontWeight: 800,
+                fontSize: '15px',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              <PlusCircle size={20} />
+              Parcel Counter
+            </button>
+            <button
+              onClick={() => setAddTableOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                backgroundColor: '#0ea5e9',
+                color: 'white',
+                padding: '14px 28px',
+                borderRadius: '16px',
+                fontWeight: 800,
+                fontSize: '15px',
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: '0 8px 16px rgba(14, 165, 233, 0.2)',
+                transition: 'all 0.2s'
+              }}
+            >
+              <PlusCircle size={20} />
+              Create New Tables
+            </button>
+          </div>
         )}
       </div>
 
@@ -294,6 +345,7 @@ const Dashboard = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '64px' }}>
+
           {floors.map(floor => (
             <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -498,7 +550,9 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>TABLE {table.table_number}</span>
+        <span style={{ fontSize: '11px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          {table.table_number === 'Parcel Counter' ? 'SERVICE DESK' : `TABLE ${table.table_number}`}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
            {isOwner && (
               <div style={{ display: 'flex', gap: '12px' }}>
@@ -510,7 +564,7 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
                  </button>
                  <button 
                     onClick={(e) => onDelete(e, table)} 
-                    style={{ color: '#475569', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    style={{ color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                  >
                     <Trash2 size={14} />
                  </button>
@@ -527,7 +581,7 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3 style={{ fontSize: '48px', fontWeight: 900, color: 'white', margin: 0, letterSpacing: '-0.05em' }}>{table.table_number}</h3>
+        <h3 style={{ fontSize: table.table_number === 'Parcel Counter' ? '36px' : '48px', fontWeight: 900, color: 'white', margin: 0, letterSpacing: '-0.05em' }}>{table.table_number}</h3>
         <span style={{ fontSize: '12px', fontWeight: 800, color: table.active_order_id ? '#f43f5e' : '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           {table.active_order_id ? 'OCCUPIED' : 'AVAILABLE'}
         </span>
