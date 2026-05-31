@@ -1,8 +1,7 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const db = require('../db/db');
-
-const SECRET_KEY = 'X7P9K2M8Q4';
 
 // Resolve license file next to database file (AppData/Roaming/BestBill/license.txt in production)
 const dbDir = path.dirname(db.dbPath);
@@ -10,9 +9,48 @@ const licenseFilePath = path.join(dbDir, 'license.txt');
 
 console.log(`[LICENSE] Resolving license file path: ${licenseFilePath}`);
 
+const MONTHLY_KEYS = {
+  0: 'X7p9K2m8Q4', // Jan
+  1: 'N9wT3zL8r5', // Feb
+  2: 'R5bY7qD2k9', // Mar
+  3: 'C8uM1xP6t3', // Apr
+  4: 'H4kV9nJ3w7', // May
+  5: 'Z2rF8yW7m1', // Jun
+  6: 'T6pL3cN9q4', // Jul
+  7: 'B1dQ7mK5x8', // Aug
+  8: 'G9xR2vH4p6', // Sep
+  9: 'Y3jC8tM1n7', // Oct
+  10: 'P7nW4bX6k2', // Nov
+  11: 'L5sZ9qF2r8'  // Dec
+};
+
+const YEARLY_KEYS = {
+  0: 'M7xK2pQ8r4',
+  1: 'T9bW3nL5y7',
+  2: 'C4vR8mP1k6',
+  3: 'H2qN7xJ9t5',
+  4: 'Z8pF3wD6r1',
+  5: 'B5mY9kT2c7',
+  6: 'L1xV4nQ8p3',
+  7: 'R6tK2bW7m9',
+  8: 'P3yH8qN5x2',
+  9: 'F7cM1rZ4v8'
+};
+
+const PERMANENT_KEY = 'X7P9K2M8Q4';
+
+/**
+ * Calculates HMAC-SHA256 signature to protect the license file from direct manual edits.
+ */
+function calculateSignature(key, expiryDate, type) {
+  return crypto.createHmac('sha256', 'BestBillLicenseSecretSalt2026')
+               .update(`${key}|${expiryDate}|${type}`)
+               .digest('hex');
+}
+
 /**
  * Ensures that the license.txt file exists inside the database folder.
- * If not, writes a default template with clear activation instructions.
+ * If not, writes a default trial mode template.
  */
 function ensureLicenseFileExists() {
   try {
@@ -25,8 +63,8 @@ function ensureLicenseFileExists() {
 # BestBill POS Offline - Software License Activation File
 # =====================================================================
 # This offline desktop installation comes with a 30-day free trial.
-# To activate lifetime offline access, replace the key below with
-# your authorized premium license key.
+# To activate offline access, replace the key below with your
+# authorized Monthly, Yearly, or Permanent activation key.
 #
 # Contact Customer Care to purchase or request your activation key:
 #   Phone: +91 9822401802
@@ -34,6 +72,10 @@ function ensureLicenseFileExists() {
 # =====================================================================
 
 ACTIVATION_KEY=TRIAL_MODE
+ACTIVATION_DATE=
+EXPIRY_DATE=
+LICENSE_TYPE=trial
+SIGNATURE=
 `;
       fs.writeFileSync(licenseFilePath, template, 'utf8');
       console.log(`[LICENSE] Generated new license.txt file at: ${licenseFilePath}`);
@@ -44,62 +86,155 @@ ACTIVATION_KEY=TRIAL_MODE
 }
 
 /**
- * Reads and parses the local license file to extract the activation key.
- * @returns {string} The parsed activation key or 'TRIAL_MODE' if parsing fails.
+ * Reads, parses and validates the local license file parameters.
+ * @returns {object} Parsed and validated license details.
  */
-function getLicenseKey() {
+function getLicenseDetails() {
   try {
     ensureLicenseFileExists();
     if (!fs.existsSync(licenseFilePath)) {
-      return 'TRIAL_MODE';
+      return { type: 'trial', isValid: false, daysRemaining: 0 };
     }
 
     const content = fs.readFileSync(licenseFilePath, 'utf8');
     const lines = content.split(/\r?\n/);
+    const parsed = {};
     for (const line of lines) {
-      const trimmedLine = line.trim();
-      // Skip comments or empty lines
-      if (trimmedLine.startsWith('#') || trimmedLine === '') {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('#') || trimmed === '') {
         continue;
       }
-      if (trimmedLine.includes('=')) {
-        const parts = trimmedLine.split('=');
-        if (parts[0].trim() === 'ACTIVATION_KEY') {
-          return parts[1].trim();
-        }
+      if (trimmed.includes('=')) {
+        const parts = trimmed.split('=');
+        parsed[parts[0].trim()] = parts[1].trim();
       }
     }
+
+    const key = parsed.ACTIVATION_KEY || 'TRIAL_MODE';
+    const activatedAt = parsed.ACTIVATION_DATE || '';
+    const expiresAt = parsed.EXPIRY_DATE || '';
+    const type = parsed.LICENSE_TYPE || 'trial';
+    const signature = parsed.SIGNATURE || '';
+
+    if (key === 'TRIAL_MODE' || type === 'trial') {
+      return {
+        type: 'trial',
+        key,
+        isValid: false,
+        daysRemaining: 0
+      };
+    }
+
+    // Verify signature to block direct manual files modifications
+    const expectedSig = calculateSignature(key, expiresAt, type);
+    if (signature !== expectedSig) {
+      console.error('[LICENSE WARNING] Signature mismatch! License parameters tampered.');
+      return {
+        type: 'invalid',
+        key,
+        isValid: false,
+        daysRemaining: 0
+      };
+    }
+
+    const now = new Date();
+    const expiresDate = new Date(expiresAt);
+    const timeDiff = expiresDate.getTime() - now.getTime();
+    const daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+    const isValid = now <= expiresDate;
+
+    return {
+      type,
+      key,
+      activatedAt,
+      expiresAt,
+      daysRemaining,
+      isValid
+    };
   } catch (err) {
-    console.error(`[LICENSE ERROR] Failed to read license key:`, err.message);
+    console.error(`[LICENSE ERROR] Failed to get license details:`, err.message);
+    return { type: 'trial', isValid: false, daysRemaining: 0 };
   }
-  return 'TRIAL_MODE';
 }
 
 /**
- * Checks if the configured license is valid for lifetime access.
+ * Returns the current activation key string.
+ */
+function getLicenseKey() {
+  const details = getLicenseDetails();
+  return details.key || 'TRIAL_MODE';
+}
+
+/**
+ * Checks if the configured license is valid and not expired.
  * @returns {boolean} True if license is valid, false otherwise.
  */
 function isLicenseValid() {
-  const key = getLicenseKey();
-  return key === SECRET_KEY;
+  const details = getLicenseDetails();
+  return details.isValid;
 }
 
 /**
- * Writes the given activation key to the license file.
+ * Validates, calculates expiry dates and writes the given activation key parameters to the license file.
+ * Supports Monthly (30 days), Yearly (365 days), and Permanent (lifetime) tiers.
  */
 function setLicenseKey(key) {
   try {
     ensureLicenseFileExists();
-    let content = fs.readFileSync(licenseFilePath, 'utf8');
     
-    // Replace existing key or append it
-    if (content.includes('ACTIVATION_KEY=')) {
-      content = content.replace(/ACTIVATION_KEY=.*/g, `ACTIVATION_KEY=${key}`);
+    let type = 'trial';
+    let expiry = '';
+    const now = new Date();
+
+    if (key === 'TRIAL_MODE') {
+      type = 'trial';
+    } else if (key === PERMANENT_KEY) {
+      type = 'permanent';
+      expiry = new Date('2099-12-31T23:59:59.999Z').toISOString();
     } else {
-      content += `\nACTIVATION_KEY=${key}\n`;
+      // Check Monthly
+      const currentMonth = now.getMonth();
+      if (key === MONTHLY_KEYS[currentMonth]) {
+        type = 'monthly';
+        expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        // Check Yearly
+        const currentYear = now.getFullYear();
+        const lastDigit = currentYear % 10;
+        if (key === YEARLY_KEYS[lastDigit]) {
+          type = 'yearly';
+          expiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+        } else {
+          console.warn(`[LICENSE] Key rejected. Not valid for current month/year/permanent.`);
+          return false;
+        }
+      }
     }
+
+    const activatedAt = type === 'trial' ? '' : now.toISOString();
+    const signature = type === 'trial' ? '' : calculateSignature(key, expiry, type);
+
+    const newContent = `# =====================================================================
+# BestBill POS Offline - Software License Activation File
+# =====================================================================
+# This offline desktop installation comes with a 30-day free trial.
+# To activate offline access, replace the key below with your
+# authorized Monthly, Yearly, or Permanent activation key.
+#
+# Contact Customer Care to purchase or request your activation key:
+#   Phone: +91 9822401802
+#   Email: bestbillcustomercare@gmail.com
+# =====================================================================
+
+ACTIVATION_KEY=${key}
+ACTIVATION_DATE=${activatedAt}
+EXPIRY_DATE=${expiry}
+LICENSE_TYPE=${type}
+SIGNATURE=${signature}
+`;
     
-    fs.writeFileSync(licenseFilePath, content, 'utf8');
+    fs.writeFileSync(licenseFilePath, newContent, 'utf8');
+    console.log(`[LICENSE] Key successfully set and serialized. Type: ${type}, Expiry: ${expiry}`);
     return true;
   } catch (err) {
     console.error(`[LICENSE ERROR] Failed to set license key:`, err.message);
@@ -111,6 +246,7 @@ module.exports = {
   ensureLicenseFileExists,
   getLicenseKey,
   isLicenseValid,
+  getLicenseDetails,
   setLicenseKey,
   licenseFilePath
 };

@@ -3,8 +3,42 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db/db');
 const multer = require('multer');
+const auth = require('../middleware/auth');
 const upload = multer();
 const router = express.Router();
+
+// Check if registration is allowed based on trial or license expiration
+router.get('/register-status', async (req, res) => {
+  try {
+    const { getLicenseDetails } = require('../services/licenseService');
+    const details = getLicenseDetails();
+
+    // If an activated monthly/yearly key exists but is expired
+    if (details.type !== 'trial' && !details.isValid) {
+      return res.json({ isRegistrationAllowed: false, reason: 'License expired' });
+    }
+
+    // If in trial mode, check if any existing hotel has already expired
+    if (details.type === 'trial') {
+      const hotelCheck = await db.query('SELECT created_at FROM hotels ORDER BY created_at ASC LIMIT 1');
+      if (hotelCheck.rows.length > 0) {
+        const hotelCreated = new Date(hotelCheck.rows[0].created_at);
+        const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+        const expirationDate = new Date(hotelCreated.getTime() + trialDurationMs);
+        const now = new Date();
+
+        if (now > expirationDate) {
+          return res.json({ isRegistrationAllowed: false, reason: 'Trial expired' });
+        }
+      }
+    }
+
+    return res.json({ isRegistrationAllowed: true });
+  } catch (err) {
+    console.error('Error checking registration status:', err.message);
+    return res.json({ isRegistrationAllowed: true });
+  }
+});
 
 // Register (Owner by default)
 router.post('/register', upload.none(), async (req, res) => {
@@ -89,21 +123,31 @@ router.post('/login', async (req, res) => {
         });
       }
 
-      // Check Trial Period (Skip if License Key is valid)
-      const { isLicenseValid } = require('../services/licenseService');
-      const isActivated = isLicenseValid();
+      // Check Trial Period or Subscription Validity
+      const { getLicenseDetails } = require('../services/licenseService');
+      const details = getLicenseDetails();
 
-      if (!isActivated) {
-        const hotelCreated = user.hotel_created_at ? new Date(user.hotel_created_at) : new Date(user.created_at);
-        const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-        const expirationDate = new Date(hotelCreated.getTime() + trialDurationMs);
-        const now = new Date();
+      if (!details.isValid) {
+        if (details.type === 'trial') {
+          const hotelCreated = user.hotel_created_at ? new Date(user.hotel_created_at) : new Date(user.created_at);
+          const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+          const expirationDate = new Date(hotelCreated.getTime() + trialDurationMs);
+          const now = new Date();
 
-        if (now > expirationDate) {
-          console.warn(`[TRIAL EXPIRED] Login blocked for ${email}. Hotel registered at ${hotelCreated.toISOString()} has exceeded 30 days trial.`);
+          if (now > expirationDate) {
+            console.warn(`[TRIAL EXPIRED] Login blocked for ${email}. Hotel registered at ${hotelCreated.toISOString()} has exceeded 30 days trial.`);
+            return res.status(403).json({ 
+              message: 'PLAN_EXPIRED',
+              reason: 'Your 30-day offline free trial has expired. Please contact Shubham Pilane to renew or activate your license. Mobile: 9822401802',
+              contact_phone: '9822401802',
+              contact_email: 'bestbillcustomercare@gmail.com'
+            });
+          }
+        } else {
+          console.warn(`[SUBSCRIPTION EXPIRED] Login blocked for ${email}. Expiry date was ${details.expiresAt}`);
           return res.status(403).json({ 
             message: 'PLAN_EXPIRED',
-            reason: 'Your 30-day offline free trial has expired. Please contact customer care (+91 9822401802) to activate your lifetime software license.',
+            reason: `Your ${details.type} license key has expired. Please contact Shubham Pilane to renew your subscription. Mobile: 9822401802`,
             contact_phone: '9822401802',
             contact_email: 'bestbillcustomercare@gmail.com'
           });
@@ -182,6 +226,41 @@ router.post('/activate-license', async (req, res) => {
     setLicenseKey('TRIAL_MODE');
     return res.status(400).json({ message: 'Invalid license key. Please try again.' });
   }
+});
+
+// Get Subscription Status
+router.get('/subscription-status', auth, async (req, res) => {
+  const { getLicenseDetails } = require('../services/licenseService');
+  const details = getLicenseDetails();
+  
+  if (details.type === 'trial') {
+    try {
+      const hotelResult = await db.query('SELECT created_at FROM hotels WHERE id = $1', [req.user.hotel_id]);
+      if (hotelResult.rows.length > 0) {
+        const hotelCreated = new Date(hotelResult.rows[0].created_at);
+        const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+        const expires = new Date(hotelCreated.getTime() + trialDurationMs);
+        const daysRemaining = Math.max(0, Math.ceil((expires - new Date()) / (24 * 60 * 60 * 1000)));
+        return res.json({
+          type: 'trial',
+          activatedAt: hotelCreated.toISOString(),
+          expiresAt: expires.toISOString(),
+          daysRemaining,
+          isValid: new Date() <= expires
+        });
+      }
+    } catch (e) {
+      console.error('Error fetching trial details:', e.message);
+    }
+  }
+  
+  res.json({
+    type: details.type,
+    activatedAt: details.activatedAt,
+    expiresAt: details.expiresAt,
+    daysRemaining: details.daysRemaining,
+    isValid: details.isValid
+  });
 });
 
 module.exports = router;

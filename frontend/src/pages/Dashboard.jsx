@@ -4,7 +4,7 @@ import api from '../services/api';
 import OrderModal from '../components/OrderModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel } from 'lucide-react';
+import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import SwapModal from '../components/SwapModal';
 
@@ -29,6 +29,16 @@ const Dashboard = () => {
 
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [menuData, setMenuData] = useState({ categories: [], items: [] });
+  const [subStatus, setSubStatus] = useState(null);
+
+  const fetchSubscriptionStatus = async () => {
+    try {
+      const res = await api.get('/auth/subscription-status');
+      setSubStatus(res.data);
+    } catch (err) {
+      console.error('Failed to fetch subscription status', err);
+    }
+  };
 
   const fetchTables = async () => {
     try {
@@ -55,6 +65,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchTables();
+    fetchSubscriptionStatus();
 
     const serverUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:8080';
     const socket = io(serverUrl, { transports: ['websocket'] });
@@ -238,16 +249,95 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '40px', alignItems: 'center' }}>
-
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-end' }}>
+          {/* Current Date */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
             <span style={{ fontSize: '10px', fontWeight: 900, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Current Date</span>
-            <span style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>
+            <span style={{ fontSize: '16px', fontWeight: 800, color: 'white', whiteSpace: 'nowrap' }}>
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
           </div>
+
+          {/* Small Premium Subscription Info Block */}
+          {subStatus && (
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              backgroundColor: 'rgba(30, 41, 59, 0.4)',
+              border: '1px solid #1e293b',
+              borderRadius: '12px',
+              padding: '6px 12px',
+              fontSize: '12px',
+              color: '#94a3b8',
+              fontWeight: 700
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#475569', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Plan:</span>
+                <span style={{ color: '#0ea5e9', fontWeight: 800 }}>
+                  {subStatus.type === 'trial' ? 'Free Trial' : 
+                   subStatus.type === 'monthly' ? 'Monthly' : 
+                   subStatus.type === 'yearly' ? 'Yearly' : 'Lifetime'}
+                </span>
+              </div>
+              {subStatus.type !== 'permanent' && (
+                <>
+                  <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#1e293b' }}></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: '#475569', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expires:</span>
+                    <span style={{ color: '#e2e8f0', fontWeight: 800 }}>
+                      {subStatus.expiresAt ? new Date(subStatus.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                    </span>
+                  </div>
+                  <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#1e293b' }}></div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: '#475569', fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Remaining:</span>
+                    <span style={{ color: subStatus.daysRemaining <= 3 ? '#f43f5e' : '#10b981', fontWeight: 800 }}>
+                      {subStatus.daysRemaining} day{subStatus.daysRemaining !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Subscription Alert Banner */}
+      {subStatus && subStatus.type !== 'permanent' && subStatus.daysRemaining <= 3 && (
+        <div style={{
+          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: '16px',
+          padding: '16px 20px',
+          color: '#f87171',
+          fontSize: '14px',
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          lineHeight: 1.5,
+          marginTop: '-32px',
+          marginBottom: '-16px'
+        }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <span style={{ fontWeight: 900, fontSize: '16px' }}>!</span>
+          </div>
+          <div>
+            Your subscription will expire in {subStatus.daysRemaining} day(s). Please contact Shubham Pilane to renew your license. Mobile: 9822401802
+          </div>
+        </div>
+      )}
+
       <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
           <h2 style={{ fontSize: '24px', fontWeight: 900, letterSpacing: '-0.02em', color: 'white', display: 'flex', alignItems: 'center', gap: '12px' }}>

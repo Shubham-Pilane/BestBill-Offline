@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -19,9 +19,22 @@ const Login = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [licenseKey, setLicenseKey] = useState('');
+  const [isRegistrationAllowed, setIsRegistrationAllowed] = useState(true);
   
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkRegisterStatus = async () => {
+      try {
+        const res = await api.get('/auth/register-status');
+        setIsRegistrationAllowed(res.data.isRegistrationAllowed);
+      } catch (err) {
+        console.error('Failed to fetch registration status', err);
+      }
+    };
+    checkRegisterStatus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -164,7 +177,7 @@ const Login = () => {
                     type="text"
                     placeholder="Enter Key"
                     value={licenseKey}
-                    onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                    onChange={(e) => setLicenseKey(e.target.value)}
                     style={{
                       flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                       color: 'white', padding: '12px 16px', borderRadius: '12px', outline: 'none',
@@ -428,8 +441,14 @@ const Login = () => {
                 </>
               ) : (
                 <>
-                  Don't have a hotel account?{' '}
-                  <button onClick={() => setIsRegister(true)} style={{ color: '#38bdf8', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, textDecoration: 'underline', paddingLeft: '4px' }}>Register here</button>
+                  {isRegistrationAllowed ? (
+                    <>
+                      Don't have a hotel account?{' '}
+                      <button onClick={() => setIsRegister(true)} style={{ color: '#38bdf8', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 800, textDecoration: 'underline', paddingLeft: '4px' }}>Register here</button>
+                    </>
+                  ) : (
+                    <span style={{ color: '#f43f5e', fontWeight: 800 }}>Free Trial Period Expired. Activation Required.</span>
+                  )}
                 </>
               )}
             </p>

@@ -15,13 +15,22 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ message: 'Token verification failed, access denied' });
     }
 
-    if (verified.role !== 'admin' && !isLicenseValid()) {
-      const hotelResult = await db.query('SELECT created_at FROM hotels WHERE id = $1', [verified.hotel_id]);
-      if (hotelResult.rows.length > 0) {
-        const hotelCreated = new Date(hotelResult.rows[0].created_at);
-        const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
-        if (new Date() > new Date(hotelCreated.getTime() + trialDurationMs)) {
-           return res.status(401).json({ message: 'Trial expired' });
+    if (verified.role !== 'admin') {
+      const { getLicenseDetails } = require('../services/licenseService');
+      const details = getLicenseDetails();
+      
+      if (!details.isValid) {
+        if (details.type === 'trial') {
+          const hotelResult = await db.query('SELECT created_at FROM hotels WHERE id = $1', [verified.hotel_id]);
+          if (hotelResult.rows.length > 0) {
+            const hotelCreated = new Date(hotelResult.rows[0].created_at);
+            const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
+            if (new Date() > new Date(hotelCreated.getTime() + trialDurationMs)) {
+               return res.status(401).json({ message: 'Trial expired' });
+            }
+          }
+        } else {
+          return res.status(401).json({ message: 'Plan expired' });
         }
       }
     }
