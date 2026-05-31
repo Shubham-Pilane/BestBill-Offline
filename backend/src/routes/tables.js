@@ -98,7 +98,7 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
   try {
     const [hotelRes, tableRes, orderRes] = await Promise.all([
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
-      db.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
+      db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
       db.query(`
         SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
         FROM orders o
@@ -156,6 +156,7 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
     printService.sendKOT({
       hotelId: req.user.hotel_id,
       table: tableNumber,
+      floor: tableRes.rows[0]?.floor || '',
       waiter: finalWaiter,
       items: printItems,
       notes: notes || ''

@@ -48,6 +48,16 @@ const Profile = () => {
     const [showLodgingModal, setShowLodgingModal] = useState(false);
     const [lodgingPassword, setLodgingPassword] = useState('');
     const [lodgingModalMode, setLodgingModalMode] = useState('enable');
+    const [showPrinters, setShowPrinters] = useState(false);
+    
+    // Modules
+    const [showModules, setShowModules] = useState(false);
+    
+    // KOT State
+    const [kotEnabled, setKotEnabled] = useState(false);
+    const [showKotModal, setShowKotModal] = useState(false);
+    const [kotPassword, setKotPassword] = useState('');
+    const [kotModalMode, setKotModalMode] = useState('enable');
 
     useEffect(() => {
         if (isOwner) {
@@ -57,6 +67,7 @@ const Profile = () => {
             fetchInstalledPrinters();
             fetchAvailableIps();
             fetchLodgingStatus();
+            fetchKotStatus();
         }
     }, [isOwner]);
 
@@ -83,11 +94,11 @@ const Profile = () => {
     };
 
     const handleLodgingModalSubmit = async () => {
+        if (!lodgingPassword) {
+            toast.error("Password cannot be blank");
+            return;
+        }
         if (lodgingModalMode === 'enable') {
-            if (!lodgingPassword) {
-                toast.error("Password cannot be blank");
-                return;
-            }
             try {
                 const res = await api.post('/hotel/toggle-lodging', { enabled: true, passcode: lodgingPassword });
                 if (res.data.success) {
@@ -101,13 +112,69 @@ const Profile = () => {
             }
         } else {
             try {
-                await api.post('/hotel/toggle-lodging', { enabled: false });
-                setLodgingEnabled(false);
-                updateUser({ lodgingEnabled: false });
-                toast.success("Lodging module deactivated successfully.");
-                setShowLodgingModal(false);
+                const res = await api.post('/hotel/toggle-lodging', { enabled: false, passcode: lodgingPassword });
+                if (res.data.success) {
+                    setLodgingEnabled(false);
+                    updateUser({ lodgingEnabled: false });
+                    toast.success("Lodging module deactivated successfully.");
+                    setShowLodgingModal(false);
+                }
             } catch (err) {
-                toast.error("Failed to deactivate lodging module.");
+                toast.error(err.response?.data?.message || "Incorrect deactivation password");
+            }
+        }
+    };
+
+    const fetchKotStatus = async () => {
+        try {
+            const res = await api.get('/hotel/kot-status');
+            setKotEnabled(res.data.kotEnabled);
+            updateUser({ kotEnabled: res.data.kotEnabled });
+        } catch (err) {
+            console.error('Failed to fetch KOT status', err);
+        }
+    };
+
+    const handleToggleKot = (shouldEnable) => {
+        if (shouldEnable) {
+            setKotModalMode('enable');
+            setKotPassword('');
+            setShowKotModal(true);
+        } else {
+            setKotModalMode('disable');
+            setKotPassword('');
+            setShowKotModal(true);
+        }
+    };
+
+    const handleKotModalSubmit = async () => {
+        if (!kotPassword) {
+            toast.error("Password cannot be blank");
+            return;
+        }
+        if (kotModalMode === 'enable') {
+            try {
+                const res = await api.post('/hotel/toggle-kot', { enabled: true, passcode: kotPassword });
+                if (res.data.success) {
+                    setKotEnabled(true);
+                    updateUser({ kotEnabled: true });
+                    toast.success("KOT Module activated!");
+                    setShowKotModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect activation password");
+            }
+        } else {
+            try {
+                const res = await api.post('/hotel/toggle-kot', { enabled: false, passcode: kotPassword });
+                if (res.data.success) {
+                    setKotEnabled(false);
+                    updateUser({ kotEnabled: false });
+                    toast.success("KOT module deactivated.");
+                    setShowKotModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect deactivation password");
             }
         }
     };
@@ -372,11 +439,25 @@ const Profile = () => {
             {/* Physical Offline Printers Management */}
             {isOwner && (
                 <div style={{ width: '100%', marginTop: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                        <Printer size={32} style={{ color: '#10b981' }} />
-                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Offline Physical Printers</h2>
+                    <div 
+                        onClick={() => setShowPrinters(!showPrinters)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showPrinters ? '24px' : '0', cursor: 'pointer', backgroundColor: '#0f172a', padding: '24px', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.05)', transition: 'all 0.2s' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <Printer size={32} style={{ color: '#10b981' }} />
+                            <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>Offline Physical Printers</h2>
+                        </div>
+                        <ChevronDown 
+                            size={28} 
+                            style={{ 
+                                color: '#64748b', 
+                                transform: showPrinters ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s ease'
+                            }} 
+                        />
                     </div>
-                    <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    {showPrinters && (
+                        <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
                             <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
                                     
@@ -710,10 +791,11 @@ const Profile = () => {
                                 </div>
                             </form>
                         </div>
+                    )}
                 </div>
             )}
             {/* Staff Section */}
-            {isOwner && (
+            {isOwner && kotEnabled && (
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
                         <Users size={32} style={{ color: '#f59e0b' }} />
@@ -751,12 +833,27 @@ const Profile = () => {
             {/* System Add-ons Section */}
             {isOwner && (
                 <div style={{ width: '100%', marginTop: '48px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                        <ShieldCheck size={32} style={{ color: '#f43f5e' }} />
-                        <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>System Modules & Licensing</h2>
+                    <div 
+                        onClick={() => setShowModules(!showModules)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showModules ? '24px' : '0', cursor: 'pointer', backgroundColor: '#0f172a', padding: '24px', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.05)', transition: 'all 0.2s' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <ShieldCheck size={32} style={{ color: '#f43f5e' }} />
+                            <h2 style={{ fontSize: '24px', fontWeight: 950, color: 'white', margin: 0 }}>System Modules & Licensing</h2>
+                        </div>
+                        <ChevronDown 
+                            size={28} 
+                            style={{ 
+                                color: '#64748b', 
+                                transform: showModules ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s ease'
+                            }} 
+                        />
                     </div>
-                    <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                    {showModules && (
+                        <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                            {/* Lodging Module */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
                                 <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0 }}>Lodging & Room Management</h3>
                                 <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
@@ -789,9 +886,46 @@ const Profile = () => {
                                 </label>
                             </div>
                         </div>
+
+                        {/* KOT Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'white', margin: 0 }}>Kitchen Order Ticket (KOT)</h3>
+                                <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable kitchen routing, chef KOT dashboard, and waitstaff onboarding for order taking. 
+                                    This module requires a premium license passcode to unlock.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: '#020617', padding: '12px 24px', borderRadius: '16px', border: '1px solid #1e293b' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'white', fontWeight: 800, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="kotModule"
+                                        checked={!kotEnabled} 
+                                        onChange={() => handleToggleKot(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'white', fontWeight: 800, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="kotModule"
+                                        checked={kotEnabled} 
+                                        onChange={() => handleToggleKot(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
+        )}
 
             <div style={{ textAlign: 'center', marginTop: '32px' }}>
                  <p style={{ color: '#475569', fontSize: '12px', fontWeight: 800 }}>BestBill Identity Protection — Secure Role-Based Access Control Active</p>
@@ -810,23 +944,23 @@ const Profile = () => {
                         <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
                             {lodgingModalMode === 'enable'
                                 ? 'Enter the Premium Activation License Password to unlock Lodging & Room Management.'
-                                : 'Are you sure you want to deactivate Lodging & Room Management? Rooms and guest portals will be hidden.'
+                                : 'Are you sure you want to deactivate Lodging & Room Management? Please enter the license password to confirm deactivation. Rooms and guest portals will be hidden.'
                             }
                         </p>
-                        {lodgingModalMode === 'enable' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>ACTIVATION PASSWORD</label>
-                                <input
-                                    type="password"
-                                    value={lodgingPassword}
-                                    onChange={e => setLodgingPassword(e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && handleLodgingModalSubmit()}
-                                    placeholder="Enter license password"
-                                    autoFocus
-                                    style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                                />
-                            </div>
-                        )}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>
+                                {lodgingModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
+                            </label>
+                            <input
+                                type="password"
+                                value={lodgingPassword}
+                                onChange={e => setLodgingPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleLodgingModalSubmit()}
+                                placeholder={lodgingModalMode === 'enable' ? "Enter activation password" : "Enter deactivation password"}
+                                autoFocus
+                                style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                            />
+                        </div>
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                             <button
                                 onClick={() => setShowLodgingModal(false)}
@@ -836,6 +970,50 @@ const Profile = () => {
                                 onClick={handleLodgingModalSubmit}
                                 style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: lodgingModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'white', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: lodgingModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
                             >{lodgingModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* KOT Activation Modal */}
+            {showKotModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowKotModal(false)}>
+                    <div style={{ backgroundColor: '#0f172a', borderRadius: '24px', padding: '36px', border: '1px solid #1e293b', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: kotModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>
+                                {kotModalMode === 'enable' ? 'Activate KOT Module' : 'Deactivate KOT Module'}
+                            </h3>
+                        </div>
+                        <p style={{ color: '#64748b', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            {kotModalMode === 'enable'
+                                ? 'Enter the Premium Activation License Password to unlock Kitchen Order Tickets and Waitstaff routing.'
+                                : 'Are you sure you want to deactivate the KOT Module? Please enter the license password to confirm deactivation. Kitchen printing and waitstaff functions will be disabled.'
+                            }
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>
+                                {kotModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
+                            </label>
+                            <input
+                                type="password"
+                                value={kotPassword}
+                                onChange={e => setKotPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleKotModalSubmit()}
+                                placeholder={kotModalMode === 'enable' ? "Enter activation password" : "Enter deactivation password"}
+                                autoFocus
+                                style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowKotModal(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: '#1e293b', color: '#94a3b8', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleKotModalSubmit}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: kotModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'white', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: kotModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                            >{kotModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
                         </div>
                     </div>
                 </div>

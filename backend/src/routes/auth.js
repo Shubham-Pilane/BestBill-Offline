@@ -135,7 +135,8 @@ router.post('/login', async (req, res) => {
         hotel_location: user.hotel_location,
         upi_id: user.upi_id,
         subscription_valid_until: user.subscription_valid_until,
-        lodgingEnabled: !!config.lodgingEnabled
+        lodgingEnabled: !!config.lodgingEnabled,
+        kotEnabled: !!config.kotEnabled
       }
     });
   } catch (err) {

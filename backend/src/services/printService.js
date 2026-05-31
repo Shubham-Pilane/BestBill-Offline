@@ -63,12 +63,13 @@ class PrintService {
   /**
    * Generates and spools a KOT (Kitchen Order Ticket) payload.
    */
-  sendKOT({ hotelId, table, waiter, items, notes }) {
+  sendKOT({ hotelId, table, floor, waiter, items, notes }) {
     const payload = {
       type: 'KOT',
       printer: 'kitchen',
       hotelId: Number(hotelId),
       table: String(table),
+      floor: String(floor || ''),
       waiter: waiter || 'Staff',
       items: items.map(item => ({
         name: item.name,

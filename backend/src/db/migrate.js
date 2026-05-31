@@ -66,12 +66,13 @@ const syncSchema = async () => {
             )`,
             `CREATE TABLE IF NOT EXISTS tables (
                 id SERIAL PRIMARY KEY,
-                hotel_id INTEGER REFERENCES hotels(id),
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
                 table_number VARCHAR(50) NOT NULL,
                 capacity INTEGER DEFAULT 4,
                 status VARCHAR(20) DEFAULT 'available',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (hotel_id, table_number)
+                floor VARCHAR(50) DEFAULT 'Floor 1',
+                UNIQUE (hotel_id, floor, table_number)
             )`,
             `CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
@@ -177,7 +178,8 @@ const syncSchema = async () => {
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_room_order ON orders (room_id) WHERE status = 'active' AND room_id IS NOT NULL",
-            "ALTER TABLE tables ADD CONSTRAINT tables_hotel_id_table_number_key UNIQUE (hotel_id, table_number)"
+            "ALTER TABLE tables DROP CONSTRAINT IF EXISTS tables_hotel_id_table_number_key",
+            "ALTER TABLE tables ADD CONSTRAINT tables_hotel_id_floor_table_number_key UNIQUE (hotel_id, floor, table_number)"
         ];
 
         for (const q of migrations) {
@@ -185,6 +187,39 @@ const syncSchema = async () => {
                 await db.query(q);
             } catch (e) {
                 // Ignore errors like "column already exists"
+            }
+        }
+
+        // 5. Special SQLite Migration for dropping UNIQUE constraint on tables
+        if (db.sqliteDb) {
+            try {
+                console.log('[MIGRATION] Running SQLite-specific table rebuild to update constraints...');
+                db.sqliteDb.exec('PRAGMA foreign_keys = OFF');
+                db.sqliteDb.exec(`
+                    CREATE TABLE IF NOT EXISTS tables_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                        table_number TEXT NOT NULL,
+                        capacity INTEGER DEFAULT 4,
+                        status TEXT DEFAULT 'available',
+                        floor TEXT DEFAULT 'Floor 1',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (hotel_id, floor, table_number)
+                    )
+                `);
+                
+                // Copy data using named columns to avoid mismatches
+                db.sqliteDb.exec(`
+                    INSERT OR IGNORE INTO tables_new (id, hotel_id, table_number, capacity, status, floor, created_at) 
+                    SELECT id, hotel_id, table_number, capacity, status, floor, created_at FROM tables
+                `);
+                
+                db.sqliteDb.exec('DROP TABLE tables');
+                db.sqliteDb.exec('ALTER TABLE tables_new RENAME TO tables');
+                db.sqliteDb.exec('PRAGMA foreign_keys = ON');
+            } catch (e) {
+                console.error('[MIGRATION] SQLite table rebuild error:', e.message);
+                db.sqliteDb.exec('PRAGMA foreign_keys = ON');
             }
         }
 

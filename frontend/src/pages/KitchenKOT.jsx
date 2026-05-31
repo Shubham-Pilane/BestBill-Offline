@@ -292,16 +292,16 @@ const KitchenKOT = () => {
                                                 <div style={{ 
                                                     display: 'flex', 
                                                     gap: '10px', 
-                                                    backgroundColor: 'rgba(239, 68, 68, 0.05)', 
-                                                    border: '1px solid rgba(239, 68, 68, 0.15)', 
+                                                    backgroundColor: 'rgba(16, 185, 129, 0.05)', 
+                                                    border: '1px solid rgba(16, 185, 129, 0.15)', 
                                                     padding: '12px 18px', 
                                                     borderRadius: '16px',
                                                     marginTop: '4px'
                                                 }}>
-                                                    <AlertTriangle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                                    <AlertTriangle size={16} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
                                                     <div>
-                                                        <span style={{ fontSize: '11px', fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cooking Instruction: </span>
-                                                        <span style={{ fontSize: '13px', color: '#f87171', fontWeight: 700 }}>"{order.guest_note}"</span>
+                                                        <span style={{ fontSize: '11px', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cooking Instruction: </span>
+                                                        <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 700 }}>"{order.guest_note}"</span>
                                                     </div>
                                                 </div>
                                             )}

@@ -76,8 +76,8 @@ router.get('/items', auth, async (req, res) => {
 
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      params.push(searchParam, searchParam);
-      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
+      params.push(searchParam);
+      queryStr += ` AND LOWER(mi.name) LIKE $${params.length}`;
     }
 
     if (category_id && category_id !== 'all') {
@@ -102,8 +102,8 @@ router.get('/items', auth, async (req, res) => {
     const countParams = [req.user.hotel_id];
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      countParams.push(searchParam, searchParam);
-      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
+      countParams.push(searchParam);
+      countQueryStr += ` AND LOWER(mi.name) LIKE $${countParams.length}`;
     }
     if (category_id && category_id !== 'all') {
       countParams.push(parseInt(category_id));

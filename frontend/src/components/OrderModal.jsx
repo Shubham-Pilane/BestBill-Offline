@@ -8,8 +8,9 @@ import SwapModal from './SwapModal';
 const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) => {
   const { user } = useAuth();
   const [categories, setCategories] = useState(initialMenu?.categories || []);
+  const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [kitchenNotes, setKitchenNotes] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -28,12 +29,10 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
   const [editPriceValue, setEditPriceValue] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const fetchMenuPage = async (page = 1, category = 'all', search = '') => {
+  const fetchAllMenu = async () => {
     try {
-      const res = await api.get(`/menu/items?page=${page}&limit=10&category_id=${category}&search=${encodeURIComponent(search)}`);
-      setItems(res.data.items || []);
-      setTotalPages(res.data.totalPages || 1);
-      setCurrentPage(res.data.currentPage || 1);
+      const res = await api.get('/menu/items');
+      setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
     }
@@ -57,7 +56,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
         }
         setOrderItems(orderRes.data.items || []);
         
-        await fetchMenuPage(1, 'all', '');
+        await fetchAllMenu();
         
         setLoading(false);
       } catch (err) {
@@ -70,21 +69,33 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
   }, [table.id]);
 
   useEffect(() => {
-    if (!loading) {
-      fetchMenuPage(currentPage, selectedCategory, searchQuery);
+    let filtered = allItems;
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(i => String(i.category_id) === String(selectedCategory));
     }
-  }, [currentPage, selectedCategory, searchQuery]);
-
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      const matched = items.filter(i => 
-        i.name.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 5);
-      setSuggestions(matched);
+    if (searchQuery.trim().length > 0) {
+      const query = searchQuery.toLowerCase().replace(/\s/g, '');
+      filtered = filtered.filter(i => {
+        const name = i.name.toLowerCase();
+        if (name.includes(searchQuery.toLowerCase())) return true;
+        let patternIdx = 0;
+        for (let char of name) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+        return false;
+      });
+    }
+    setTotalPages(Math.ceil(filtered.length / 10) || 1);
+    const startIndex = (currentPage - 1) * 10;
+    setItems(filtered.slice(startIndex, startIndex + 10));
+    
+    if (searchQuery.trim().length > 0) {
+      setSuggestions(filtered);
     } else {
       setSuggestions([]);
     }
-  }, [items, searchQuery]);
+  }, [allItems, currentPage, selectedCategory, searchQuery]);
 
   const addToOrder = async (item) => {
     // Optimistic Update
@@ -391,7 +402,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                   </button>
                 )}
                 {suggestions.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a', borderRadius: '16px', marginTop: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid #1e293b', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#0f172a', borderRadius: '16px', marginTop: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid #1e293b', overflowY: 'auto', maxHeight: '350px' }}>
                     {suggestions.map(s => (
                       <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{ padding: '14px 20px', cursor: 'pointer', borderBottom: '1px solid #1e293b', color: 'white', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: '0.2s' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

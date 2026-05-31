@@ -173,9 +173,6 @@ const Dashboard = () => {
   // Group tables by floor - Memoized for performance
   const groupedTables = useMemo(() => {
     const groups = (tables || []).reduce((acc, table) => {
-      if (!isOwner && table.table_number === 'Parcel Counter') {
-        return acc;
-      }
       let floor = table.floor || 'Floor 1';
       if (table.table_number === 'Parcel Counter') {
         floor = 'Floor 1';

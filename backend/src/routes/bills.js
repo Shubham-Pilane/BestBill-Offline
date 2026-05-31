@@ -105,9 +105,10 @@ router.post('/:id/print', auth, async (req, res) => {
     // Resolve table name
     let tableName = 'Parcel';
     if (billData.table_id) {
-      const tableQuery = await db.query('SELECT table_number FROM tables WHERE id = $1', [billData.table_id]);
+      const tableQuery = await db.query('SELECT table_number, floor FROM tables WHERE id = $1', [billData.table_id]);
       if (tableQuery.rows.length > 0) {
-        tableName = tableQuery.rows[0].table_number;
+        const tb = tableQuery.rows[0];
+        tableName = `Table ${tb.table_number} (${tb.floor || 'Floor 1'})`;
       }
     } else if (billData.room_id) {
       const roomQuery = await db.query('SELECT room_number FROM rooms WHERE id = $1', [billData.room_id]);

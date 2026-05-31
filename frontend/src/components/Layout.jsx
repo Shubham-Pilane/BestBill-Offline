@@ -102,12 +102,42 @@ const Layout = ({ children }) => {
           { name: 'Profile Settings', path: '/profile', icon: <UserCircle size={20} /> },
         ];
 
-  const navItems = baseNavItems.filter(item => {
-    if ((item.path === '/lodging' || item.path === '/orders') && !lodgingEnabled) {
-      return false;
+  const kotEnabled = user?.kotEnabled || false;
+
+  const navItems = baseNavItems;
+
+  const handleNavClick = (e, item) => {
+    if (item.path === '/kitchen-kot' && !kotEnabled) {
+      e.preventDefault();
+      toast.error("You need licencse for that to unloack this fetaure contact Shubham Pilane 9822401802", {
+        style: {
+          borderRadius: '12px',
+          background: '#0f172a',
+          color: '#fff',
+          border: '1px solid #ef4444',
+          fontWeight: '900',
+          fontSize: '14px'
+        }
+      });
+      return;
     }
-    return true;
-  });
+    if ((item.path === '/lodging' || item.path === '/orders') && !lodgingEnabled) {
+      e.preventDefault();
+      toast.error("You need licencse for that to unloack this fetaure contact Shubham Pilane 9822401802", {
+        style: {
+          borderRadius: '12px',
+          background: '#0f172a',
+          color: '#fff',
+          border: '1px solid #ef4444',
+          fontWeight: '900',
+          fontSize: '14px'
+        }
+      });
+      return;
+    }
+    setMobileMenuOpen(false);
+  };
+
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#050a18', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
@@ -154,7 +184,7 @@ const Layout = ({ children }) => {
             <Link 
               key={item.path} 
               to={item.path} 
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={(e) => handleNavClick(e, item)}
               style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '14px', textDecoration: 'none', color: location.pathname === item.path ? '#0ea5e9' : '#94a3b8', backgroundColor: location.pathname === item.path ? 'rgba(14, 165, 233, 0.1)' : 'transparent', fontWeight: 700, fontSize: '16px' }}
             >
               {item.icon}

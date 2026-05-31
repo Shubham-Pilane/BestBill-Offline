@@ -192,7 +192,6 @@ router.get('/lodging-status', auth, (req, res) => {
   }
 });
 
-// Toggle Lodging Module (Passcode Restricted)
 router.post('/toggle-lodging', auth, (req, res) => {
   const { enabled, passcode } = req.body;
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
@@ -200,19 +199,44 @@ router.post('/toggle-lodging', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (enabled) {
-      if (passcode !== '231018') {
-        return res.status(400).json({ message: 'Incorrect activation password' });
-      }
-      config.lodgingEnabled = true;
-    } else {
-      config.lodgingEnabled = false;
+    if (passcode !== '231018') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
+    config.lodgingEnabled = !!enabled;
 
     configManager.saveConfig(config);
     res.json({ success: true, lodgingEnabled: config.lodgingEnabled });
   } catch (err) {
     res.status(500).json({ message: 'Error updating lodging configuration' });
+  }
+});
+
+// Get KOT Module Activation Status
+router.get('/kot-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ kotEnabled: !!config.kotEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking KOT status' });
+  }
+});
+
+router.post('/toggle-kot', auth, (req, res) => {
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '272325') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.kotEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, kotEnabled: config.kotEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating KOT configuration' });
   }
 });
 
