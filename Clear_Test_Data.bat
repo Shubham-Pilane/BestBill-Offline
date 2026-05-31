@@ -22,6 +22,20 @@ echo.
 echo ====================================================
 echo.
 
+:PASSWORD_PROMPT
+set /p PASSCODE="Enter Developer Authorization Passcode: "
+if "%PASSCODE%"=="272325" goto PROMPT
+color 0C
+echo.
+echo ====================================================
+echo               ACCESS DENIED - SYSTEM LOCKED
+echo ====================================================
+echo.
+echo ERROR: Incorrect passcode! Access is prohibited.
+echo This utility is restricted to authorized developers only.
+echo.
+goto EXIT_PROMPT
+
 :PROMPT
 set /p CONFIRM="Are you sure you want to delete all test transactional data? [Y/N]: "
 if /i "%CONFIRM%"=="Y" goto PURGE
@@ -48,7 +62,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Run database cleanup script inline using native built-in SQLite driver
-node -e "const path = require('path'); const fs = require('fs'); const dbPath = path.join(process.env.APPDATA, 'BestBill', 'bestbill.db'); if (!fs.existsSync(dbPath)) { console.error('Database file not found at:', dbPath); process.exit(1); } const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(dbPath); try { db.exec('DELETE FROM order_items; DELETE FROM bills; DELETE FROM orders; DELETE FROM sqlite_sequence WHERE name IN (\'bills\', \'order_items\', \'orders\');'); console.log('Database test data cleared successfully!'); process.exit(0); } catch (e) { console.error('Purge failed:', e.message); const logPath = path.join(process.argv[1], 'clear_error.log'); fs.writeFileSync(logPath, 'TIMESTAMP: ' + new Date().toISOString() + '\nERROR: ' + e.message + '\nSTACK: ' + e.stack + '\n', 'utf8'); process.exit(1); }" "%~dp0"
+node -e "const path = require('path'); const fs = require('fs'); const possiblePaths = [path.join(process.argv[1], 'backend', 'bestbill.db'), path.join(process.argv[1], 'resources', 'app', 'backend', 'bestbill.db'), path.join(process.env.APPDATA, 'bestbill-desktop', 'bestbill.db'), path.join(process.env.APPDATA, 'BestBill', 'bestbill.db')]; let dbPath = null; for (const p of possiblePaths) { if (fs.existsSync(p)) { dbPath = p; break; } } if (!dbPath) { console.error('Database file not found! Checked locations:'); possiblePaths.forEach(function(p) { console.error('  -', p); }); process.exit(1); } console.log('Database resolved at:', dbPath); const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(dbPath); try { db.exec('DELETE FROM order_items; DELETE FROM bills; DELETE FROM orders; DELETE FROM sqlite_sequence WHERE name IN (\'bills\', \'order_items\', \'orders\');'); console.log('Database test data cleared successfully!'); process.exit(0); } catch (e) { console.error('Purge failed:', e.message); const logPath = path.join(process.argv[1], 'clear_error.log'); fs.writeFileSync(logPath, 'TIMESTAMP: ' + new Date().toISOString() + '\nERROR: ' + e.message + '\nSTACK: ' + e.stack + '\n', 'utf8'); process.exit(1); }" "%~dp0"
 if %errorlevel% neq 0 goto FAILURE
 
 color 0A

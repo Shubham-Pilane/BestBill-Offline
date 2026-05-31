@@ -67,7 +67,8 @@ function preprocessSql(sql, params) {
     .replace(/NOW\(\) - INTERVAL '2 days'/gi, "datetime('now', '-2 days')")
     .replace(/NOW\(\) - INTERVAL '1 year'/gi, "datetime('now', '-1 year')")
     .replace(/NOW\(\)/gi, "datetime('now', 'localtime')")
-    .replace(/CURRENT_TIMESTAMP/gi, "(datetime('now', 'localtime'))");
+    .replace(/CURRENT_TIMESTAMP/gi, "(datetime('now', 'localtime'))")
+    .replace(/CURRENT_DATE/gi, "date('now', 'localtime')");
 
   // Handle unique PG onboarding intervals like: NOW() + $7::interval
   if (cleanedSql.includes('?::interval') || cleanedSql.includes('?::timestamp')) {
