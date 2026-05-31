@@ -44,6 +44,9 @@
       "!backend/bestbill.db",
       "!backend/uploads/**/*",
       "!backend/backups/**/*"
+    ],
+    "extraFiles": [
+      "Clear_Test_Data.bat"
     ]
   },
   "devDependencies": {

@@ -47,8 +47,8 @@ if %errorlevel% neq 0 (
     goto FAILURE
 )
 
-:: Run database cleanup script using absolute path resolution
-node "%~dp0backend\src\db\clear-test-data.js"
+:: Run database cleanup script inline using native built-in SQLite driver
+node -e "const path = require('path'); const fs = require('fs'); const dbPath = path.join(process.env.APPDATA, 'BestBill', 'bestbill.db'); if (!fs.existsSync(dbPath)) { console.error('Database file not found at:', dbPath); process.exit(1); } const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(dbPath); try { db.exec('DELETE FROM order_items; DELETE FROM bills; DELETE FROM orders; DELETE FROM sqlite_sequence WHERE name IN (\'bills\', \'order_items\', \'orders\');'); console.log('Database test data cleared successfully!'); process.exit(0); } catch (e) { console.error('Purge failed:', e.message); const logPath = path.join(process.argv[1], 'clear_error.log'); fs.writeFileSync(logPath, 'TIMESTAMP: ' + new Date().toISOString() + '\nERROR: ' + e.message + '\nSTACK: ' + e.stack + '\n', 'utf8'); process.exit(1); }" "%~dp0"
 if %errorlevel% neq 0 goto FAILURE
 
 color 0A
