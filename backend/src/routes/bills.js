@@ -79,7 +79,7 @@ router.post('/:id/print', auth, async (req, res) => {
     const { id } = req.params;
     const bill = await db.query(`
       SELECT b.*, o.room_id, o.table_id,
-             h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.upi_id, h.printer_size
+             h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.upi_id, h.printer_size, h.fssai_number, h.email as hotel_email
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
       LEFT JOIN tables t ON o.table_id = t.id 
@@ -148,6 +148,8 @@ router.post('/:id/print', auth, async (req, res) => {
       hotelName: billData.hotel_name,
       hotelPhone: billData.hotel_phone,
       hotelLocation: billData.hotel_location,
+      hotelEmail: billData.hotel_email,
+      hotelFssai: billData.fssai_number,
       gst_percentage: Number(billData.gst_percentage || 0),
       upiId: billData.upi_id || '',
       isPaid: billData.is_paid || false,

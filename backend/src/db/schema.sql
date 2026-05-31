@@ -115,7 +115,9 @@ CREATE TABLE public.hotels (
     subscription_valid_until timestamp without time zone DEFAULT (CURRENT_TIMESTAMP + '30 days'::interval),
     upi_id character varying(255),
     gst_percentage numeric(5,2) DEFAULT 0.00,
-    address text
+    address text,
+    fssai_number character varying(255),
+    email character varying(255)
 );
 
 

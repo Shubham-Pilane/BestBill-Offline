@@ -171,6 +171,8 @@ const syncSchema = async () => {
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS kot_sent_at TIMESTAMP",
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false",
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false",
+            "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS fssai_number VARCHAR(255)",
+            "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

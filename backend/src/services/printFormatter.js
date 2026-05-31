@@ -125,9 +125,16 @@ function formatKOT(data) {
 
   data.items.forEach(item => {
     const qty = item.quantity || item.qty || 1;
-    let name = item.name;
-    if (name.length > itemLen) name = name.substring(0, itemLen - 2) + '..';
-    builder.text(mg + padText(name, itemLen) + ' ' + padText(qty, qtyLen, 'right'));
+    const nameStr = toTitleCase(String(item.name));
+    let chunks = [];
+    for (let j = 0; j < nameStr.length; j += itemLen) {
+      chunks.push(nameStr.substring(j, j + itemLen));
+    }
+    
+    builder.text(mg + padText(chunks[0], itemLen) + ' ' + padText(qty, qtyLen, 'right'));
+    for (let j = 1; j < chunks.length; j++) {
+      builder.text(mg + padText(chunks[j], itemLen) + ' ' + padText('', qtyLen, 'right'));
+    }
   });
 
   builder.setFontNormal()
@@ -159,6 +166,10 @@ const padText = (text, length, align = 'left') => {
     return ' '.repeat(pad) + text + ' '.repeat(length - text.length - pad);
   }
   return text.padEnd(length, ' ');
+};
+
+const toTitleCase = (str) => {
+  return str.split(' ').map(word => word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : '').join(' ');
 };
 
 /**
@@ -207,6 +218,12 @@ function formatBill(data) {
   }
   if (hPhone) {
     builder.text(mg + padText('Ph: ' + hPhone, LINE_WIDTH, 'center'));
+  }
+  if (data.hotelEmail) {
+    builder.text(mg + padText('Email: ' + data.hotelEmail, LINE_WIDTH, 'center'));
+  }
+  if (data.hotelFssai) {
+    builder.text(mg + padText('FSSAI No: ' + data.hotelFssai, LINE_WIDTH, 'center'));
   }
   
   builder.alignLeft();
@@ -259,16 +276,28 @@ function formatBill(data) {
   }
   
   (data.items || []).forEach(i => {
-    let name = i.name;
-    if (name.length > ACTUAL_ITEM_LEN) name = name.substring(0, ACTUAL_ITEM_LEN - 2) + '..';
-    
     const qty = i.quantity || i.qty || 1;
+    const nameStr = toTitleCase(String(i.name));
+    let chunks = [];
+    for (let j = 0; j < nameStr.length; j += ACTUAL_ITEM_LEN) {
+      chunks.push(nameStr.substring(j, j + ACTUAL_ITEM_LEN));
+    }
+    
     builder.text(
-      mg + padText(name, ACTUAL_ITEM_LEN) + ' ' +
+      mg + padText(chunks[0], ACTUAL_ITEM_LEN) + ' ' +
       padText(Math.round(i.price), PRC_LEN, 'right') + ' ' + 
       padText(qty, QTY_LEN, 'right') + ' ' + 
       padText(Math.round(i.price * qty), TOT_LEN, 'right')
     );
+
+    for (let j = 1; j < chunks.length; j++) {
+      builder.text(
+        mg + padText(chunks[j], ACTUAL_ITEM_LEN) + ' ' +
+        padText('', PRC_LEN, 'right') + ' ' + 
+        padText('', QTY_LEN, 'right') + ' ' + 
+        padText('', TOT_LEN, 'right')
+      );
+    }
   });
   
   builder.line('-', LINE_WIDTH);

@@ -16,12 +16,12 @@ router.get('/', auth, async (req, res) => {
 
 // Update hotel details (Owner only)
 router.put('/', auth, async (req, res) => {
-  const { name, address, upi_id, gst_percentage, printer_size, billing_method } = req.body;
+  const { name, address, upi_id, gst_percentage, printer_size, billing_method, fssai_number, email, phone } = req.body;
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Only owners can modify hotel settings' });
   try {
     const updated = await db.query(
-      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6 WHERE id = $7 RETURNING *',
-      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', req.user.hotel_id]
+      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9 WHERE id = $10 RETURNING *',
+      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, req.user.hotel_id]
     );
     res.json(updated.rows[0]);
   } catch (err) {

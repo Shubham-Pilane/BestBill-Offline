@@ -24,7 +24,10 @@ const Profile = () => {
         upi_id: user?.upi_id || '',
         gst_percentage: user?.gst_percentage || 0,
         billing_method: user?.billing_method || 'qz',
-        logo_url: ''
+        logo_url: '',
+        fssai_number: '',
+        email: '',
+        phone: ''
     });
 
     const [staff, setStaff] = useState([]);
@@ -163,17 +166,21 @@ const Profile = () => {
     const fetchHotelDetails = async () => {
         try {
             const res = await api.get('/hotel');
-            setHotelData({
-                name: res.data.name || '',
-                address: res.data.location || '',
-                upi_id: res.data.upi_id || '',
-                gst_percentage: res.data.gst_percentage || 0,
-                printer_size: res.data.printer_size || '80mm',
-                billing_method: res.data.billing_method || 'qz',
-                logo_url: res.data.logo_url || ''
-            });
+            const data = res.data;
+            setHotelData(prev => ({
+                ...prev,
+                name: data.name || '',
+                address: data.location || '',
+                upi_id: data.upi_id || '',
+                gst_percentage: data.gst_percentage || 0,
+                billing_method: data.billing_method || 'qz',
+                logo_url: data.logo_url || '',
+                fssai_number: data.fssai_number || '',
+                email: data.email || '',
+                phone: data.phone || ''
+            }));
         } catch (err) {
-            console.error(err);
+            console.error('Failed to load hotel details', err);
         }
     };
 
@@ -307,12 +314,52 @@ const Profile = () => {
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PHYSICAL ADDRESS</label>
-                                    <input value={hotelData.address} onChange={e => setHotelData({...hotelData, address: e.target.value})} placeholder="Full location address" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>UPI ID (MERCHANT)</label>
-                                    <input value={hotelData.upi_id} onChange={e => setHotelData({...hotelData, upi_id: e.target.value})} placeholder="merchant@bank" style={{ padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                    <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>PHYSICAL ADDRESS</label>
+                                                    <input 
+                                                        value={hotelData.address} 
+                                                        onChange={e => setHotelData({ ...hotelData, address: e.target.value })} 
+                                                        style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                    />
+                                                </div>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>MOBILE NUMBER</label>
+                                                        <input 
+                                                            value={hotelData.phone} 
+                                                            onChange={e => setHotelData({ ...hotelData, phone: e.target.value })} 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>HOTEL EMAIL</label>
+                                                        <input 
+                                                            value={hotelData.email} 
+                                                            onChange={e => setHotelData({ ...hotelData, email: e.target.value })} 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>UPI ID (MERCHANT)</label>
+                                                        <input 
+                                                            value={hotelData.upi_id} 
+                                                            onChange={e => setHotelData({ ...hotelData, upi_id: e.target.value })} 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                        <label style={{ color: '#64748b', fontSize: '11px', fontWeight: 900 }}>FSSAI NUMBER</label>
+                                                        <input 
+                                                            value={hotelData.fssai_number} 
+                                                            onChange={e => setHotelData({ ...hotelData, fssai_number: e.target.value })} 
+                                                            style={{ width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} 
+                                                        />
+                                                    </div>
+                                                </div>
                                 </div>
 
                                 <button type="submit" style={{ backgroundColor: '#0ea5e9', color: 'white', padding: '16px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none', marginTop: '8px' }}>Save Profile Settings</button>

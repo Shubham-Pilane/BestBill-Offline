@@ -9,7 +9,8 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
   const { user } = useAuth();
   const [categories, setCategories] = useState(initialMenu?.categories || []);
   const [items, setItems] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [kitchenNotes, setKitchenNotes] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [orderItems, setOrderItems] = useState([]);
@@ -209,7 +210,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
     try {
       const res = await api.post(`/tables/${table.id}/order/kot`, {
         waiter: user?.name || 'Waiter',
-        notes: ''
+        notes: kitchenNotes
       });
       
       if (res.data && res.data.success === false) {
@@ -553,6 +554,15 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                    <span style={{ fontSize: '22px', fontWeight: 1000 }}>Final Due</span>
                     <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
                  </div>
+              </div>
+              <div style={{ marginBottom: '16px' }}>
+                <input 
+                  type="text" 
+                  value={kitchenNotes} 
+                  onChange={e => setKitchenNotes(e.target.value)}
+                  placeholder="Add notes for kitchen (e.g. less spicy)..." 
+                  style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', fontWeight: 600, outline: 'none', fontSize: '13px' }} 
+                />
               </div>
               {user?.role === 'waiter' ? (
                 <button 

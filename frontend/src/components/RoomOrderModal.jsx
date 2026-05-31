@@ -12,6 +12,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [orderItems, setOrderItems] = useState([]);
+  const [kitchenNotes, setKitchenNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState(null);
@@ -268,7 +269,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     try {
       await api.post(`/rooms/${room.id}/order/kot`, {
         waiter: user?.name || 'Waiter',
-        notes: ''
+        notes: kitchenNotes
       });
       toast.success('KOT sent to kitchen successfully!', { id: t });
     } catch (err) {
@@ -562,6 +563,15 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                             <span style={{ fontSize: '22px', fontWeight: 1000 }}>Total Due</span>
                             <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{((subtotalVal * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
                          </div>
+                      </div>
+                      <div style={{ marginBottom: '16px' }}>
+                        <input 
+                          type="text" 
+                          value={kitchenNotes} 
+                          onChange={e => setKitchenNotes(e.target.value)}
+                          placeholder="Add notes for kitchen (e.g. less spicy)..." 
+                          style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', fontWeight: 600, outline: 'none', fontSize: '13px' }} 
+                        />
                       </div>
                        {user?.role === 'waiter' ? (
                           <button 

@@ -197,9 +197,11 @@ const Dashboard = () => {
 
   const floorOrder = (name) => {
     if (name.startsWith('Floor ')) return parseInt(name.replace('Floor ', '')) || 99;
-    if (name === 'Rooftop') return 100;
-    if (name === 'Garden') return 101;
-    if (name === 'Family Section') return 102;
+    if (name === 'Main Hall') return 100;
+    if (name === 'Party Hall') return 101;
+    if (name === 'Rooftop') return 102;
+    if (name === 'Garden') return 103;
+    if (name === 'Family Section') return 104;
     return 200;
   };
 
@@ -417,9 +419,11 @@ const Dashboard = () => {
                         onChange={(e) => setNewTableFloor(e.target.value)}
                         style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '14px', borderRadius: '16px', outline: 'none' }}
                      >
-                        {[...Array(10)].map((_, i) => (
+                        {[...Array(5)].map((_, i) => (
                            <option key={i+1} value={`Floor ${i+1}`}>Floor {i+1}</option>
                         ))}
+                        <option value="Main Hall">Main Hall</option>
+                        <option value="Party Hall">Party Hall</option>
                         <option value="Rooftop">Rooftop</option>
                         <option value="Garden">Garden</option>
                         <option value="Family Section">Family Section</option>
@@ -469,9 +473,11 @@ const Dashboard = () => {
                         onChange={(e) => setEditData({...editData, floor: e.target.value})}
                         style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '14px', borderRadius: '16px' }}
                       >
-                          {[...Array(10)].map((_, i) => (
+                          {[...Array(5)].map((_, i) => (
                              <option key={i+1} value={`Floor ${i+1}`}>Floor {i+1}</option>
                           ))}
+                          <option value="Main Hall">Main Hall</option>
+                          <option value="Party Hall">Party Hall</option>
                           <option value="Rooftop">Rooftop</option>
                           <option value="Garden">Garden</option>
                           <option value="Family Section">Family Section</option>
