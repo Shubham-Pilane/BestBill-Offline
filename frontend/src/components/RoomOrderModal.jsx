@@ -595,73 +595,72 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
       {showBill && billData && (
         <div className="bill-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-            <div style={{width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--text-primary)', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', position: 'relative' }}>
-               <div style={{ flex: 1, padding: '48px', borderRight: '1px solid #f1f5f9', backgroundColor: billData?.is_paid ? '#10b981' : 'white', overflowY: 'auto', position: 'relative', transition: 'all 0.6s' }}>
+             <div style={{width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--bg-card)', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative' }}>
+                <div style={{ flex: 1, padding: '48px', borderRight: '1px solid var(--border-rgba-05)', backgroundColor: billData?.is_paid ? '#10b981' : '#0f172a', overflowY: 'auto', position: 'relative', transition: 'all 0.6s' }}>
                  {isSuccess && (
                     <div style={{ position: 'absolute', inset: 0, backgroundColor: '#10b981', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s ease-out' }}>
-                       <div style={{width: '120px', height: '120px', borderRadius: '50%', backgroundcolor: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+                       <div style={{width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
                           <CheckCircle size={80} strokeWidth={3} />
                        </div>
                        <h2 style={{fontSize: '32px', fontWeight: 1000, color: 'var(--text-primary)', margin: 0 }}>Transaction Complete</h2>
                        <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.8)', marginTop: '8px', fontWeight: 800 }}>Redirecting...</p>
                     </div>
                  )}
-                 {billData?.is_paid && !isSuccess && (
+                 {!!billData?.is_paid && !isSuccess && (
                     <div style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
-                       <div style={{backgroundcolor: 'var(--text-primary)', padding: '24px', borderRadius: '50%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}><CheckCircle size={100} color="#10b981" /></div>
+                       <div style={{backgroundColor: 'var(--text-primary)', padding: '24px', borderRadius: '50%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}><CheckCircle size={100} color="#10b981" /></div>
                     </div>
                  )}
                  <div style={{ textAlign: 'center', marginBottom: '24px', opacity: billData?.is_paid ? 0.3 : 1 }}>
-                    <h1 style={{ margin: 0, fontWeight: 950, fontSize: '28px', color: billData?.is_paid ? 'white' : 'var(--bg-border)' }}>{(user?.hotel_name || 'BESTBILL').toUpperCase()}</h1>
-                    <div style={{ color: billData?.is_paid ? 'white' : 'var(--text-muted)', fontWeight: 800, fontSize: '14px', marginTop: '4px' }}>{user?.hotel_location}</div>
+                    <h1 style={{ margin: 0, fontWeight: 950, fontSize: '28px', color: 'white' }}>{(user?.hotel_name || 'BESTBILL').toUpperCase()}</h1>
+                    <div style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 800, fontSize: '14px', marginTop: '4px' }}>{user?.hotel_location}</div>
                  </div>
-
-                 <div style={{ borderTop: '2px dashed var(--text-primary)', borderBottom: '2px dashed var(--text-primary)', padding: '16px 0', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: 'var(--text-muted)' }}>
+                 
+                 <div style={{ borderTop: '2px dashed var(--border-rgba-05)', borderBottom: '2px dashed var(--border-rgba-05)', padding: '16px 0', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: 'white' }}>
                        <span>ROOM NO: {room?.room_number}</span>
                        <span>BILL NO: #{billData?.id}</span>
                     </div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
+                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
                  </div>
 
                  <div style={{ marginBottom: '24px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', borderBottom: '1px dashed var(--text-secondary)', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px', fontWeight: 900, color: 'var(--text-muted)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', borderBottom: '1px dashed var(--border-rgba-05)', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px', fontWeight: 900, color: 'rgba(255,255,255,0.7)' }}>
                        <span>Service / Item</span><span style={{ textAlign: 'right' }}>Qty</span><span style={{ textAlign: 'right' }}>Total</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'var(--bg-border)' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'white' }}>
                        <span>Room Charge ({room?.booking_days} Days)</span><span style={{ textAlign: 'right' }}>1</span><span style={{ textAlign: 'right' }}>₹{billData?.room_charge}</span>
                     </div>
                     {(billData?.items || []).map((i, idx) => (
-                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'var(--bg-border)' }}>
+                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'white' }}>
                           <span>{i?.name}</span><span style={{ textAlign: 'right' }}>{i?.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i?.price * i?.quantity).toFixed(2)}</span>
                        </div>
                     ))}
                  </div>
 
-                 <div style={{ borderTop: '1px dashed var(--text-secondary)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'var(--text-muted)' }}>
+                 <div style={{ borderTop: '1px dashed var(--border-rgba-05)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.8)' }}>
                         <span>Subtotal</span>
                         <span>₹{parseFloat(billData?.subtotal || 0).toFixed(2)}</span>
                     </div>
                     {parseFloat(billData?.gst || 0) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.8)' }}>
                             <span>GST ({billData?.gst_percentage}%)</span>
                             <span>₹{parseFloat(billData?.gst || 0).toFixed(2)}</span>
                         </div>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double var(--text-primary)', marginTop: '12px', paddingTop: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double var(--border-rgba-05)', marginTop: '12px', paddingTop: '12px' }}>
                         <span>TOTAL</span>
                         <span>₹{parseFloat(billData?.final_amount || 0).toFixed(0)}</span>
                     </div>
                  </div>
 
                  {!billData?.is_paid && (
-                   <button onClick={rollbackBill} style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '2px solid #111827', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 900, cursor: 'pointer' }}>MODIFY INVOICE</button>
+                   <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '1px solid var(--border-rgba-1)', backgroundColor: 'var(--bg-border)', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
                  )}
               </div>
-
-              <div style={{ width: '380px', padding: '48px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
-                 <div style={{textAlign: 'center', backgroundcolor: 'var(--text-primary)', padding: '24px', borderRadius: '32px' }}>
+              <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+                 <div style={{textAlign: 'center', backgroundColor: 'var(--text-primary)', padding: '24px', borderRadius: '32px' }}>
                     <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />
                     {!billData?.is_paid && (
                        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
@@ -717,7 +716,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: '12px' }}>
-                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#111827', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)' }}>
+                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)' }}>
                         <Printer size={18} /> {!billData?.is_paid ? 'Print' : 'Re-Print'}
                      </button>
                      {user?.whatsAppBillingEnabled && (

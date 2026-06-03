@@ -372,28 +372,3 @@ body {
   stroke-opacity: 0.9;
 }
 
-/* Receipt Paper Styles to keep paper white and text dark in both themes */
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) {
-  background-color: white !important;
-  color: #0f172a !important;
-}
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) * {
-  color: #1e293b !important;
-}
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) h1,
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) span,
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) p,
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) div {
-  color: #1e293b !important;
-}
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) [style*="color: rgb(16, 185, 129)"],
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) [style*="color: #10b981"] {
-  color: #10b981 !important;
-}
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) button:not(.btn-modify-invoice):not(.btn-no-override) {
-  border-color: #cbd5e1 !important;
-  color: #475569 !important;
-  background-color: white !important;
-}
-
-

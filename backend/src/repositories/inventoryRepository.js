@@ -382,7 +382,7 @@ class InventoryRepository {
     const res = await q.query(
       `INSERT INTO recipe_items (recipe_id, inventory_item_id, quantity_required) 
        VALUES ($1, $2, $3) 
-       ON CONFLICT (recipe_id, inventory_item_id) DO UPDATE SET quantity_required = $3
+       ON CONFLICT (recipe_id, inventory_item_id) DO UPDATE SET quantity_required = EXCLUDED.quantity_required
        RETURNING *`,
       [recipe_id, inventory_item_id, quantity_required]
     );

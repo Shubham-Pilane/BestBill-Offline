@@ -396,7 +396,7 @@ const CreditManagement = () => {
                       <td style={tdStyle}>{tx.party_type === 'vendor' ? tx.vendor_name : tx.customer_name}</td>
                       <td style={tdStyle}>{(tx.party_type === 'vendor' ? tx.vendor_phone : tx.customer_phone) || 'N/A'}</td>
                       <td style={tdStyle}>#{tx.bill_id}</td>
-                      <td style={{ ...tdStyle, color: '#f43f5e', fontWeight: 900 }}>₹{parseFloat(tx.amount).toFixed(2)}</td>
+                      <td style={{ ...tdStyle, color: tx.status === 'settled' ? '#10b981' : '#f43f5e', fontWeight: 900 }}>₹{parseFloat(tx.amount).toFixed(2)}</td>
                       <td style={tdStyle}>
                         <span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', backgroundColor: tx.status === 'settled' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(244, 63, 94, 0.1)', color: tx.status === 'settled' ? '#10b981' : '#f43f5e' }}>
                           {tx.status}
@@ -655,18 +655,27 @@ const CreditManagement = () => {
                             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                               <button 
                                 onClick={() => handleSettleTransaction(settlePaymentMethod)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: '#10b981', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', textTransform: 'uppercase', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}
+                                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border-rgba-1)', backgroundColor: '#111827', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', textTransform: 'uppercase', boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)' }}
                               >
-                                Settle W/o Print
+                                SETTLE & NO PRINT
                               </button>
                               <button 
-                                onClick={() => {
-                                  handleSettleTransaction(settlePaymentMethod);
-                                  setTimeout(() => window.print(), 500);
+                                onClick={async () => {
+                                  await handleSettleTransaction(settlePaymentMethod);
+                                  if (txDetails?.bill?.id) {
+                                    try {
+                                      await api.post(`/bills/${txDetails.bill.id}/print`);
+                                      toast.success('Sent to printer successfully!');
+                                    } catch (err) {
+                                      toast.error('Print failed');
+                                    }
+                                  } else {
+                                    setTimeout(() => window.print(), 500);
+                                  }
                                 }}
-                                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', backgroundColor: '#f59e0b', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', textTransform: 'uppercase', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)' }}
+                                style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border-rgba-1)', backgroundColor: '#111827', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', textTransform: 'uppercase', boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)' }}
                               >
-                                Settle & Print
+                                SETTLE & PRINT
                               </button>
                             </div>
 
