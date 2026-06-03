@@ -7,7 +7,13 @@ const router = express.Router();
 router.get('/history', auth, async (req, res) => {
   try {
     const result = await db.query(`
-      SELECT b.*, t.table_number, o.created_at as order_time 
+      SELECT b.*, t.table_number, o.created_at as order_time,
+             (
+                SELECT json_group_array(json_object('name', mi.name, 'quantity', oi.quantity, 'price', mi.price))
+                FROM order_items oi
+                JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE oi.order_id = b.order_id
+             ) as items_json
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
       JOIN tables t ON o.table_id = t.id 
@@ -63,9 +69,10 @@ router.get('/:id', auth, async (req, res) => {
 router.put('/:id/pay', auth, async (req, res) => {
     try {
         const { id } = req.params;
+        const { method } = req.body;
         const result = await db.query(
-            'UPDATE bills SET is_paid = true WHERE id = $1 RETURNING *',
-            [id]
+            'UPDATE bills SET is_paid = true, payment_method = $1 WHERE id = $2 RETURNING *',
+            [method || 'upi', id]
         );
         res.json(result.rows[0]);
     } catch (err) {

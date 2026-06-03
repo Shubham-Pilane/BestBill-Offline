@@ -98,22 +98,22 @@ const KitchenKOT = () => {
     if (loading) {
         return (
             <div style={{ height: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}>
-                <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '4px solid #1e293b', borderTopColor: themeColor, animation: 'spin 1s linear infinite' }}></div>
-                <div style={{ color: '#64748b', fontWeight: 800 }}>Loading Kitchen Queue...</div>
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', border: '4px solid var(--bg-border)', borderTopColor: themeColor, animation: 'spin 1s linear infinite' }}></div>
+                <div style={{ color: 'var(--text-muted)', fontWeight: 800 }}>Loading Kitchen Queue...</div>
                 <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
             </div>
         );
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', width: '100%', color: 'white' }}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '32px', width: '100%', color: 'var(--text-primary)' }}>
             {/* Header section */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
                 <div>
                    <h2 style={{ fontSize: '28px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
                        <ChefHat style={{ color: themeColor }} size={32} /> Kitchen Display (KOT)
                    </h2>
-                   <p style={{ color: '#64748b', fontWeight: 600, fontSize: '14px', margin: '4px 0 0 0' }}>
+                   <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '14px', margin: '4px 0 0 0' }}>
                        Live orders being prepared by the kitchen crew.
                    </p>
                 </div>
@@ -125,9 +125,9 @@ const KitchenKOT = () => {
                         display: 'flex', 
                         alignItems: 'center', 
                         gap: '8px', 
-                        backgroundColor: audioEnabled ? 'rgba(245, 158, 11, 0.15)' : '#1e293b', 
-                        color: audioEnabled ? themeColor : '#64748b', 
-                        border: `1px solid ${audioEnabled ? themeColor : '#1e293b'}`, 
+                        backgroundColor: audioEnabled ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-border)', 
+                        color: audioEnabled ? themeColor : 'var(--text-muted)', 
+                        border: `1px solid ${audioEnabled ? themeColor : 'var(--bg-border)'}`, 
                         padding: '10px 20px', 
                         borderRadius: '14px', 
                         fontSize: '14px', 
@@ -151,13 +151,13 @@ const KitchenKOT = () => {
                 </div>
 
                 {orders.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '120px 40px', backgroundColor: '#0f172a', borderRadius: '32px', border: '2px dashed #1e293b', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                    <div style={{ textAlign: 'center', padding: '120px 40px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', border: '2px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(245, 158, 11, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ChefHat size={40} style={{ color: '#475569' }} />
+                            <ChefHat size={40} style={{ color: 'var(--text-muted)' }} />
                         </div>
                         <div>
-                            <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 900, color: 'white' }}>All Caught Up!</h4>
-                            <p style={{ color: '#64748b', fontWeight: 700, margin: 0, fontSize: '14px' }}>No active waiter KOT orders are waiting in the kitchen.</p>
+                            <h4 style={{margin: '0 0 8px 0', fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)' }}>All Caught Up!</h4>
+                            <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0, fontSize: '14px' }}>No active waiter KOT orders are waiting in the kitchen.</p>
                         </div>
                     </div>
                 ) : (
@@ -168,10 +168,10 @@ const KitchenKOT = () => {
                                 <div 
                                     key={order.order_id} 
                                     style={{ 
-                                        backgroundColor: '#0f172a', 
+                                        backgroundColor: 'var(--bg-card)', 
                                         borderRadius: '28px', 
                                         padding: isExpanded ? '28px 32px' : '20px 32px', 
-                                        border: '1px solid #1e293b', 
+                                        border: '1px solid var(--bg-border)', 
                                         boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
                                         display: 'flex',
                                         flexDirection: 'column',
@@ -185,7 +185,7 @@ const KitchenKOT = () => {
                                         display: 'flex', 
                                         justifyContent: 'space-between', 
                                         alignItems: 'center', 
-                                        borderBottom: isExpanded ? '1px dashed #1e293b' : 'none', 
+                                        borderBottom: isExpanded ? '1px dashed var(--bg-border)' : 'none', 
                                         paddingBottom: isExpanded ? '16px' : '0px', 
                                         flexWrap: 'wrap', 
                                         gap: '12px' 
@@ -199,10 +199,10 @@ const KitchenKOT = () => {
                                                 boxShadow: `0 0 10px ${themeColor}`
                                             }} />
                                             <div>
-                                                <h4 style={{ margin: 0, fontWeight: 950, fontSize: '20px', color: 'white', letterSpacing: '0.05em' }}>
+                                                <h4 style={{margin: 0, fontWeight: 950, fontSize: '20px', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
                                                     TABLE {order.table_number}
                                                 </h4>
-                                                <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 800 }}>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>
                                                     Location: {order.table_floor}
                                                 </span>
                                             </div>
@@ -215,13 +215,13 @@ const KitchenKOT = () => {
                                                     <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cleared</span>
                                                 </div>
                                             )}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
                                                 <User size={14} color="#0ea5e9" style={{ flexShrink: 0 }} />
-                                                <span>Waiter: <span style={{ color: 'white' }}>{order.waiter_name || 'Waiter'}</span></span>
+                                                <span>Waiter: <span style={{color: 'var(--text-primary)' }}>{order.waiter_name || 'Waiter'}</span></span>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#94a3b8', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
                                                 <Calendar size={14} style={{ flexShrink: 0 }} />
-                                                <span>Sent: <span style={{ color: 'white' }}>{formatDateTime(order.kot_sent_at)}</span></span>
+                                                <span>Sent: <span style={{color: 'var(--text-primary)' }}>{formatDateTime(order.kot_sent_at)}</span></span>
                                             </div>
                                             <div style={{ fontSize: '18px', color: '#10b981', fontWeight: 1000, marginRight: '8px' }}>
                                                  ₹{parseFloat(order.total_amount || 0).toFixed(0)}
@@ -232,8 +232,8 @@ const KitchenKOT = () => {
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: '6px',
-                                                    backgroundColor: isExpanded ? 'rgba(245, 158, 11, 0.1)' : '#1e293b',
-                                                    color: isExpanded ? themeColor : '#94a3b8',
+                                                    backgroundColor: isExpanded ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-border)',
+                                                    color: isExpanded ? themeColor : 'var(--text-secondary)',
                                                     border: `1px solid ${isExpanded ? themeColor : '#334155'}`,
                                                     padding: '8px 16px',
                                                     borderRadius: '12px',
@@ -259,14 +259,14 @@ const KitchenKOT = () => {
                                                         display: 'flex', 
                                                         alignItems: 'center', 
                                                         gap: '12px',
-                                                        backgroundColor: '#020617', 
+                                                        backgroundColor: 'var(--bg-base)', 
                                                         padding: '12px 20px', 
                                                         borderRadius: '16px',
-                                                        border: '1px solid #1e293b',
+                                                        border: '1px solid var(--bg-border)',
                                                         minWidth: '200px',
                                                         justifyContent: 'space-between'
                                                     }}>
-                                                        <span style={{ fontWeight: 800, color: 'white', fontSize: '15px' }}>
+                                                        <span style={{fontWeight: 800, color: 'var(--text-primary)', fontSize: '15px' }}>
                                                             {item.name}
                                                         </span>
                                                         <div style={{ 

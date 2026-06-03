@@ -240,4 +240,34 @@ router.post('/toggle-kot', auth, (req, res) => {
   }
 });
 
+// Get WhatsApp Billing Module Status
+router.get('/whatsapp-billing-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ whatsAppBillingEnabled: !!config.whatsAppBillingEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking WhatsApp billing status' });
+  }
+});
+
+router.post('/toggle-whatsapp-billing', auth, (req, res) => { // wait, let's keep name consistent: toggle-whatsapp-billing
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '231018') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.whatsAppBillingEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, whatsAppBillingEnabled: config.whatsAppBillingEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating WhatsApp billing configuration' });
+  }
+});
+
 module.exports = router;
+

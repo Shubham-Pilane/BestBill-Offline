@@ -17,6 +17,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState(null);
   const [customerPhone, setCustomerPhone] = useState(room.guest_phone || '');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [discount, setDiscount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -246,9 +247,9 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     }
   };
 
-  const confirmPayment = async () => {
+  const confirmPayment = async (method = 'upi') => {
     try {
-      await api.put(`/bills/${billData.id}/pay`);
+      await api.put(`/bills/${billData.id}/pay`, { method });
       await api.post(`/rooms/${room.id}/checkout`);
       
       setIsSuccess(true);
@@ -281,8 +282,9 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     try {
       await api.post(`/bills/${billData.id}/print`);
       toast.success('Sent to printer successfully!');
-      // Automatically settle the bill (same as clicking Mark Paid)
-      await confirmPayment();
+      if (!billData.is_paid) {
+        await confirmPayment(selectedPaymentMethod);
+      }
     } catch (err) {
       console.error('Print and settle failed:', err);
       toast.error('Print failed');
@@ -313,43 +315,43 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
   return (
     <div className="order-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div style={{ width: '100%', maxWidth: '1440px', height: '90vh', backgroundColor: isSuccess ? '#064e3b' : '#0f172a', borderRadius: '40px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.05)', position: 'relative', transition: 'all 0.5s ease' }}>
+      <div style={{ width: '100%', maxWidth: '1440px', height: '90vh', backgroundColor: isSuccess ? '#064e3b' : 'var(--bg-card)', borderRadius: '40px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative', transition: 'all 0.5s ease' }}>
         
         {/* Header */}
-        <div style={{ padding: '32px 48px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a' }}>
+        <div style={{ padding: '32px 48px', borderBottom: '1px solid var(--border-rgba-05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-             <div style={{ width: '64px', height: '64px', backgroundColor: isOccupied ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+             <div style={{width: '64px', height: '64px', backgroundColor: isOccupied ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)' }}>
                 <Bed size={32} />
              </div>
              <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'white', margin: 0 }}>Room {room.room_number} <span style={{ fontSize: '14px', color: '#64748b' }}>({room.floor})</span></h2>
+                <h2 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Room {room.room_number} <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>({room.floor})</span></h2>
                 <span style={{ fontSize: '11px', fontWeight: 900, color: isOccupied ? '#f43f5e' : '#10b981', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{isOccupied ? 'Occupied - Guest In Residence' : 'Available for Booking'}</span>
              </div>
           </div>
-          <button onClick={onClose} style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: '#1e293b', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={24} /></button>
+          <button onClick={onClose} style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={24} /></button>
         </div>
 
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Menu */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255, 255, 255, 0.05)', overflow: 'hidden', minWidth: 0 }}>
-             <div style={{ padding: '16px 48px', display: 'flex', gap: '20px', alignItems: 'center', backgroundColor: '#020617', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-rgba-05)', overflow: 'hidden', minWidth: 0 }}>
+             <div style={{ padding: '16px 48px', display: 'flex', gap: '20px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)' }}>
                 <div className="category-bar-container" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, paddingBottom: '4px' }}>
-                   <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{ padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : '#1e293b', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>ALL MENU</button>
+                   <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>ALL MENU</button>
                    {categories.map(cat => (
-                      <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{ padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: parseInt(selectedCategory) === cat.id ? '#0ea5e9' : '#1e293b', color: 'white', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
+                      <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: parseInt(selectedCategory) === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
                    ))}
                 </div>
                 <div style={{ position: 'relative', width: '300px' }}>
-                    <Search style={{ position: 'absolute', top: '50%', left: '16px', transform: 'translateY(-50%)', color: '#64748b' }} size={18} />
-                    <input type="text" placeholder="Filter items..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} style={{ width: '100%', padding: '14px 48px', borderRadius: '16px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700, outline: 'none' }} />
+                    <Search style={{ position: 'absolute', top: '50%', left: '16px', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={18} />
+                    <input type="text" placeholder="Filter items..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} style={{width: '100%', padding: '14px 48px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} />
                 </div>
              </div>
              
              <div style={{ flex: 1, padding: '32px 48px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', alignContent: 'start' }}>
                 {filteredItems.map(item => (
                    <div key={item.id} onClick={() => isOccupied && addToOrder(item)} style={{ 
-                     backgroundColor: '#020617', 
-                     border: '1px solid #1e293b', 
+                     backgroundColor: 'var(--bg-base)', 
+                     border: '1px solid var(--bg-border)', 
                      padding: '16px 24px', 
                      borderRadius: '16px', 
                      cursor: isOccupied ? 'pointer' : 'not-allowed', 
@@ -362,24 +364,24 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                    }}
                    onMouseEnter={(e) => {
                      if (isOccupied) {
-                       e.currentTarget.style.backgroundColor = '#0f172a';
+                       e.currentTarget.style.backgroundColor = 'var(--bg-card)';
                        e.currentTarget.style.borderColor = '#0ea5e9';
                        e.currentTarget.style.transform = 'translateX(4px)';
                      }
                    }}
                    onMouseLeave={(e) => {
                      if (isOccupied) {
-                       e.currentTarget.style.backgroundColor = '#020617';
-                       e.currentTarget.style.borderColor = '#1e293b';
+                       e.currentTarget.style.backgroundColor = 'var(--bg-base)';
+                       e.currentTarget.style.borderColor = 'var(--bg-border)';
                        e.currentTarget.style.transform = 'translateX(0)';
                      }
                    }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <span style={{ fontSize: '16px', fontWeight: 900, color: 'white', textTransform: 'uppercase' }}>{item.name}</span>
-                          <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 800, backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>{item.category_name?.toUpperCase()}</span>
+                          <span style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase' }}>{item.name}</span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 800, backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>{item.category_name?.toUpperCase()}</span>
                         </div>
-                        <p style={{ fontSize: '12px', color: '#475569', margin: 0 }}>{item.description || 'Standard culinary selection'}</p>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{item.description || 'Standard culinary selection'}</p>
                       </div>
                       
                       <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
@@ -410,17 +412,17 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                    return (
                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px', marginTop: '24px', flexWrap: 'wrap' }}>
                        <button disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}
-                         style={{ ...btn, padding: '0 12px', backgroundColor: currentPage === 1 ? 'rgba(255,255,255,0.02)' : '#1e293b', color: currentPage === 1 ? '#475569' : '#94a3b8', cursor: currentPage === 1 ? 'default' : 'pointer' }}
+                         style={{ ...btn, padding: '0 12px', backgroundColor: currentPage === 1 ? 'rgba(255,255,255,0.02)' : 'var(--bg-border)', color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: currentPage === 1 ? 'default' : 'pointer' }}
                        >&#8249; Prev</button>
                        {getPages().map((p, i) => p === '...' ? (
-                         <span key={`e${i}`} style={{ color: '#475569', fontWeight: 800, padding: '0 4px' }}>...</span>
+                         <span key={`e${i}`} style={{ color: 'var(--text-muted)', fontWeight: 800, padding: '0 4px' }}>...</span>
                        ) : (
                          <button key={p} onClick={() => setCurrentPage(p)}
-                           style={{ ...btn, backgroundColor: currentPage === p ? '#0ea5e9' : '#1e293b', color: currentPage === p ? 'white' : '#94a3b8', boxShadow: currentPage === p ? '0 4px 12px rgba(14,165,233,0.4)' : 'none' }}
+                           style={{ ...btn, backgroundColor: currentPage === p ? '#0ea5e9' : 'var(--bg-border)', color: currentPage === p ? 'white' : 'var(--text-secondary)', boxShadow: currentPage === p ? '0 4px 12px rgba(14,165,233,0.4)' : 'none' }}
                          >{p}</button>
                        ))}
                        <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}
-                         style={{ ...btn, padding: '0 12px', backgroundColor: currentPage === totalPages ? 'rgba(255,255,255,0.02)' : '#1e293b', color: currentPage === totalPages ? '#475569' : '#94a3b8', cursor: currentPage === totalPages ? 'default' : 'pointer' }}
+                         style={{ ...btn, padding: '0 12px', backgroundColor: currentPage === totalPages ? 'rgba(255,255,255,0.02)' : 'var(--bg-border)', color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: currentPage === totalPages ? 'default' : 'pointer' }}
                        >Next &#8250;</button>
                      </div>
                    );
@@ -429,49 +431,49 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
           </div>
 
           {/* Cart / Guest Details */}
-          <div style={{ width: '420px', backgroundColor: '#020617', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ width: '420px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
              {!isOccupied ? (
                 <div style={{ padding: '40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                    <div style={{ textAlign: 'center', marginBottom: '16px' }}>
                       <div style={{ width: '80px', height: '80px', backgroundColor: '#10b98110', border: '1px solid #10b981', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
                          <User size={40} style={{ color: '#10b981' }} />
                       </div>
-                      <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'white' }}>Guest Arrival</h3>
+                      <h3 style={{fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)' }}>Guest Arrival</h3>
                    </div>
                    <form onSubmit={handleBooking} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      <input type="text" placeholder="Guest Name" required value={bookingData.guest_name} onChange={(e) => setBookingData({...bookingData, guest_name: e.target.value})} style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
-                      <input type="text" placeholder="Phone Number" required value={bookingData.guest_phone} onChange={(e) => setBookingData({...bookingData, guest_phone: e.target.value})} style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                      <input type="text" placeholder="Guest Name" required value={bookingData.guest_name} onChange={(e) => setBookingData({...bookingData, guest_name: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
+                      <input type="text" placeholder="Phone Number" required value={bookingData.guest_phone} onChange={(e) => setBookingData({...bookingData, guest_phone: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                           <label style={{ fontSize: '10px', color: '#64748b', fontWeight: 900 }}>STAY DAYS</label>
-                           <input type="number" required value={bookingData.booking_days} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, booking_days: e.target.value})} style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                           <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>STAY DAYS</label>
+                           <input type="number" required value={bookingData.booking_days} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, booking_days: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
                          </div>
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                           <label style={{ fontSize: '10px', color: '#64748b', fontWeight: 900 }}>TOTAL RENT</label>
-                           <input type="number" required value={bookingData.total_cost} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, total_cost: e.target.value})} style={{ padding: '16px', borderRadius: '16px', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', fontWeight: 700 }} />
+                           <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>TOTAL RENT</label>
+                           <input type="number" required value={bookingData.total_cost} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, total_cost: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
                          </div>
                       </div>
-                      <button type="submit" disabled={isSubmitting} style={{ padding: '20px', borderRadius: '20px', backgroundColor: isSubmitting ? '#1e293b' : '#10b981', color: 'white', border: 'none', fontWeight: 1000, fontSize: '18px', cursor: isSubmitting ? 'not-allowed' : 'pointer', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                      <button type="submit" disabled={isSubmitting} style={{padding: '20px', borderRadius: '20px', backgroundColor: isSubmitting ? 'var(--bg-border)' : '#10b981', color: 'var(--text-primary)', border: 'none', fontWeight: 1000, fontSize: '18px', cursor: isSubmitting ? 'not-allowed' : 'pointer', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
                         {isSubmitting ? <><RefreshCcw size={20} className="animate-spin" /> PROVISIONING...</> : 'CHECK-IN GUEST'}
                       </button>
                    </form>
                 </div>
              ) : (
                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                      <div style={{ padding: '32px', borderBottom: '1px solid #1e293b', backgroundColor: '#0f172a' }}>
+                      <div style={{ padding: '32px', borderBottom: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-card)' }}>
                          {isEditingStay ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                              <div style={{ padding: '12px', backgroundColor: '#020617', borderRadius: '14px', border: '1px dashed #1e293b' }}>
-                                 <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 800 }}>CURRENT STAY: {room.booking_days} NIGHTS / ₹{room.total_cost}</div>
+                              <div style={{ padding: '12px', backgroundColor: 'var(--bg-base)', borderRadius: '14px', border: '1px dashed var(--bg-border)' }}>
+                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>CURRENT STAY: {room.booking_days} NIGHTS / ₹{room.total_cost}</div>
                               </div>
                               <div style={{ display: 'flex', gap: '8px' }}>
                                 <div style={{ flex: 1 }}>
                                   <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>EXTEND BY (DAYS)</label>
-                                  <input type="number" value={extensionDays} onFocus={e => e.target.select()} onChange={e => setExtensionDays(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 800 }} placeholder="+ Days" />
+                                  <input type="number" value={extensionDays} onFocus={e => e.target.select()} onChange={e => setExtensionDays(e.target.value)} style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} placeholder="+ Days" />
                                 </div>
                                 <div style={{ flex: 1 }}>
                                   <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>EXTRA CHARGE</label>
-                                  <input type="number" value={extensionCost} onFocus={e => e.target.select()} onChange={e => setExtensionCost(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: '#020617', border: '1px solid #1e293b', color: 'white', fontWeight: 800 }} placeholder="+ Amount" />
+                                  <input type="number" value={extensionCost} onFocus={e => e.target.select()} onChange={e => setExtensionCost(e.target.value)} style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} placeholder="+ Amount" />
                                 </div>
                               </div>
                               <div style={{ padding: '16px', backgroundColor: '#0ea5e910', borderRadius: '14px', border: '1px solid #0ea5e9' }}>
@@ -481,7 +483,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                                  </div>
                               </div>
                               <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => setEditingStay(false)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#1e293b', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+                                <button onClick={() => setEditingStay(false)} style={{flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
                                 <button onClick={updateStayDetails} style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Apply Extension</button>
                               </div>
                             </div>
@@ -490,24 +492,24 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                                 <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><User size={24} /></div>
                                 <div>
-                                   <div style={{ color: 'white', fontWeight: 900 }}>{room.guest_name}</div>
-                                   <div style={{ color: '#64748b', fontSize: '12px' }}>{room.guest_phone}</div>
+                                   <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{room.guest_name}</div>
+                                   <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{room.guest_phone}</div>
                                 </div>
                              </div>
-                             <button onClick={() => setEditingStay(true)} style={{ padding: '8px 12px', borderRadius: '10px', backgroundColor: '#1e293b', color: '#0ea5e9', border: 'none', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}>EDIT STAY</button>
+                             <button onClick={() => setEditingStay(true)} style={{ padding: '8px 12px', borderRadius: '10px', backgroundColor: 'var(--bg-border)', color: '#0ea5e9', border: 'none', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}>EDIT STAY</button>
                            </div>
                          )}
                       </div>
                       
                       <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
-                         <div style={{ padding: '16px', backgroundColor: '#0f172a', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', border: '1px solid #1e293b' }}>
-                            <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 800 }}>ROOM CHARGE ({room.booking_days}D)</span>
+                         <div style={{ padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', border: '1px solid var(--bg-border)' }}>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>ROOM CHARGE ({room.booking_days}D)</span>
                             <span style={{ color: '#f43f5e', fontWeight: 900 }}>₹{room.total_cost}</span>
                          </div>
                          {orderItems.map(item => (
-                            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: '#0f172a', borderRadius: '16px' }}>
+                            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px' }}>
                                <div>
-                                 <div style={{ color: 'white', fontWeight: 900 }}>{item.name}</div>
+                                 <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{item.name}</div>
                                  {editingPriceId === item.id ? (
                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                                       <span style={{ color: '#10b981', fontSize: '13px' }}>₹</span>
@@ -518,9 +520,9 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                                         onChange={e => setEditPriceValue(e.target.value)}
                                         onBlur={() => savePriceChange(item.id, item.menu_item_id)}
                                         onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                                        style={{ width: '85px', backgroundColor: '#020617', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', outline: 'none', fontWeight: 800 }}
+                                        style={{ width: '85px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', outline: 'none', fontWeight: 800 }}
                                       />
-                                      <span style={{ color: '#64748b', fontSize: '11px' }}>/ unit</span>
+                                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/ unit</span>
                                    </div>
                                  ) : (
                                    <div 
@@ -528,7 +530,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                                      style={{ color: '#10b981', fontSize: '13px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '2px', marginTop: '4px' }}
                                      title="Edit Unit Price (Updates Master Menu)"
                                    >
-                                      ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: '#64748b', fontSize: '11px', marginLeft: '6px' }}>(₹{Math.round(item.price)} each)</span>}
+                                      ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>(₹{Math.round(item.price)} each)</span>}
                                    </div>
                                  )}
                                </div>
@@ -536,15 +538,15 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                                   <button 
                                     onClick={() => item.id && updateQuantity(item.id, -1)} 
                                     disabled={!item.id}
-                                    style={{ cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#1e293b', color: 'white' }}
+                                    style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
                                   >
                                     <Minus size={14} />
                                   </button>
-                                  <span style={{ color: 'white', fontWeight: 1000 }}>{item.quantity}</span>
+                                  <span style={{color: 'var(--text-primary)', fontWeight: 1000 }}>{item.quantity}</span>
                                   <button 
                                     onClick={() => item.id && updateQuantity(item.id, 1)} 
                                     disabled={!item.id}
-                                    style={{ cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#1e293b', color: 'white' }}
+                                    style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
                                   >
                                     <Plus size={14} />
                                   </button>
@@ -553,13 +555,13 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                          ))}
                       </div>
 
-                   <div style={{ padding: '20px 24px', backgroundColor: '#0f172a', borderTop: '1px solid #1e293b' }}>
+                   <div style={{ padding: '20px 24px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
                       <div style={{ marginBottom: '16px' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '11px', fontWeight: 900, marginBottom: '8px' }}>
+                         <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 900, marginBottom: '8px' }}>
                             <span>DISCOUNT (%)</span>
-                            <input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(e.target.value)} style={{ width: '50px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'white', textAlign: 'center', fontWeight: 900, outline: 'none' }} />
+                            <input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(e.target.value)} style={{width: '50px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none' }} />
                          </div>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
                             <span style={{ fontSize: '22px', fontWeight: 1000 }}>Total Due</span>
                             <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{((subtotalVal * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
                          </div>
@@ -570,7 +572,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                           value={kitchenNotes} 
                           onChange={e => setKitchenNotes(e.target.value)}
                           placeholder="Add notes for kitchen (e.g. less spicy)..." 
-                          style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', backgroundColor: '#1e293b', border: '1px solid #334155', color: 'white', fontWeight: 600, outline: 'none', fontSize: '13px' }} 
+                          style={{width: '100%', padding: '12px 16px', borderRadius: '12px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', fontWeight: 600, outline: 'none', fontSize: '13px' }} 
                         />
                       </div>
                        {user?.role === 'waiter' ? (
@@ -593,89 +595,137 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
       {showBill && billData && (
         <div className="bill-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-           <div style={{ width: '100%', maxWidth: '850px', backgroundColor: 'white', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)' }}>
-              <div style={{ flex: 1, padding: '48px', borderRight: '1px solid #f1f5f9', backgroundColor: billData?.is_paid ? '#10b981' : 'white', overflowY: 'auto', position: 'relative', transition: 'all 0.6s' }}>
+            <div style={{width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--text-primary)', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', position: 'relative' }}>
+               <div style={{ flex: 1, padding: '48px', borderRight: '1px solid #f1f5f9', backgroundColor: billData?.is_paid ? '#10b981' : 'white', overflowY: 'auto', position: 'relative', transition: 'all 0.6s' }}>
                  {isSuccess && (
                     <div style={{ position: 'absolute', inset: 0, backgroundColor: '#10b981', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s ease-out' }}>
-                       <div style={{ width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+                       <div style={{width: '120px', height: '120px', borderRadius: '50%', backgroundcolor: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
                           <CheckCircle size={80} strokeWidth={3} />
                        </div>
-                       <h2 style={{ fontSize: '32px', fontWeight: 1000, color: 'white', margin: 0 }}>Transaction Complete</h2>
+                       <h2 style={{fontSize: '32px', fontWeight: 1000, color: 'var(--text-primary)', margin: 0 }}>Transaction Complete</h2>
                        <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.8)', marginTop: '8px', fontWeight: 800 }}>Redirecting...</p>
                     </div>
                  )}
                  {billData?.is_paid && !isSuccess && (
                     <div style={{ position: 'absolute', top: '10%', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
-                       <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '50%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}><CheckCircle size={100} color="#10b981" /></div>
+                       <div style={{backgroundcolor: 'var(--text-primary)', padding: '24px', borderRadius: '50%', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}><CheckCircle size={100} color="#10b981" /></div>
                     </div>
                  )}
                  <div style={{ textAlign: 'center', marginBottom: '24px', opacity: billData?.is_paid ? 0.3 : 1 }}>
-                    <h1 style={{ margin: 0, fontWeight: 950, fontSize: '28px', color: billData?.is_paid ? 'white' : '#1e293b' }}>{(user?.hotel_name || 'BESTBILL').toUpperCase()}</h1>
-                    <div style={{ color: billData?.is_paid ? 'white' : '#64748b', fontWeight: 800, fontSize: '14px', marginTop: '4px' }}>{user?.hotel_location}</div>
+                    <h1 style={{ margin: 0, fontWeight: 950, fontSize: '28px', color: billData?.is_paid ? 'white' : 'var(--bg-border)' }}>{(user?.hotel_name || 'BESTBILL').toUpperCase()}</h1>
+                    <div style={{ color: billData?.is_paid ? 'white' : 'var(--text-muted)', fontWeight: 800, fontSize: '14px', marginTop: '4px' }}>{user?.hotel_location}</div>
                  </div>
 
-                 <div style={{ borderTop: '2px dashed #e2e8f0', borderBottom: '2px dashed #e2e8f0', padding: '16px 0', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: '#475569' }}>
+                 <div style={{ borderTop: '2px dashed var(--text-primary)', borderBottom: '2px dashed var(--text-primary)', padding: '16px 0', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: 'var(--text-muted)' }}>
                        <span>ROOM NO: {room?.room_number}</span>
                        <span>BILL NO: #{billData?.id}</span>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
                  </div>
 
                  <div style={{ marginBottom: '24px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px', fontWeight: 900, color: '#475569' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', borderBottom: '1px dashed var(--text-secondary)', paddingBottom: '8px', marginBottom: '12px', fontSize: '12px', fontWeight: 900, color: 'var(--text-muted)' }}>
                        <span>Service / Item</span><span style={{ textAlign: 'right' }}>Qty</span><span style={{ textAlign: 'right' }}>Total</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: '#1e293b' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'var(--bg-border)' }}>
                        <span>Room Charge ({room?.booking_days} Days)</span><span style={{ textAlign: 'right' }}>1</span><span style={{ textAlign: 'right' }}>₹{billData?.room_charge}</span>
                     </div>
                     {(billData?.items || []).map((i, idx) => (
-                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: '#1e293b' }}>
+                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'var(--bg-border)' }}>
                           <span>{i?.name}</span><span style={{ textAlign: 'right' }}>{i?.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i?.price * i?.quantity).toFixed(2)}</span>
                        </div>
                     ))}
                  </div>
 
-                 <div style={{ borderTop: '1px dashed #cbd5e1', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: '#64748b' }}>
+                 <div style={{ borderTop: '1px dashed var(--text-secondary)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'var(--text-muted)' }}>
                         <span>Subtotal</span>
                         <span>₹{parseFloat(billData?.subtotal || 0).toFixed(2)}</span>
                     </div>
                     {parseFloat(billData?.gst || 0) > 0 && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: '#64748b' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'var(--text-muted)' }}>
                             <span>GST ({billData?.gst_percentage}%)</span>
                             <span>₹{parseFloat(billData?.gst || 0).toFixed(2)}</span>
                         </div>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double #e2e8f0', marginTop: '12px', paddingTop: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double var(--text-primary)', marginTop: '12px', paddingTop: '12px' }}>
                         <span>TOTAL</span>
                         <span>₹{parseFloat(billData?.final_amount || 0).toFixed(0)}</span>
                     </div>
                  </div>
 
                  {!billData?.is_paid && (
-                   <button onClick={rollbackBill} style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '2px solid #e2e8f0', background: 'white', color: '#64748b', fontWeight: 900, cursor: 'pointer' }}>MODIFY INVOICE</button>
+                   <button onClick={rollbackBill} style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '2px solid #111827', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 900, cursor: 'pointer' }}>MODIFY INVOICE</button>
                  )}
               </div>
 
-              <div style={{ width: '380px', padding: '48px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                 <div style={{ textAlign: 'center', backgroundColor: 'white', padding: '24px', borderRadius: '32px' }}>
+              <div style={{ width: '380px', padding: '48px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
+                 <div style={{textAlign: 'center', backgroundcolor: 'var(--text-primary)', padding: '24px', borderRadius: '32px' }}>
                     <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />
-                    {!billData?.is_paid && <button onClick={confirmPayment} style={{ width: '100%', marginTop: '20px', padding: '18px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '16px', fontWeight: 1000 }}>MARK PAID</button>}
-                 </div>
-                 <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #e2e8f0' }}>
-                    <Phone size={18} color="#94a3b8" />
-                    <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={{ border: 'none', outline: 'none', fontWeight: 800, fontSize: '15px', width: '100%', background: 'white', color: '#1e293b' }} placeholder="Guest Phone" />
-                 </div>
-                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <button onClick={printBill} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#0f172a', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px' }}>
-                        <Printer size={18} /> Print
+                    {!billData?.is_paid && (
+                       <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                         <button 
+                           type="button"
+                           onClick={() => setSelectedPaymentMethod('cash')} 
+                           style={{ 
+                             flex: 1, 
+                             padding: '16px', 
+                             backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : 'transparent', 
+                             color: selectedPaymentMethod === 'cash' ? 'white' : 'var(--text-muted)', 
+                             border: selectedPaymentMethod === 'cash' ? 'none' : '2px solid var(--bg-border)', 
+                             borderRadius: '16px', 
+                             fontWeight: 1000, 
+                             cursor: 'pointer', 
+                             fontSize: '12px', 
+                             textTransform: 'uppercase', 
+                             letterSpacing: '0.05em', 
+                             boxShadow: selectedPaymentMethod === 'cash' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none',
+                             transition: 'all 0.2s'
+                           }}
+                         >
+                           Cash Payment
+                         </button>
+                         <button 
+                           type="button"
+                           onClick={() => setSelectedPaymentMethod('upi')} 
+                           style={{ 
+                             flex: 1, 
+                             padding: '16px', 
+                             backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : 'transparent', 
+                             color: selectedPaymentMethod === 'upi' ? 'white' : 'var(--text-muted)', 
+                             border: selectedPaymentMethod === 'upi' ? 'none' : '2px solid var(--bg-border)', 
+                             borderRadius: '16px', 
+                             fontWeight: 1000, 
+                             cursor: 'pointer', 
+                             fontSize: '12px', 
+                             textTransform: 'uppercase', 
+                             letterSpacing: '0.05em', 
+                             boxShadow: selectedPaymentMethod === 'upi' ? '0 4px 12px rgba(14, 165, 233, 0.2)' : 'none',
+                             transition: 'all 0.2s'
+                           }}
+                         >
+                           Online Payment
+                         </button>
+                       </div>
+                     )}
+                  </div>
+                  {user?.whatsAppBillingEnabled && (
+                    <div style={{backgroundColor: 'var(--text-primary)', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--text-primary)' }}>
+                       <Phone size={18} color="var(--text-secondary)" />
+                       <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={{ border: 'none', outline: 'none', fontWeight: 800, fontSize: '15px', width: '100%', background: 'white', color: 'var(--bg-border)' }} placeholder="Guest Phone" />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#111827', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)' }}>
+                        <Printer size={18} /> {!billData?.is_paid ? 'Print' : 'Re-Print'}
                      </button>
-                     <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#10b981', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px' }}>
-                        <MessageCircle size={18} /> WhatsApp
-                     </button>
-                 </div>
-                 <button onClick={onClose} style={{ width: '100%', padding: '20px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '20px', fontWeight: 900, cursor: 'pointer' }}>CLOSE</button>
+                     {user?.whatsAppBillingEnabled && (
+                       <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
+                          <MessageCircle size={18} /> WhatsApp
+                       </button>
+                     )}
+                  </div>
               </div>
            </div>
         </div>

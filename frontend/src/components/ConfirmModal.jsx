@@ -18,9 +18,9 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText
       <div style={{
         width: '100%',
         maxWidth: '440px',
-        backgroundColor: '#0f172a',
+        backgroundColor: 'var(--bg-card)',
         borderRadius: '32px',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
+        border: '1px solid var(--border-rgba-05)',
         padding: '40px',
         boxShadow: '0 50px 100px -20px rgba(0, 0, 0, 0.7)',
         textAlign: 'center'
@@ -39,16 +39,15 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText
            <AlertTriangle size={32} style={{ color: type === 'danger' ? '#f43f5e' : '#0ea5e9' }} />
         </div>
 
-        <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'white', margin: '0 0 12px 0', letterSpacing: '-0.02em' }}>{title}</h3>
-        <p style={{ fontSize: '15px', color: '#64748b', fontWeight: 600, margin: '0 0 32px 0', lineHeight: '1.6' }}>{message}</p>
+        <h3 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 12px 0', letterSpacing: '-0.02em' }}>{title}</h3>
+        <p style={{ fontSize: '15px', color: 'var(--text-muted)', fontWeight: 600, margin: '0 0 32px 0', lineHeight: '1.6' }}>{message}</p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
            <button
              onClick={onConfirm}
-             style={{
-               width: '100%',
+             style={{width: '100%',
                backgroundColor: type === 'danger' ? '#f43f5e' : '#0ea5e9',
-               color: 'white',
+               color: 'var(--text-primary)',
                border: 'none',
                padding: '16px',
                borderRadius: '16px',
@@ -69,7 +68,7 @@ const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText
                width: '100%',
                background: 'none',
                border: 'none',
-               color: '#475569',
+               color: 'var(--text-muted)',
                padding: '12px',
                fontSize: '14px',
                fontWeight: 800,

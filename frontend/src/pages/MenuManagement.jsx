@@ -212,23 +212,23 @@ const MenuManagement = () => {
         <button
           disabled={currentPage === 1}
           onClick={() => onPageChange(currentPage - 1)}
-          style={{ ...btnBase, padding: '0 14px', backgroundColor: currentPage === 1 ? 'rgba(255,255,255,0.03)' : '#1e293b', color: currentPage === 1 ? '#475569' : '#94a3b8', cursor: currentPage === 1 ? 'default' : 'pointer' }}
+          style={{ ...btnBase, padding: '0 14px', backgroundColor: currentPage === 1 ? 'rgba(255,255,255,0.03)' : 'var(--bg-border)', color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: currentPage === 1 ? 'default' : 'pointer' }}
         >&#8249; Prev</button>
         {getPages().map((p, i) =>
           p === '...' ? (
-            <span key={`ellipsis-${i}`} style={{ color: '#475569', fontWeight: 800, padding: '0 4px' }}>...</span>
+            <span key={`ellipsis-${i}`} style={{ color: 'var(--text-muted)', fontWeight: 800, padding: '0 4px' }}>...</span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              style={{ ...btnBase, backgroundColor: currentPage === p ? activeColor : '#1e293b', color: currentPage === p ? 'white' : '#94a3b8', boxShadow: currentPage === p ? `0 4px 12px ${activeColor}55` : 'none' }}
+              style={{ ...btnBase, backgroundColor: currentPage === p ? activeColor : 'var(--bg-border)', color: currentPage === p ? 'white' : 'var(--text-secondary)', boxShadow: currentPage === p ? `0 4px 12px ${activeColor}55` : 'none' }}
             >{p}</button>
           )
         )}
         <button
           disabled={currentPage === totalPages}
           onClick={() => onPageChange(currentPage + 1)}
-          style={{ ...btnBase, padding: '0 14px', backgroundColor: currentPage === totalPages ? 'rgba(255,255,255,0.03)' : '#1e293b', color: currentPage === totalPages ? '#475569' : '#94a3b8', cursor: currentPage === totalPages ? 'default' : 'pointer' }}
+          style={{ ...btnBase, padding: '0 14px', backgroundColor: currentPage === totalPages ? 'rgba(255,255,255,0.03)' : 'var(--bg-border)', color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)', cursor: currentPage === totalPages ? 'default' : 'pointer' }}
         >Next &#8250;</button>
       </div>
     );
@@ -239,37 +239,37 @@ const MenuManagement = () => {
       
       {/* Category Management Column */}
       <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '32px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
             <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <Layers size={22} style={{ color: '#818cf8', margin: 'auto' }} />
             </div>
-            <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>Groups</h2>
+            <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Groups</h2>
           </div>
 
           <form onSubmit={addCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.1em' }}>New Category Title</label>
+              <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>New Category Title</label>
               <div style={{ position: 'relative' }}>
-                <Tag style={{ position: 'absolute', top: '14px', left: '16px', color: '#475569' }} size={16} />
+                <Tag style={{ position: 'absolute', top: '14px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                 <input
                   type="text"
-                  style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '12px 16px 12px 40px', borderRadius: '14px', outline: 'none', fontSize: '14px', fontWeight: 600 }}
+                  style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px 16px 12px 40px', borderRadius: '14px', outline: 'none', fontSize: '14px', fontWeight: 600 }}
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
                   required
                 />
               </div>
             </div>
-            <button type="submit" style={{ width: '100%', backgroundColor: '#6366f1', color: 'white', border: 'none', padding: '14px', borderRadius: '14px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <button type="submit" style={{width: '100%', backgroundColor: '#6366f1', color: 'var(--text-primary)', border: 'none', padding: '14px', borderRadius: '14px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               <Plus size={18} strokeWidth={3} /> Add
             </button>
           </form>
 
           <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <h3 style={{ fontSize: '10px', fontWeight: 950, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.2em', borderBottom: '1px solid #1e293b', paddingBottom: '8px' }}>Active Groups</h3>
+            <h3 style={{ fontSize: '10px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', borderBottom: '1px solid var(--bg-border)', paddingBottom: '8px' }}>Active Groups</h3>
             {(categories || []).map(cat => (
-              <div key={cat.id} style={{ padding: '14px 16px', backgroundColor: '#020617', border: '1px solid #1e293b', borderRadius: '14px', color: 'white', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={cat.id} style={{padding: '14px 16px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', borderRadius: '14px', color: 'var(--text-primary)', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 {editingCatId === cat.id ? (
                   <input
                     autoFocus
@@ -286,7 +286,7 @@ const MenuManagement = () => {
                    {editingCatId === cat.id ? (
                       <button onClick={() => saveCategoryUpdate(cat.id)} style={{ color: '#10b981', background: 'none', border: 'none', cursor: 'pointer' }}><Save size={16} /></button>
                    ) : (
-                      <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); }} style={{ color: '#64748b', background: 'none', border: 'none', cursor: 'pointer' }}><Edit2 size={16} /></button>
+                      <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); }} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}><Edit2 size={16} /></button>
                    )}
                    <button onClick={() => deleteCategory(cat.id)} style={{ color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
                 </div>
@@ -298,13 +298,13 @@ const MenuManagement = () => {
 
       {/* Item Management Column */}
       <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        <div style={{ backgroundColor: '#0f172a', borderRadius: '32px', padding: '40px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-rgba-05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Utensils size={22} style={{ color: '#10b981' }} />
               </div>
-              <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'white', margin: 0 }}>Add To Live Menu</h2>
+              <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Add To Live Menu</h2>
             </div>
             <button onClick={() => fileInputRef.current?.click()} type="button" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}>
               <UploadCloud size={18} /> Import CSV
@@ -314,22 +314,22 @@ const MenuManagement = () => {
 
           <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: '#64748b', textTransform: 'uppercase' }}>Dish Name</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dish Name</label>
               <input
                 type="text"
-                style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
+                style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
                 value={newItem.name}
                 onChange={(e) => setNewItem({...newItem, name: e.target.value})}
                 required
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: '#64748b', textTransform: 'uppercase' }}>Price (₹)</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price (₹)</label>
               <div style={{ position: 'relative' }}>
-                <IndianRupee style={{ position: 'absolute', top: '15px', left: '16px', color: '#475569' }} size={16} />
+                <IndianRupee style={{ position: 'absolute', top: '15px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                 <input
                   type="number"
-                  style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: '#10b981', padding: '14px 16px 14px 40px', borderRadius: '16px', outline: 'none', fontSize: '18px', fontWeight: 900 }}
+                  style={{ width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: '#10b981', padding: '14px 16px 14px 40px', borderRadius: '16px', outline: 'none', fontSize: '18px', fontWeight: 900 }}
                   value={newItem.price}
                   onChange={(e) => setNewItem({...newItem, price: e.target.value})}
                   required
@@ -337,9 +337,9 @@ const MenuManagement = () => {
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: '#64748b', textTransform: 'uppercase' }}>Category</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
               <select
-                style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
+                style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
                 value={newItem.category_id}
                 onChange={(e) => setNewItem({...newItem, category_id: e.target.value})}
               >
@@ -350,10 +350,10 @@ const MenuManagement = () => {
               </select>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: '#64748b', textTransform: 'uppercase' }}>Description</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Description</label>
               <input
                 type="text"
-                style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: '#94a3b8', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px' }}
+                style={{ width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-secondary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px' }}
                 value={newItem.description}
                 onChange={(e) => setNewItem({...newItem, description: e.target.value})}
               />
@@ -368,26 +368,26 @@ const MenuManagement = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-               <ListChecks size={20} style={{ color: '#64748b' }} />
-               <h3 style={{ fontSize: '14px', fontWeight: 950, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.2em', margin: 0 }}>Current Menu Catalog</h3>
+               <ListChecks size={20} style={{ color: 'var(--text-muted)' }} />
+               <h3 style={{ fontSize: '14px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', margin: 0 }}>Current Menu Catalog</h3>
             </div>
             
             <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
-               <Search style={{ position: 'absolute', top: '12px', left: '16px', color: '#64748b' }} size={16} />
+               <Search style={{ position: 'absolute', top: '12px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                <input
                  type="text"
                  placeholder="Search dishes or groups..."
                  value={searchTerm}
                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                 style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '10px 16px 10px 42px', borderRadius: '12px', outline: 'none', fontSize: '13px', fontWeight: 700 }}
+                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '10px 16px 10px 42px', borderRadius: '12px', outline: 'none', fontSize: '13px', fontWeight: 700 }}
                />
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {(items || []).map(item => (
               <div key={item.id} style={{ 
-                backgroundColor: '#0f172a', 
-                border: editingItemId === item.id ? '2px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.05)', 
+                backgroundColor: 'var(--bg-card)', 
+                border: editingItemId === item.id ? '2px solid #38bdf8' : '1px solid var(--border-rgba-05)', 
                 borderRadius: '16px', 
                 padding: '16px 24px', 
                 display: 'flex', 
@@ -402,17 +402,17 @@ const MenuManagement = () => {
                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: '120px' }}>
                       <span style={{ fontSize: '9px', color: '#10b981', fontWeight: 950, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '6px', width: 'fit-content', marginBottom: '4px' }}>{item.category_name}</span>
                       {editingItemId === item.id ? (
-                        <input value={editItemData.name} onChange={(e) => setEditItemData({...editItemData, name: e.target.value})} style={{ background: '#020617', border: '1px solid #1e293b', color: 'white', padding: '4px 8px', borderRadius: '8px', fontSize: '15px', fontWeight: 900, width: '200px' }} />
+                        <input value={editItemData.name} onChange={(e) => setEditItemData({...editItemData, name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '15px', fontWeight: 900, width: '200px' }} />
                       ) : (
-                        <h4 style={{ fontSize: '16px', fontWeight: 800, color: 'white', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
+                        <h4 style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
                       )}
                    </div>
                    
                    <div style={{ flex: 1, padding: '0 24px' }}>
                       {editingItemId === item.id ? (
-                        <textarea value={editItemData.description} onChange={(e) => setEditItemData({...editItemData, description: e.target.value})} style={{ width: '100%', background: '#020617', border: '1px solid #1e293b', color: '#94a3b8', padding: '4px 8px', borderRadius: '8px', fontSize: '12px', minHeight: '40px' }} />
+                        <textarea value={editItemData.description} onChange={(e) => setEditItemData({...editItemData, description: e.target.value})} style={{ width: '100%', background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-secondary)', padding: '4px 8px', borderRadius: '8px', fontSize: '12px', minHeight: '40px' }} />
                       ) : (
-                        <p style={{ color: '#475569', fontSize: '13px', margin: 0, lineHeight: '1.4' }}>{item.description || 'No description provided'}</p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.4' }}>{item.description || 'No description provided'}</p>
                       )}
                    </div>
                 </div>
@@ -422,22 +422,22 @@ const MenuManagement = () => {
                       {editingItemId === item.id ? (
                         <div style={{ position: 'relative' }}>
                           <span style={{ position: 'absolute', left: '8px', top: '6px', color: '#10b981', fontSize: '14px', fontWeight: 900 }}>₹</span>
-                          <input type="number" value={editItemData.price} onChange={(e) => setEditItemData({...editItemData, price: e.target.value})} style={{ background: '#020617', border: '1px solid #1e293b', color: '#10b981', padding: '4px 8px 4px 20px', borderRadius: '8px', fontSize: '16px', fontWeight: 900, width: '90px' }} />
+                          <input type="number" value={editItemData.price} onChange={(e) => setEditItemData({...editItemData, price: e.target.value})} style={{ background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#10b981', padding: '4px 8px 4px 20px', borderRadius: '8px', fontSize: '16px', fontWeight: 900, width: '90px' }} />
                         </div>
                       ) : (
-                        <span style={{ fontSize: '18px', fontWeight: 900, color: 'white' }}>₹{item.price}</span>
+                        <span style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)' }}>₹{item.price}</span>
                       )}
                    </div>
 
-                   <div style={{ display: 'flex', gap: '10px', borderLeft: '1px solid rgba(255,255,255,0.05)', paddingLeft: '24px' }}>
+                   <div style={{ display: 'flex', gap: '10px', borderLeft: '1px solid var(--border-rgba-05)', paddingLeft: '24px' }}>
                       {editingItemId === item.id ? (
                         <>
-                          <button onClick={() => setEditingItemId(null)} style={{ padding: '8px', color: '#64748b', background: 'rgba(100, 116, 139, 0.1)', border: 'none', borderRadius: '10px', cursor: 'pointer' }}><X size={18} /></button>
+                          <button onClick={() => setEditingItemId(null)} style={{ padding: '8px', color: 'var(--text-muted)', background: 'rgba(100, 116, 139, 0.1)', border: 'none', borderRadius: '10px', cursor: 'pointer' }}><X size={18} /></button>
                           <button onClick={() => saveItemUpdate(item.id)} style={{ padding: '8px', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', border: 'none', borderRadius: '10px', cursor: 'pointer' }}><Save size={18} /></button>
                         </>
                       ) : (
                         <>
-                          <button onClick={() => startEditItem(item)} style={{ padding: '8px', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.2s', borderRadius: '10px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 116, 139, 0.1)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Edit2 size={18} /></button>
+                          <button onClick={() => startEditItem(item)} style={{ padding: '8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.2s', borderRadius: '10px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 116, 139, 0.1)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Edit2 size={18} /></button>
                           <button onClick={() => deleteItem(item.id)} style={{ padding: '8px', color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', transition: 'all 0.2s', borderRadius: '10px' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(244, 63, 94, 0.1)'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}><Trash2 size={18} /></button>
                         </>
                       )}

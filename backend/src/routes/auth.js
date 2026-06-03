@@ -180,7 +180,8 @@ router.post('/login', async (req, res) => {
         upi_id: user.upi_id,
         subscription_valid_until: user.subscription_valid_until,
         lodgingEnabled: !!config.lodgingEnabled,
-        kotEnabled: !!config.kotEnabled
+        kotEnabled: !!config.kotEnabled,
+        whatsAppBillingEnabled: !!config.whatsAppBillingEnabled
       }
     });
   } catch (err) {

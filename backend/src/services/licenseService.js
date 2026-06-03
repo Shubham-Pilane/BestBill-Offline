@@ -37,7 +37,20 @@ const YEARLY_KEYS = {
   9: 'F7cM1rZ4v8'
 };
 
-const PERMANENT_KEY = 'X7P9K2M8Q4';
+const PERMANENT_KEYS = {
+  0: 'X7P9K2M8Q4', // Jan
+  1: 'N9WT3ZL8R5', // Feb
+  2: 'R5BY7QD2K9', // Mar
+  3: 'C8UM1XP6T3', // Apr
+  4: 'H4KV9NJ3W7', // May
+  5: 'Z2RF8YW7M1', // Jun
+  6: 'T6PL3CN9Q4', // Jul
+  7: 'B1DQ7MK5X8', // Aug
+  8: 'G9XR2VH4P6', // Sep
+  9: 'Y3JC8TM1N7', // Oct
+  10: 'P7NW4BX6K2', // Nov
+  11: 'L5SZ9QF2R8'  // Dec
+};
 
 /**
  * Calculates HMAC-SHA256 signature to protect the license file from direct manual edits.
@@ -186,24 +199,29 @@ function setLicenseKey(key) {
     let expiry = '';
     const now = new Date();
 
+    const currentMonth = now.getMonth();
+
     if (key === 'TRIAL_MODE') {
       type = 'trial';
-    } else if (key === PERMANENT_KEY) {
+    } else if (key === PERMANENT_KEYS[currentMonth]) {
       type = 'permanent';
       expiry = new Date('2099-12-31T23:59:59.999Z').toISOString();
+    } else if (Object.values(PERMANENT_KEYS).includes(key)) {
+      // Reject permanent keys that belong to other months
+      console.warn(`[LICENSE] Permanent key rejected. Not valid for current month.`);
+      return false;
     } else {
       // Check Monthly
-      const currentMonth = now.getMonth();
       if (key === MONTHLY_KEYS[currentMonth]) {
         type = 'monthly';
-        expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
       } else {
         // Check Yearly
         const currentYear = now.getFullYear();
         const lastDigit = currentYear % 10;
         if (key === YEARLY_KEYS[lastDigit]) {
           type = 'yearly';
-          expiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+          expiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(); // 365 days
         } else {
           console.warn(`[LICENSE] Key rejected. Not valid for current month/year/permanent.`);
           return false;

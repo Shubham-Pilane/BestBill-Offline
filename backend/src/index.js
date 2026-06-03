@@ -70,7 +70,7 @@ const db = require('./db/db');
 // --- AUTO CLEANUP TASK (2 DAYS / 1 YEAR) ---
 const runCleanupTask = async () => {
     try {
-        console.log('[CLEANUP] Starting daily history cleanup (Orders: 2 days, Bills: 1 year)...');
+        console.log('[CLEANUP] Starting daily history cleanup (Orders: 2 days, Bills: 1 year, Items: Today)...');
         
         // 1. Delete all unbilled orders older than 2 days (transient, active, or cancelled orders)
         const resUnbilledOrders = await db.query(
@@ -87,7 +87,12 @@ const runCleanupTask = async () => {
             "DELETE FROM orders WHERE id IN (SELECT order_id FROM bills) AND created_at < datetime('now', '-1 year')"
         );
 
-        console.log(`[CLEANUP] Success: Removed ${resUnbilledOrders.rowCount} unbilled orders, ${resBills.rowCount} bills, and ${resBilledOrders.rowCount} billed orders.`);
+        // 4. Delete item sales details (order_items) that are older than today (local time)
+        const resOrderItems = await db.query(
+            "DELETE FROM order_items WHERE created_at < date('now', 'localtime')"
+        );
+
+        console.log(`[CLEANUP] Success: Removed ${resUnbilledOrders.rowCount} unbilled orders, ${resBills.rowCount} bills, ${resBilledOrders.rowCount} billed orders, and ${resOrderItems.rowCount} order items.`);
     } catch (err) {
         console.error('[CLEANUP] Error during cleanup:', err.message);
     }

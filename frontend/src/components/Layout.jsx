@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
 import { 
@@ -47,6 +48,7 @@ const playInternalChime = () => {
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
+
   const location = useLocation();
   const isWaiter = user?.role === 'waiter';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -104,7 +106,12 @@ const Layout = ({ children }) => {
 
   const kotEnabled = user?.kotEnabled || false;
 
-  const navItems = baseNavItems;
+  const navItems = baseNavItems.filter(item => {
+    if (item.path === '/kitchen-kot' && !kotEnabled) return false;
+    if (item.path === '/lodging' && !lodgingEnabled) return false;
+    if (item.path === '/orders' && !lodgingEnabled) return false;
+    return true;
+  });
 
   const handleNavClick = (e, item) => {
     if (item.path === '/kitchen-kot' && !kotEnabled) {
@@ -112,7 +119,7 @@ const Layout = ({ children }) => {
       toast.error("You need licencse for that to unloack this fetaure contact Shubham Pilane 9822401802", {
         style: {
           borderRadius: '12px',
-          background: '#0f172a',
+          background: 'var(--bg-card)',
           color: '#fff',
           border: '1px solid #ef4444',
           fontWeight: '900',
@@ -126,7 +133,7 @@ const Layout = ({ children }) => {
       toast.error("You need licencse for that to unloack this fetaure contact Shubham Pilane 9822401802", {
         style: {
           borderRadius: '12px',
-          background: '#0f172a',
+          background: 'var(--bg-card)',
           color: '#fff',
           border: '1px solid #ef4444',
           fontWeight: '900',
@@ -140,7 +147,7 @@ const Layout = ({ children }) => {
 
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#050a18', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-layout)', color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div 
@@ -153,8 +160,8 @@ const Layout = ({ children }) => {
       <aside 
         style={{ 
           width: '280px', 
-          backgroundColor: '#0f172a', 
-          borderRight: '1px solid #1e293b', 
+          backgroundColor: 'var(--bg-card)', 
+          borderRight: '1px solid var(--bg-border)', 
           display: 'flex', 
           flexDirection: 'column', 
           position: 'fixed', 
@@ -174,7 +181,7 @@ const Layout = ({ children }) => {
             <h1 style={{ fontSize: '28px', fontWeight: 900, margin: 0 }}>Best<span style={{ color: '#38bdf8' }}>Bill</span></h1>
           </div>
           {/* Close button only for mobile */}
-          <button className="mobile-only" onClick={() => setMobileMenuOpen(false)} style={{ background: 'none', border: 'none', color: '#64748b' }}>
+          <button className="mobile-only" onClick={() => setMobileMenuOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)' }}>
             <X size={24} />
           </button>
         </div>
@@ -185,7 +192,7 @@ const Layout = ({ children }) => {
               key={item.path} 
               to={item.path} 
               onClick={(e) => handleNavClick(e, item)}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '14px', textDecoration: 'none', color: location.pathname === item.path ? '#0ea5e9' : '#94a3b8', backgroundColor: location.pathname === item.path ? 'rgba(14, 165, 233, 0.1)' : 'transparent', fontWeight: 700, fontSize: '16px' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '14px', textDecoration: 'none', color: location.pathname === item.path ? '#0ea5e9' : 'var(--text-secondary)', backgroundColor: location.pathname === item.path ? 'rgba(14, 165, 233, 0.1)' : 'transparent', fontWeight: 700, fontSize: '16px' }}
             >
               {item.icon}
               <span style={{ flex: 1 }}>{item.name}</span>
@@ -200,26 +207,26 @@ const Layout = ({ children }) => {
         <div style={{ padding: '0 24px', marginTop: '8px' }}>
           <button
             onClick={() => setShowSupport(!showSupport)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', borderRadius: '14px', backgroundColor: showSupport ? 'rgba(14, 165, 233, 0.1)' : 'transparent', border: 'none', cursor: 'pointer', color: showSupport ? '#0ea5e9' : '#94a3b8', fontWeight: 700, fontSize: '16px', textAlign: 'left' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', borderRadius: '14px', backgroundColor: showSupport ? 'rgba(14, 165, 233, 0.1)' : 'transparent', border: 'none', cursor: 'pointer', color: showSupport ? '#0ea5e9' : 'var(--text-secondary)', fontWeight: 700, fontSize: '16px', textAlign: 'left' }}
           >
             <Headset size={20} />
             <span style={{ flex: 1 }}>Customer Care</span>
           </button>
           {showSupport && (
             <div style={{ backgroundColor: 'rgba(14, 165, 233, 0.05)', borderRadius: '14px', padding: '16px', border: '1px solid rgba(14, 165, 233, 0.1)', marginTop: '6px', animation: 'fadeIn 0.2s ease' }}>
-              <p style={{ color: '#94a3b8', fontSize: '11px', fontWeight: 700, margin: '0 0 8px 0', lineHeight: '1.5' }}>Founder — <span style={{ color: '#e2e8f0' }}>Shubham Pilane</span></p>
-              <a href="tel:+919822401802" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textDecoration: 'none', marginBottom: '4px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700, margin: '0 0 8px 0', lineHeight: '1.5' }}>Founder — <span style={{ color: 'var(--text-primary)' }}>Shubham Pilane</span></p>
+              <a href="tel:+919822401802" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 700, textDecoration: 'none', marginBottom: '4px' }}>
                 <Phone size={12} style={{ color: '#10b981' }} /> +91 9822401802
               </a>
-              <a href="mailto:bestbillsolutions@gmail.com" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textDecoration: 'none' }}>
+              <a href="mailto:bestbillsolutions@gmail.com" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 700, textDecoration: 'none' }}>
                 <Mail size={12} style={{ color: '#f59e0b' }} /> bestbillsolutions@gmail.com
               </a>
-              <p style={{ color: '#475569', fontSize: '10px', fontWeight: 600, margin: '10px 0 0 0', lineHeight: '1.5' }}>For any support, queries, or technical assistance, please contact us.</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600, margin: '10px 0 0 0', lineHeight: '1.5' }}>For any support, queries, or technical assistance, please contact us.</p>
             </div>
           )}
         </div>
 
-        <div style={{ padding: '16px 24px 24px' }}>
+        <div style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button onClick={logout} style={{ width: '100%', padding: '14px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
             <LogOut size={18} /> Sign Out
           </button>
@@ -228,17 +235,17 @@ const Layout = ({ children }) => {
 
       {/* Main Content Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
-        <header className="responsive-header" style={{ height: '72px', backgroundColor: '#0f172a', padding: '0 24px', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 100 }}>
+        <header className="responsive-header" style={{ height: '72px', backgroundColor: 'var(--bg-card)', padding: '0 24px', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 100 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button onClick={() => setMobileMenuOpen(true)} style={{ color: '#fff', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button onClick={() => setMobileMenuOpen(true)} style={{color: 'var(--text-primary)', background: 'var(--border-rgba-05)', border: '1px solid var(--border-rgba-1)', padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Menu size={24} />
             </button>
             <h1 style={{ fontSize: '20px', fontWeight: 900, margin: 0 }}>Best<span style={{ color: '#38bdf8' }}>Bill</span></h1>
           </div>
           {user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-               <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #334155' }}>
-                  <UserCircle size={20} color="#94a3b8" />
+               <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #334155' }}>
+                  <UserCircle size={20} color="var(--text-secondary)" />
                </div>
             </div>
           )}

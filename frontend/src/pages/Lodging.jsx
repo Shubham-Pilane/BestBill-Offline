@@ -164,7 +164,7 @@ const Lodging = () => {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
-      <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '4px solid #1e293b', borderTopColor: '#0ea5e9', animation: 'spin 1s linear infinite' }}></div>
+      <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '4px solid var(--bg-border)', borderTopColor: '#0ea5e9', animation: 'spin 1s linear infinite' }}></div>
       <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -187,10 +187,10 @@ const Lodging = () => {
             <Hotel color="#0ea5e9" size={32} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <h1 style={{ fontSize: '36px', fontWeight: 950, color: 'white', margin: 0, letterSpacing: '-0.02em' }}>{user?.hotel_name || 'BestBill Hotel'}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#64748b', fontSize: '14px', fontWeight: 700 }}>
+            <h1 style={{fontSize: '36px', fontWeight: 950, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>{user?.hotel_name || 'BestBill Hotel'}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 700 }}>
               <span>Proprietor: {user?.name || 'A'}</span>
-              <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#1e293b' }}></div>
+              <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--bg-border)' }}></div>
               <span style={{ color: '#10b981' }}>Active Session</span>
             </div>
           </div>
@@ -199,8 +199,8 @@ const Lodging = () => {
         <div style={{ display: 'flex', gap: '40px', alignItems: 'center' }}>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
-            <span style={{ fontSize: '10px', fontWeight: 900, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Current Date</span>
-            <span style={{ fontSize: '16px', fontWeight: 800, color: 'white' }}>
+            <span style={{ fontSize: '10px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Current Date</span>
+            <span style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
           </div>
@@ -208,25 +208,25 @@ const Lodging = () => {
       </div>
       <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'white', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h2 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <Bed style={{ color: '#0ea5e9' }} size={24} />
             Lodging Control
           </h2>
           <div style={{ position: 'relative' }}>
-            <Search style={{ position: 'absolute', top: '14px', left: '16px', color: '#475569' }} size={18} />
+            <Search style={{ position: 'absolute', top: '14px', left: '16px', color: 'var(--text-muted)' }} size={18} />
             <input
               type="text"
               placeholder="Search rooms..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', backgroundColor: '#0f172a', border: '2px solid #1e293b', color: 'white', padding: '12px 16px 12px 48px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 600 }}
+              style={{width: '100%', backgroundColor: 'var(--bg-card)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px 16px 12px 48px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 600 }}
             />
           </div>
         </div>
           <div style={{ display: 'flex', gap: '16px' }}>
             <button
               onClick={() => setQRModalOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: '#0f172a', color: 'white', padding: '14px 24px', borderRadius: '16px', fontWeight: 800, fontSize: '15px', cursor: 'pointer', border: '2px solid #1e293b' }}
+              style={{display: 'flex', alignItems: 'center', gap: '12px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', padding: '14px 24px', borderRadius: '16px', fontWeight: 800, fontSize: '15px', cursor: 'pointer', border: '2px solid var(--bg-border)' }}
             >
               <QrCode size={20} />
               Guest QR
@@ -244,9 +244,9 @@ const Lodging = () => {
       </div>
 
       {floors.length === 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px', backgroundColor: '#0f172a', borderRadius: '32px', border: '2px dashed #1e293b', textAlign: 'center' }}>
-          <Bed size={48} style={{ color: '#1e293b', marginBottom: '16px' }} />
-          <p style={{ color: '#64748b', fontSize: '18px', fontWeight: 600 }}>No rooms configured for this hotel.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', border: '2px dashed var(--bg-border)', textAlign: 'center' }}>
+          <Bed size={48} style={{ color: 'var(--bg-border)', marginBottom: '16px' }} />
+          <p style={{ color: 'var(--text-muted)', fontSize: '18px', fontWeight: 600 }}>No rooms configured for this hotel.</p>
           <button onClick={() => setAddRoomOpen(true)} style={{ color: '#0ea5e9', fontWeight: 900, background: 'none', border: 'none', cursor: 'pointer', marginTop: '12px', fontSize: '16px', textDecoration: 'underline' }}>Setup Lodging Layout</button>
         </div>
       ) : (
@@ -254,9 +254,9 @@ const Lodging = () => {
           {floors.map(floor => (
             <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase' }}>{floor}</h2>
-                  <div style={{ flex: 1, height: '2px', backgroundColor: '#1e293b' }}></div>
-                  <span style={{ fontSize: '12px', color: '#475569', fontWeight: 800 }}>{groupedRooms[floor].length} ROOMS</span>
+                  <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{floor}</h2>
+                  <div style={{ flex: 1, height: '2px', backgroundColor: 'var(--bg-border)' }}></div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{groupedRooms[floor].length} ROOMS</span>
                </div>
                
                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '24px' }}>
@@ -282,16 +282,16 @@ const Lodging = () => {
       {/* Add Room Batch Modal */}
       {isAddRoomOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
-           <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#0f172a', borderRadius: '32px', padding: '40px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+           <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-rgba-1)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'white', margin: 0 }}>Initialize Lodging</h3>
-                <button onClick={() => setAddRoomOpen(false)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={24} /></button>
+                <h3 style={{fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Initialize Lodging</h3>
+                <button onClick={() => setAddRoomOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={24} /></button>
               </div>
               <form onSubmit={addRoomsBatch} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                  {roomConfigs.map((config, index) => (
-                    <div key={index} style={{ padding: '20px', backgroundColor: '#020617', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div key={index} style={{ padding: '20px', backgroundColor: 'var(--bg-base)', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                        <div>
-                          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 900 }}>FLOOR</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 900 }}>FLOOR</label>
                           <select 
                             value={config.floor} 
                             onChange={(e) => {
@@ -299,7 +299,7 @@ const Lodging = () => {
                                 newConfigs[index].floor = e.target.value;
                                 setRoomConfigs(newConfigs);
                             }}
-                            style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', padding: '12px', borderRadius: '12px' }}
+                            style={{width: '100%', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px', borderRadius: '12px' }}
                           >
                              {[...Array(5)].map((_, i) => <option key={i+1} value={`Floor ${i+1}`}>Floor {i+1}</option>)}
                              <option value="Main Hall">Main Hall</option>
@@ -310,7 +310,7 @@ const Lodging = () => {
                           </select>
                        </div>
                        <div>
-                          <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 900 }}>ROOM BATCH COUNT</label>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 900 }}>ROOM BATCH COUNT</label>
                           <input 
                             type="number" 
                             value={config.count}
@@ -319,7 +319,7 @@ const Lodging = () => {
                                 newConfigs[index].count = e.target.value;
                                 setRoomConfigs(newConfigs);
                             }}
-                            style={{ width: '100%', backgroundColor: '#0f172a', border: '1px solid #1e293b', color: 'white', padding: '12px', borderRadius: '12px', fontWeight: 900 }} 
+                            style={{width: '100%', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px', borderRadius: '12px', fontWeight: 900 }} 
                           />
                        </div>
                     </div>
@@ -348,19 +348,19 @@ const Lodging = () => {
       {/* Edit/Rename Modal */}
       {isEditModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(16px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
-           <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#0f172a', borderRadius: '32px', padding: '40px' }}>
-              <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'white', marginBottom: '24px' }}>Rename Room</h3>
+           <div style={{ width: '100%', maxWidth: '400px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '40px' }}>
+              <h3 style={{fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '24px' }}>Rename Room</h3>
               <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                  <div>
-                    <label style={{ fontSize: '11px', color: '#64748b' }}>Room Name/Label</label>
+                    <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Room Name/Label</label>
                     <input 
                       type="text" value={editData.room_name} 
                       onChange={(e) => setEditData({...editData, room_name: e.target.value})}
-                      style={{ width: '100%', backgroundColor: '#020617', border: '2px solid #1e293b', color: 'white', padding: '14px', borderRadius: '16px', fontWeight: 800 }}
+                      style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', fontWeight: 800 }}
                     />
                  </div>
                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <button type="button" onClick={() => setEditModalOpen(false)} style={{ flex: 1, backgroundColor: '#1e293b', color: 'white', padding: '14px', borderRadius: '16px', border: 'none' }}>Cancel</button>
+                    <button type="button" onClick={() => setEditModalOpen(false)} style={{flex: 1, backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', border: 'none' }}>Cancel</button>
                     <button type="submit" style={{ flex: 2, backgroundColor: '#0ea5e9', color: 'white', padding: '14px', borderRadius: '16px', border: 'none', fontWeight: 800 }}>Save Changes</button>
                  </div>
               </form>
@@ -371,13 +371,13 @@ const Lodging = () => {
       {/* Guest QR Modal */}
       {isQRModalOpen && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(32px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9000, padding: '24px' }}>
-           <div style={{ width: '100%', maxWidth: '440px', backgroundColor: '#0f172a', borderRadius: '48px', padding: '48px', border: '1px solid rgba(255, 255, 255, 0.05)', textAlign: 'center' }}>
+           <div style={{ width: '100%', maxWidth: '440px', backgroundColor: 'var(--bg-card)', borderRadius: '48px', padding: '48px', border: '1px solid var(--border-rgba-05)', textAlign: 'center' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'white', margin: 0 }}>Hotel Guest QR</h3>
-                <button onClick={() => setQRModalOpen(false)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={32} /></button>
+                <h3 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Hotel Guest QR</h3>
+                <button onClick={() => setQRModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={32} /></button>
               </div>
               
-              <div style={{ backgroundColor: 'white', padding: '32px', borderRadius: '32px', display: 'inline-block', marginBottom: '32px' }}>
+              <div style={{backgroundcolor: 'var(--text-primary)', padding: '32px', borderRadius: '32px', display: 'inline-block', marginBottom: '32px' }}>
                   <QRCodeCanvas 
                     id="hotel-qr-code"
                     value={`http://${lanIp}:5000/#/guest/order/${user.hotel_id}`}
@@ -388,8 +388,8 @@ const Lodging = () => {
               </div>
 
               <div style={{ marginBottom: '32px' }}>
-                  <h4 style={{ fontSize: '20px', fontWeight: 900, color: 'white', margin: '0 0 8px 0' }}>{user.hotel_name}</h4>
-                  <p style={{ color: '#64748b', fontSize: '14px', fontWeight: 600, margin: 0 }}>Place in every room. Guests can scan this to view menu and order instantly.</p>
+                  <h4 style={{fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 8px 0' }}>{user.hotel_name}</h4>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600, margin: 0 }}>Place in every room. Guests can scan this to view menu and order instantly.</p>
               </div>
 
               <button 
@@ -425,7 +425,7 @@ const RoomCard = React.memo(({ room, onOpen, onEdit, onDelete, searchQuery }) =>
     <div
       onClick={() => onOpen(room)}
       style={{ 
-        backgroundColor: '#0f172a', 
+        backgroundColor: 'var(--bg-card)', 
         borderRadius: '32px', 
         padding: '32px', 
         border: isOccupied ? '2px solid rgba(244, 63, 94, 0.4)' : '2px solid rgba(16, 185, 129, 0.4)', 
@@ -442,20 +442,20 @@ const RoomCard = React.memo(({ room, onOpen, onEdit, onDelete, searchQuery }) =>
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', backgroundColor: '#f43f5e' }}></div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' }}>ROOM {room.room_number}</span>
+        <span style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase' }}>ROOM {room.room_number}</span>
         <div style={{ display: 'flex', gap: '12px' }}>
            <button onClick={(e) => onEdit(e, room)} style={{ color: '#0ea5e9', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 900, fontSize: '11px' }}>RENAME</button>
            <button onClick={(e) => onDelete(e, room.id)} style={{ color: '#f43f5e', border: 'none', background: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
         </div>
       </div>
       <div>
-        <h3 style={{ fontSize: '32px', fontWeight: 900, color: 'white', margin: 0 }}>{room.room_name || room.room_number}</h3>
+        <h3 style={{fontSize: '32px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{room.room_name || room.room_number}</h3>
         <span style={{ fontSize: '12px', fontWeight: 800, color: isOccupied ? '#f43f5e' : '#10b981' }}>{room.status.toUpperCase()}</span>
       </div>
       {isOccupied && (
-        <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>{room.guest_name}</span>
-          <span style={{ fontSize: '11px', color: '#64748b' }}>Check-in: {new Date(room.check_in_date).toLocaleDateString()}</span>
+        <div style={{ marginTop: 'auto', paddingTop: '12px', borderTop: '1px solid var(--border-rgba-05)' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block' }}>{room.guest_name}</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Check-in: {new Date(room.check_in_date).toLocaleDateString()}</span>
         </div>
       )}
     </div>
