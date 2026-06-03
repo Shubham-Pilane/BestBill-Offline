@@ -181,7 +181,8 @@ router.post('/login', async (req, res) => {
         subscription_valid_until: user.subscription_valid_until,
         lodgingEnabled: !!config.lodgingEnabled,
         kotEnabled: !!config.kotEnabled,
-        whatsAppBillingEnabled: !!config.whatsAppBillingEnabled
+        whatsAppBillingEnabled: !!config.whatsAppBillingEnabled,
+        inventoryEnabled: !!config.inventoryEnabled
       }
     });
   } catch (err) {

@@ -29,6 +29,25 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editPriceValue, setEditPriceValue] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
+  const [partyType, setPartyType] = useState('customer'); // 'customer' or 'vendor'
+  const [customerName, setCustomerName] = useState('');
+  const [selectedVendorId, setSelectedVendorId] = useState('');
+  const [vendors, setVendors] = useState([]);
+
+  useEffect(() => {
+    if (selectedPaymentMethod === 'credit') {
+      const fetchVendors = async () => {
+        try {
+          const res = await api.get('/credit/vendors');
+          setVendors(res.data || []);
+        } catch (err) {
+          toast.error('Failed to load vendors');
+        }
+      };
+      fetchVendors();
+    }
+  }, [selectedPaymentMethod]);
+
 
   const fetchAllMenu = async () => {
     try {
@@ -270,20 +289,44 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
     }
   };
 
-    const confirmPayment = async (method = 'upi') => {
-     try {
-        await api.put(`/tables/bill/${billData.id}/pay`, { method });
-        setBillData(prev => ({ ...prev, is_paid: true }));
-        setIsSuccess(true);
-        toast.success('Transaction Completed');
-        
-        setTimeout(() => {
-           onClose();
-        }, 1800);
-     } catch (err) {
-        toast.error('Payment verification failed');
-     }
-   };
+  const confirmPayment = async (method = 'upi') => {
+    try {
+       if (method === 'credit') {
+          const payload = {
+            bill_id: billData.id,
+            party_type: partyType,
+            amount: parseFloat(billData.final_amount),
+            vendor_id: partyType === 'vendor' ? Number(selectedVendorId) : null,
+            customer_name: partyType === 'customer' ? customerName : null,
+            customer_phone: partyType === 'customer' ? customerPhone : null
+          };
+          if (partyType === 'customer' && !customerName.trim()) {
+            return toast.error('Customer Name is required');
+          }
+          if (partyType === 'vendor' && !selectedVendorId) {
+            return toast.error('Please select a vendor');
+          }
+          await api.post('/credit/save', payload);
+          setBillData(prev => ({ ...prev, is_paid: false, payment_method: 'credit' }));
+          setIsSuccess(true);
+          toast.success('Credit Bill Recorded!');
+          setTimeout(() => {
+             onClose();
+          }, 1800);
+          return;
+       }
+       await api.put(`/tables/bill/${billData.id}/pay`, { method });
+       setBillData(prev => ({ ...prev, is_paid: true }));
+       setIsSuccess(true);
+       toast.success('Transaction Completed');
+       
+       setTimeout(() => {
+          onClose();
+       }, 1800);
+    } catch (err) {
+       toast.error(err.response?.data?.message || 'Payment verification failed');
+    }
+  };
 
   const sendNotification = async (method) => {
     if (!customerPhone || customerPhone.length < 10) {
@@ -649,81 +692,244 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                 </div>
 
                 <div style={{ marginTop: '48px' }}>
-                   {!billData.is_paid ? (
-                     <button onClick={rollbackBill} style={{ width: '100%', padding: '20px', borderRadius: '24px', border: '2px solid #111827', backgroundColor: '#f3f4f6', color: '#111827', fontWeight: 900, cursor: 'pointer' }}>MODIFY INVOICE</button>
-                   ) : (
-                     <div style={{textAlign: 'center', padding: '24px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '24px', color: 'var(--text-primary)', fontWeight: 950, fontSize: '20px' }}>SUCCESSFULLY SETTLED</div>
-                   )}
+                  {!billData.is_paid ? (
+                    <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', padding: '20px', borderRadius: '24px', border: 'none', backgroundColor: '#ef4444', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}>MODIFY INVOICE</button>
+                  ) : (
+                    <div style={{textAlign: 'center', padding: '24px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '24px', color: 'var(--text-primary)', fontWeight: 950, fontSize: '20px' }}>SUCCESSFULLY SETTLED</div>
+                  )}
                 </div>
-             </div>
-
-             <div style={{ width: '380px', padding: '48px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '32px', overflowY: 'auto' }}>
-                <div style={{textAlign: 'center', backgroundColor: 'var(--text-primary)', padding: '24px', borderRadius: '32px' }}>
-                   <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />
-                    {!billData.is_paid && (
-                       <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                         <button 
-                           type="button"
-                           onClick={() => setSelectedPaymentMethod('cash')} 
-                           style={{ 
-                             flex: 1, 
-                             padding: '16px', 
-                             backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : 'transparent', 
-                             color: selectedPaymentMethod === 'cash' ? 'white' : 'var(--text-muted)', 
-                             border: selectedPaymentMethod === 'cash' ? 'none' : '2px solid var(--bg-border)', 
-                             borderRadius: '16px', 
-                             fontWeight: 1000, 
-                             cursor: 'pointer', 
-                             fontSize: '12px', 
-                             textTransform: 'uppercase', 
-                             letterSpacing: '0.05em', 
-                             boxShadow: selectedPaymentMethod === 'cash' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : 'none',
-                             transition: 'all 0.2s'
-                           }}
-                         >
-                           Cash Payment
-                         </button>
-                         <button 
-                           type="button"
-                           onClick={() => setSelectedPaymentMethod('upi')} 
-                           style={{ 
-                             flex: 1, 
-                             padding: '16px', 
-                             backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : 'transparent', 
-                             color: selectedPaymentMethod === 'upi' ? 'white' : 'var(--text-muted)', 
-                             border: selectedPaymentMethod === 'upi' ? 'none' : '2px solid var(--bg-border)', 
-                             borderRadius: '16px', 
-                             fontWeight: 1000, 
-                             cursor: 'pointer', 
-                             fontSize: '12px', 
-                             textTransform: 'uppercase', 
-                             letterSpacing: '0.05em', 
-                             boxShadow: selectedPaymentMethod === 'upi' ? '0 4px 12px rgba(14, 165, 233, 0.2)' : 'none',
-                             transition: 'all 0.2s'
-                           }}
-                         >
-                           Online Payment
-                         </button>
+              </div>
+              <div style={{ width: '380px', padding: '36px', backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                     {!billData.is_paid && (
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                         <div style={{ display: 'flex', gap: '8px' }}>
+                           <button 
+                             type="button"
+                             onClick={() => setSelectedPaymentMethod('cash')} 
+                             style={{ 
+                               flex: 1, 
+                               padding: '14px 8px', 
+                               backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : '#ffffff', 
+                               color: selectedPaymentMethod === 'cash' ? 'white' : '#475569', 
+                               border: selectedPaymentMethod === 'cash' ? 'none' : '1px solid #cbd5e1', 
+                               borderRadius: '12px', 
+                               fontWeight: 1000, 
+                               cursor: 'pointer', 
+                               fontSize: '13px', 
+                               textTransform: 'uppercase', 
+                               letterSpacing: '0.05em', 
+                               boxShadow: selectedPaymentMethod === 'cash' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
+                               transition: 'all 0.2s'
+                             }}
+                           >
+                             Cash
+                           </button>
+                           <button 
+                             type="button"
+                             onClick={() => setSelectedPaymentMethod('upi')} 
+                             style={{ 
+                               flex: 1, 
+                               padding: '14px 8px', 
+                               backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : '#ffffff', 
+                               color: selectedPaymentMethod === 'upi' ? 'white' : '#475569', 
+                               border: selectedPaymentMethod === 'upi' ? 'none' : '1px solid #cbd5e1', 
+                               borderRadius: '12px', 
+                               fontWeight: 1000, 
+                               cursor: 'pointer', 
+                               fontSize: '13px', 
+                               textTransform: 'uppercase', 
+                               letterSpacing: '0.05em', 
+                               boxShadow: selectedPaymentMethod === 'upi' ? '0 4px 12px rgba(14, 165, 233, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
+                               transition: 'all 0.2s'
+                             }}
+                           >
+                             Online
+                           </button>
+                           <button 
+                             type="button"
+                             onClick={() => setSelectedPaymentMethod('credit')} 
+                             style={{ 
+                               flex: 1, 
+                               padding: '14px 8px', 
+                               backgroundColor: selectedPaymentMethod === 'credit' ? '#f59e0b' : '#ffffff', 
+                               color: selectedPaymentMethod === 'credit' ? 'white' : '#475569', 
+                               border: selectedPaymentMethod === 'credit' ? 'none' : '1px solid #cbd5e1', 
+                               borderRadius: '12px', 
+                               fontWeight: 1000, 
+                               cursor: 'pointer', 
+                               fontSize: '13px', 
+                               textTransform: 'uppercase', 
+                               letterSpacing: '0.05em', 
+                               boxShadow: selectedPaymentMethod === 'credit' ? '0 4px 12px rgba(245, 158, 11, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
+                               transition: 'all 0.2s'
+                             }}
+                           >
+                             Credit
+                           </button>
+                         </div>
+ 
+                         {selectedPaymentMethod === 'credit' && (
+                           <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                             <div style={{ display: 'flex', gap: '12px' }}>
+                               <button 
+                                 type="button" 
+                                 className="btn-no-override"
+                                 onClick={() => setPartyType('customer')}
+                                 style={{ 
+                                   flex: 1, 
+                                   padding: '16px', 
+                                   borderRadius: '20px', 
+                                   fontSize: '15px', 
+                                   fontWeight: 900, 
+                                   backgroundColor: partyType === 'customer' ? '#0ea5e9' : 'white', 
+                                   color: partyType === 'customer' ? 'white' : '#475569', 
+                                   border: '2px solid ' + (partyType === 'customer' ? '#0ea5e9' : '#cbd5e1'), 
+                                   cursor: 'pointer', 
+                                   transition: 'all 0.2s',
+                                   boxShadow: partyType === 'customer' ? '0 8px 16px rgba(14, 165, 233, 0.15)' : 'none'
+                                 }}
+                               >
+                                 Customer
+                               </button>
+                               <button 
+                                 type="button" 
+                                 className="btn-no-override"
+                                 onClick={() => setPartyType('vendor')}
+                                 style={{ 
+                                   flex: 1, 
+                                   padding: '16px', 
+                                   borderRadius: '20px', 
+                                   fontSize: '15px', 
+                                   fontWeight: 900, 
+                                   backgroundColor: partyType === 'vendor' ? '#0ea5e9' : 'white', 
+                                   color: partyType === 'vendor' ? 'white' : '#475569', 
+                                   border: '2px solid ' + (partyType === 'vendor' ? '#0ea5e9' : '#cbd5e1'), 
+                                   cursor: 'pointer', 
+                                   transition: 'all 0.2s',
+                                   boxShadow: partyType === 'vendor' ? '0 8px 16px rgba(14, 165, 233, 0.15)' : 'none'
+                                 }}
+                               >
+                                 Vendor
+                               </button>
+                             </div>
+ 
+                             {partyType === 'customer' ? (
+                               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                 <input 
+                                   placeholder="Customer Name"
+                                   value={customerName}
+                                   onChange={e => setCustomerName(e.target.value)}
+                                   style={{ 
+                                     padding: '16px 20px', 
+                                     borderRadius: '20px', 
+                                     border: '2px solid #cbd5e1', 
+                                     backgroundColor: 'white', 
+                                     color: '#0f172a', 
+                                     fontWeight: 800, 
+                                     fontSize: '15px', 
+                                     outline: 'none', 
+                                     width: '100%', 
+                                     boxSizing: 'border-box',
+                                     transition: 'border-color 0.2s'
+                                   }}
+                                 />
+                                 <input 
+                                   placeholder="Mobile Number"
+                                   value={customerPhone}
+                                   onChange={e => setCustomerPhone(e.target.value)}
+                                   style={{ 
+                                     padding: '16px 20px', 
+                                     borderRadius: '20px', 
+                                     border: '2px solid #cbd5e1', 
+                                     backgroundColor: 'white', 
+                                     color: '#0f172a', 
+                                     fontWeight: 800, 
+                                     fontSize: '15px', 
+                                     outline: 'none', 
+                                     width: '100%', 
+                                     boxSizing: 'border-box',
+                                     transition: 'border-color 0.2s'
+                                   }}
+                                 />
+                               </div>
+                             ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  {vendors.length === 0 ? (
+                                    <div style={{ color: '#64748b', fontSize: '14px', textAlign: 'center', padding: '16px', backgroundColor: 'white', borderRadius: '16px', border: '1px dashed #cbd5e1' }}>No vendors registered.</div>
+                                  ) : (
+                                    <select 
+                                      value={selectedVendorId || ''} 
+                                      onChange={(e) => setSelectedVendorId(e.target.value)}
+                                      style={{
+                                        padding: '16px 20px', 
+                                        borderRadius: '20px', 
+                                        border: '2px solid #cbd5e1', 
+                                        backgroundColor: 'white', 
+                                        color: '#0f172a', 
+                                        fontWeight: 800, 
+                                        fontSize: '15px', 
+                                        outline: 'none', 
+                                        width: '100%', 
+                                        boxSizing: 'border-box',
+                                        transition: 'border-color 0.2s',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      <option value="" disabled>Select Vendor</option>
+                                      {vendors.map(v => (
+                                        <option key={v.id} value={v.id}>{v.name} {v.phone ? `(${v.phone})` : ''}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                </div>
+                              )}
+ 
+                             <button 
+                               type="button"
+                               className="btn-no-override"
+                               onClick={() => confirmPayment('credit')}
+                               style={{ 
+                                 width: '100%', 
+                                 padding: '18px', 
+                                 borderRadius: '20px', 
+                                 backgroundColor: '#10b981', 
+                                 color: 'white', 
+                                 border: 'none', 
+                                 cursor: 'pointer', 
+                                 fontWeight: '900', 
+                                 fontSize: '15px', 
+                                 boxShadow: '0 8px 20px rgba(16, 185, 129, 0.2)', 
+                                 textTransform: 'uppercase', 
+                                 marginTop: '8px',
+                                 transition: 'transform 0.1s'
+                               }}
+                             >
+                               Settle Without Print
+                             </button>
+                           </div>
+                         )}
                        </div>
                      )}
-                 </div>
-                 {user?.whatsAppBillingEnabled && (
-                    <div style={{backgroundColor: 'var(--text-primary)', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--text-primary)' }}>
-                       <Phone size={18} color="var(--text-secondary)" />
-                       <input 
-                          placeholder="Enter Mobile No" 
-                          value={customerPhone} 
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                          style={{ border: 'none', width: '100%', outline: 'none', fontWeight: 800, fontSize: '15px', background: 'white', color: 'var(--bg-border)' }}
-                       />
-                    </div>
-                  )}
+                  </div>
+ 
+                  {user?.whatsAppBillingEnabled && selectedPaymentMethod !== 'credit' && (
+                     <div style={{backgroundColor: 'white', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #cbd5e1' }}>
+                        <Phone size={18} color="#64748b" />
+                        <input 
+                           placeholder="Enter Mobile No" 
+                           value={customerPhone} 
+                           onChange={(e) => setCustomerPhone(e.target.value)}
+                           style={{ border: 'none', width: '100%', outline: 'none', fontWeight: 800, fontSize: '15px', background: 'white', color: '#0f172a' }}
+                        />
+                     </div>
+                   )}
 
                   <div style={{ display: 'flex', gap: '12px' }}>
                      <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#111827', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(17, 24, 39, 0.2)' }}>
                         <Printer size={18} /> {!billData.is_paid ? 'Print' : 'Re-Print'}
                      </button>
-                     {user?.whatsAppBillingEnabled && (
+                     {user?.whatsAppBillingEnabled && selectedPaymentMethod !== 'credit' && (
                        <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
                           <MessageCircle size={18} /> WhatsApp
                        </button>

@@ -116,6 +116,92 @@ const syncSchema = async () => {
                 valid_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 valid_until TIMESTAMP NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS inventory_categories (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS inventory_items (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                category_id INTEGER REFERENCES inventory_categories(id) ON DELETE SET NULL,
+                name VARCHAR(255) NOT NULL,
+                unit VARCHAR(50) NOT NULL,
+                current_stock DECIMAL(12,4) DEFAULT 0,
+                minimum_stock DECIMAL(12,4) DEFAULT 0,
+                purchase_rate DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS suppliers (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                email VARCHAR(255),
+                address TEXT,
+                gst_number VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS purchase_entries (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
+                invoice_number VARCHAR(100),
+                invoice_date DATE,
+                total_amount DECIMAL(10,2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS purchase_entry_items (
+                id SERIAL PRIMARY KEY,
+                purchase_entry_id INTEGER REFERENCES purchase_entries(id) ON DELETE CASCADE,
+                inventory_item_id INTEGER REFERENCES inventory_items(id) ON DELETE CASCADE,
+                quantity DECIMAL(12,4) NOT NULL,
+                rate DECIMAL(10,2) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL
+            )`,
+            `CREATE TABLE IF NOT EXISTS stock_transactions (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                inventory_item_id INTEGER REFERENCES inventory_items(id) ON DELETE CASCADE,
+                transaction_type VARCHAR(50) NOT NULL,
+                quantity DECIMAL(12,4) NOT NULL,
+                reference_type VARCHAR(50),
+                reference_id INTEGER,
+                remarks TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS recipes (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                product_id INTEGER REFERENCES menu_items(id) ON DELETE CASCADE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (hotel_id, product_id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS recipe_items (
+                id SERIAL PRIMARY KEY,
+                recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
+                inventory_item_id INTEGER REFERENCES inventory_items(id) ON DELETE CASCADE,
+                quantity_required DECIMAL(12,4) NOT NULL,
+                UNIQUE (recipe_id, inventory_item_id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS credits (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                bill_id INTEGER REFERENCES bills(id) ON DELETE CASCADE,
+                party_type VARCHAR(20) NOT NULL,
+                vendor_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
+                customer_name VARCHAR(255),
+                customer_phone VARCHAR(50),
+                amount DECIMAL(10,2) NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+                settled_at TIMESTAMP,
+                settlement_payment_method VARCHAR(20),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
@@ -132,7 +218,20 @@ const syncSchema = async () => {
             'CREATE INDEX IF NOT EXISTS idx_orders_table_id ON orders(table_id)',
             'CREATE INDEX IF NOT EXISTS idx_bills_order_id ON bills(order_id)',
             'CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)',
-            'CREATE INDEX IF NOT EXISTS idx_subscription_history_hotel_id ON subscription_history(hotel_id)'
+            'CREATE INDEX IF NOT EXISTS idx_subscription_history_hotel_id ON subscription_history(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_inventory_items_hotel_id ON inventory_items(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_inventory_items_category_id ON inventory_items(category_id)',
+            'CREATE INDEX IF NOT EXISTS idx_suppliers_hotel_id ON suppliers(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_purchase_entries_hotel_id ON purchase_entries(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_purchase_entry_items_entry ON purchase_entry_items(purchase_entry_id)',
+            'CREATE INDEX IF NOT EXISTS idx_stock_trans_hotel_item ON stock_transactions(hotel_id, inventory_item_id)',
+            'CREATE INDEX IF NOT EXISTS idx_recipes_hotel_prod ON recipes(hotel_id, product_id)',
+            'CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe ON recipe_items(recipe_id)',
+            'CREATE INDEX IF NOT EXISTS idx_credits_hotel_id ON credits(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_credits_bill_id ON credits(bill_id)',
+            'CREATE INDEX IF NOT EXISTS idx_credits_vendor_id ON credits(vendor_id)',
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_recipes ON recipes(hotel_id, product_id)',
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_recipe_items ON recipe_items(recipe_id, inventory_item_id)'
         ];
 
         for (const query of indexQueries) {
@@ -174,6 +273,7 @@ const syncSchema = async () => {
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false",
             "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS fssai_number VARCHAR(255)",
             "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+            "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS allow_negative_stock BOOLEAN DEFAULT false",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

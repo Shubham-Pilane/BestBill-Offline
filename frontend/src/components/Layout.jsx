@@ -19,7 +19,8 @@ import {
   ChefHat,
   Headset,
   Phone,
-  Mail
+  Mail,
+  Boxes
 } from 'lucide-react';
 
 const playInternalChime = () => {
@@ -88,6 +89,7 @@ const Layout = ({ children }) => {
   }, [user]);
 
   const lodgingEnabled = user?.lodgingEnabled || false;
+  const inventoryEnabled = user?.inventoryEnabled || false;
 
   const baseNavItems = isWaiter 
       ? [
@@ -99,6 +101,8 @@ const Layout = ({ children }) => {
           { name: 'Manage Menu', path: '/menu', icon: <UtensilsCrossed size={20} /> },
           { name: 'Kitchen(KOT)', path: '/kitchen-kot', icon: <ChefHat size={20} /> },
           { name: 'Billing History', path: '/history', icon: <History size={20} /> },
+          { name: 'Credit Management', path: '/credit', icon: <Wallet size={20} /> },
+          { name: 'Inventory Management', path: '/inventory', icon: <Boxes size={20} /> },
           { name: 'Lodging (Rooms)', path: '/lodging', icon: <Bed size={20} /> },
           { name: 'Guest Orders', path: '/orders', icon: <Bell size={20} /> },
           { name: 'Profile Settings', path: '/profile', icon: <UserCircle size={20} /> },
@@ -108,6 +112,7 @@ const Layout = ({ children }) => {
 
   const navItems = baseNavItems.filter(item => {
     if (item.path === '/kitchen-kot' && !kotEnabled) return false;
+    if (item.path === '/inventory' && !inventoryEnabled) return false;
     if (item.path === '/lodging' && !lodgingEnabled) return false;
     if (item.path === '/orders' && !lodgingEnabled) return false;
     return true;
@@ -117,6 +122,20 @@ const Layout = ({ children }) => {
     if (item.path === '/kitchen-kot' && !kotEnabled) {
       e.preventDefault();
       toast.error("You need licencse for that to unloack this fetaure contact Shubham Pilane 9822401802", {
+        style: {
+          borderRadius: '12px',
+          background: 'var(--bg-card)',
+          color: '#fff',
+          border: '1px solid #ef4444',
+          fontWeight: '900',
+          fontSize: '14px'
+        }
+      });
+      return;
+    }
+    if (item.path === '/inventory' && !inventoryEnabled) {
+      e.preventDefault();
+      toast.error("You need license for that to unlock this feature contact Shubham Pilane 9822401802", {
         style: {
           borderRadius: '12px',
           background: 'var(--bg-card)',
@@ -171,7 +190,8 @@ const Layout = ({ children }) => {
           height: '100vh', 
           zIndex: 200,
           transition: 'transform 0.3s ease',
-          transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)'
+          transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
+          overflowY: 'auto'
         }} 
         className="sidebar-responsive"
       >

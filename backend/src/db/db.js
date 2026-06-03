@@ -101,6 +101,7 @@ const query = (text, params = []) => {
       const safeParams = sqliteParams.map(p => {
         if (p === true) return 1;
         if (p === false) return 0;
+        if (p === undefined) return null;
         return p;
       });
 

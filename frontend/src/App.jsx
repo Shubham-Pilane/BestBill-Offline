@@ -11,6 +11,8 @@ import Lodging from './pages/Lodging';
 import GuestPortal from './pages/GuestPortal';
 import GuestOrders from './pages/GuestOrders';
 import KitchenKOT from './pages/KitchenKOT';
+import CreditManagement from './pages/CreditManagement';
+import InventoryManagement from './pages/InventoryManagement';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -27,13 +29,19 @@ const Home = () => {
 
 const OwnerRoute = ({ children }) => {
   const { user } = useAuth();
-  if (user?.role !== 'owner') return <Navigate to="/" />;
+  if (user?.role !== 'owner' || !user) return <Navigate to="/" />;
   return children;
 };
 
 const LodgingRoute = ({ children }) => {
   const { user } = useAuth();
   if (user?.role !== 'owner' || !user?.lodgingEnabled) return <Navigate to="/" />;
+  return children;
+};
+
+const InventoryRoute = ({ children }) => {
+  const { user } = useAuth();
+  if (user?.role !== 'owner' || !user?.inventoryEnabled) return <Navigate to="/" />;
   return children;
 };
 
@@ -76,6 +84,24 @@ function App() {
                     <BillingHistory />
                   </Layout>
                 </OwnerRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/credit" element={
+              <ProtectedRoute>
+                <OwnerRoute>
+                  <Layout>
+                    <CreditManagement />
+                  </Layout>
+                </OwnerRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/inventory" element={
+              <ProtectedRoute>
+                <InventoryRoute>
+                  <Layout>
+                    <InventoryManagement />
+                  </Layout>
+                </InventoryRoute>
               </ProtectedRoute>
             } />
             <Route path="/lodging" element={

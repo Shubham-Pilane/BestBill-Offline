@@ -16,12 +16,13 @@ router.get('/', auth, async (req, res) => {
 
 // Update hotel details (Owner only)
 router.put('/', auth, async (req, res) => {
-  const { name, address, upi_id, gst_percentage, printer_size, billing_method, fssai_number, email, phone } = req.body;
+  const { name, address, upi_id, gst_percentage, printer_size, billing_method, fssai_number, email, phone, allow_negative_stock } = req.body;
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Only owners can modify hotel settings' });
   try {
+    const allowNeg = allow_negative_stock === true || allow_negative_stock === 'true' || allow_negative_stock === 1 || allow_negative_stock === '1';
     const updated = await db.query(
-      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9 WHERE id = $10 RETURNING *',
-      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, req.user.hotel_id]
+      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9, allow_negative_stock = $10 WHERE id = $11 RETURNING *',
+      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, allowNeg, req.user.hotel_id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -228,7 +229,7 @@ router.post('/toggle-kot', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '272325') {
+    if (passcode !== '231018') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.kotEnabled = !!enabled;
@@ -266,6 +267,36 @@ router.post('/toggle-whatsapp-billing', auth, (req, res) => { // wait, let's kee
     res.json({ success: true, whatsAppBillingEnabled: config.whatsAppBillingEnabled });
   } catch (err) {
     res.status(500).json({ message: 'Error updating WhatsApp billing configuration' });
+  }
+});
+
+// Get Inventory Module Status
+router.get('/inventory-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ inventoryEnabled: !!config.inventoryEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking inventory status' });
+  }
+});
+
+// Toggle Inventory Module
+router.post('/toggle-inventory', auth, (req, res) => {
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '231018') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.inventoryEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, inventoryEnabled: config.inventoryEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating inventory configuration' });
   }
 });
 

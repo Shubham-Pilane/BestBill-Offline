@@ -390,7 +390,7 @@ body {
 .bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) [style*="color: #10b981"] {
   color: #10b981 !important;
 }
-.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) button {
+.bill-container > div:first-child:not([style*="background-color: rgb(16, 185, 129)"]):not([style*="background-color:#10b981"]):not([style*="background-color: #10b981"]) button:not(.btn-modify-invoice):not(.btn-no-override) {
   border-color: #cbd5e1 !important;
   color: #475569 !important;
   background-color: white !important;

@@ -36,6 +36,8 @@ app.use('/api/bills', require('./routes/bills'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/guest', require('./routes/guest'));
 app.use('/api/kitchen', require('./routes/kitchen'));
+app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/credit', require('./routes/credit'));
 
 app.get('/api/ping', (req, res) => {
   res.json({ message: 'pong', timestamp: new Date().toISOString() });

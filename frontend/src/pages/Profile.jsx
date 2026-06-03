@@ -65,6 +65,12 @@ const Profile = () => {
     const [whatsAppBillingPassword, setWhatsAppBillingPassword] = useState('');
     const [whatsAppBillingModalMode, setWhatsAppBillingModalMode] = useState('enable');
 
+    // Inventory Management State
+    const [inventoryEnabled, setInventoryEnabled] = useState(false);
+    const [showInventoryModal, setShowInventoryModal] = useState(false);
+    const [inventoryPassword, setInventoryPassword] = useState('');
+    const [inventoryModalMode, setInventoryModalMode] = useState('enable');
+
     const [showStaffSection, setShowStaffSection] = useState(false);
     const [showNetworkConfig, setShowNetworkConfig] = useState(false);
     const [showSecurityCore, setShowSecurityCore] = useState(false);
@@ -80,6 +86,7 @@ const Profile = () => {
             fetchLodgingStatus();
             fetchKotStatus();
             fetchWhatsAppBillingStatus();
+            fetchInventoryStatus();
         }
     }, [isOwner]);
 
@@ -245,6 +252,60 @@ const Profile = () => {
         }
     };
 
+    const fetchInventoryStatus = async () => {
+        try {
+            const res = await api.get('/hotel/inventory-status');
+            setInventoryEnabled(res.data.inventoryEnabled);
+            updateUser({ inventoryEnabled: res.data.inventoryEnabled });
+        } catch (err) {
+            console.error('Failed to fetch inventory status', err);
+        }
+    };
+
+    const handleToggleInventory = (shouldEnable) => {
+        if (shouldEnable) {
+            setInventoryModalMode('enable');
+            setInventoryPassword('');
+            setShowInventoryModal(true);
+        } else {
+            setInventoryModalMode('disable');
+            setInventoryPassword('');
+            setShowInventoryModal(true);
+        }
+    };
+
+    const handleInventoryModalSubmit = async () => {
+        if (!inventoryPassword) {
+            toast.error("Password cannot be blank");
+            return;
+        }
+        if (inventoryModalMode === 'enable') {
+            try {
+                const res = await api.post('/hotel/toggle-inventory', { enabled: true, passcode: inventoryPassword });
+                if (res.data.success) {
+                    setInventoryEnabled(true);
+                    updateUser({ inventoryEnabled: true });
+                    toast.success("Inventory Management Module activated!");
+                    setShowInventoryModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect activation password");
+            }
+        } else {
+            try {
+                const res = await api.post('/hotel/toggle-inventory', { enabled: false, passcode: inventoryPassword });
+                if (res.data.success) {
+                    setInventoryEnabled(false);
+                    updateUser({ inventoryEnabled: false });
+                    toast.success("Inventory Management Module deactivated.");
+                    setShowInventoryModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect deactivation password");
+            }
+        }
+    };
+
     const fetchInstalledPrinters = async () => {
         try {
             const res = await api.get('/hotel/installed-printers');
@@ -398,20 +459,20 @@ const Profile = () => {
     };
 
     return (
-    <div style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '64px', paddingBottom: '100px', overflow: 'hidden' }}>
+    <div style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px', paddingBottom: '100px', overflow: 'hidden' }}>
             
             {/* Security Core Card */}
             <div style={{ width: '100%' }}>
                 <div 
                     onClick={() => setShowSecurityCore(!showSecurityCore)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSecurityCore ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showSecurityCore ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <UserCircle size={32} style={{ color: themeColor }} />
-                        <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>Security Core</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <UserCircle size={22} style={{ color: themeColor }} />
+                        <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Security Core</h2>
                     </div>
                     <ChevronDown 
-                        size={28} 
+                        size={20} 
                         style={{ 
                             color: 'var(--text-muted)', 
                             transform: showSecurityCore ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -420,21 +481,21 @@ const Profile = () => {
                     />
                 </div>
                 {showSecurityCore && (
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
-                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)' }}>IDENTITY NAME</label>
-                              <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>IDENTITY NAME</label>
+                              <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
                            </div>
-                           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)' }}>EMAIL PROTOCOL</label>
-                              <input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
+                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>EMAIL PROTOCOL</label>
+                              <input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
                            </div>
                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                               <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="New Passcode" style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
-                               <input type="password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} placeholder="Confirm" style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
+                               <input type="password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="New Passcode" style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
+                               <input type="password" value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} placeholder="Confirm" style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
                            </div>
-                           <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: themeColor, color: 'white', padding: '16px 32px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none', boxShadow: `0 10px 20px ${themeColor}20`, width: 'fit-content' }}>
+                           <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: themeColor, color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', boxShadow: `0 10px 20px ${themeColor}20`, width: 'fit-content' }}>
                                <Save size={18} />
                                Update Credentials
                            </button>
@@ -445,17 +506,17 @@ const Profile = () => {
 
             {/* Hotel Profile Card */}
             {isOwner && (
-                <div style={{ width: '100%', marginTop: '32px' }}>
+                <div style={{ width: '100%' }}>
                     <div 
                         onClick={() => setShowHotelProfile(!showHotelProfile)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showHotelProfile ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showHotelProfile ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <LayoutPanelLeft size={32} style={{ color: '#0ea5e9' }} />
-                            <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>Hotel Profile</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <LayoutPanelLeft size={22} style={{ color: '#0ea5e9' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Hotel Profile</h2>
                         </div>
                         <ChevronDown 
-                            size={28} 
+                            size={20} 
                             style={{ 
                                 color: 'var(--text-muted)', 
                                 transform: showHotelProfile ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -464,68 +525,68 @@ const Profile = () => {
                         />
                     </div>
                     {showHotelProfile && (
-                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
+                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
                             <form onSubmit={handleHotelSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>HOTEL LEGAL NAME</label>
-                                        <input value={hotelData.name} onChange={e => setHotelData({...hotelData, name: e.target.value})} style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>HOTEL LEGAL NAME</label>
+                                        <input value={hotelData.name} onChange={e => setHotelData({...hotelData, name: e.target.value})} style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>GST %</label>
-                                        <input type="number" value={hotelData.gst_percentage} onChange={e => setHotelData({...hotelData, gst_percentage: e.target.value})} style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#10b981', fontWeight: 1000 }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>GST %</label>
+                                        <input type="number" value={hotelData.gst_percentage} onChange={e => setHotelData({...hotelData, gst_percentage: e.target.value})} style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#10b981', fontWeight: 600 }} />
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>PHYSICAL ADDRESS</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PHYSICAL ADDRESS</label>
                                         <input 
                                             value={hotelData.address} 
                                             onChange={e => setHotelData({ ...hotelData, address: e.target.value })} 
-                                            style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                            style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                         />
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>MOBILE NUMBER</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>MOBILE NUMBER</label>
                                             <input 
                                                 value={hotelData.phone} 
                                                 onChange={e => setHotelData({ ...hotelData, phone: e.target.value })} 
-                                                style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                             />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>HOTEL EMAIL</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>HOTEL EMAIL</label>
                                             <input 
                                                 value={hotelData.email} 
                                                 onChange={e => setHotelData({ ...hotelData, email: e.target.value })} 
-                                                style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                             />
                                         </div>
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>UPI ID (MERCHANT)</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>UPI ID (MERCHANT)</label>
                                             <input 
                                                 value={hotelData.upi_id} 
                                                 onChange={e => setHotelData({ ...hotelData, upi_id: e.target.value })} 
-                                                style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                             />
                                         </div>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>FSSAI NUMBER</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>FSSAI NUMBER</label>
                                             <input 
                                                 value={hotelData.fssai_number} 
                                                 onChange={e => setHotelData({ ...hotelData, fssai_number: e.target.value })} 
-                                                style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                             />
                                         </div>
                                     </div>
                                 </div>
 
-                                <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '16px 32px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none', width: 'fit-content', marginTop: '8px' }}>
+                                <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content', marginTop: '8px' }}>
                                     <Save size={18} />
                                     Save Profile Settings
                                 </button>
@@ -537,17 +598,17 @@ const Profile = () => {
 
             {/* Physical Offline Printers Management */}
             {isOwner && (
-                <div style={{ width: '100%', marginTop: '32px' }}>
+                <div style={{ width: '100%' }}>
                     <div 
                         onClick={() => setShowPrinters(!showPrinters)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showPrinters ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showPrinters ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <Printer size={32} style={{ color: '#10b981' }} />
-                            <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>Offline Physical Printers</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Printer size={22} style={{ color: '#10b981' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Offline Physical Printers</h2>
                         </div>
                         <ChevronDown 
-                            size={28} 
+                            size={20} 
                             style={{ 
                                 color: 'var(--text-muted)', 
                                 transform: showPrinters ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -556,18 +617,18 @@ const Profile = () => {
                         />
                     </div>
                     {showPrinters && (
-                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
-                            <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
+                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                            <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                     
                                     {/* Billing Printer Form */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
-                                        <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
+                                        <h3 style={{fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
                                             Cashier Billing Printer
                                         </h3>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>CONNECTION TYPE</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>CONNECTION TYPE</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                 <select 
                                                     value={printerConfig.billing.type} 
@@ -575,7 +636,7 @@ const Profile = () => {
                                                         ...printerConfig,
                                                         billing: { ...printerConfig.billing, type: e.target.value }
                                                     })}
-                                                    style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
                                                     <option value="usb">USB / Windows Spooled</option>
                                                     <option value="network">Network (LAN/Wi-Fi)</option>
@@ -584,28 +645,28 @@ const Profile = () => {
                                             </div>
                                         </div>
                                         {printerConfig.billing.type === 'usb' ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>WINDOWS SHARED / PORT NAME</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>WINDOWS SHARED / PORT NAME</label>
                                                 
                                                 {!billingCustomActive ? (
                                                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                         <select 
                                                             value={printerConfig.billing.printerName} 
                                                             onChange={e => {
-                                                                if (e.target.value === '__custom__') {
-                                                                    setBillingCustomActive(true);
-                                                                    setPrinterConfig({
-                                                                        ...printerConfig,
-                                                                        billing: { ...printerConfig.billing, printerName: '' }
-                                                                    });
-                                                                } else {
-                                                                    setPrinterConfig({
-                                                                        ...printerConfig,
-                                                                        billing: { ...printerConfig.billing, printerName: e.target.value }
-                                                                    });
-                                                                }
+                                                                 if (e.target.value === '__custom__') {
+                                                                     setBillingCustomActive(true);
+                                                                     setPrinterConfig({
+                                                                         ...printerConfig,
+                                                                         billing: { ...printerConfig.billing, printerName: '' }
+                                                                     });
+                                                                 } else {
+                                                                     setPrinterConfig({
+                                                                         ...printerConfig,
+                                                                         billing: { ...printerConfig.billing, printerName: e.target.value }
+                                                                     });
+                                                                 }
                                                             }}
-                                                            style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                            style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                         >
                                                             <option value="">-- Select Installed Printer --</option>
                                                             {installedPrinters.map(p => (
@@ -627,12 +688,12 @@ const Profile = () => {
                                                                 billing: { ...printerConfig.billing, printerName: e.target.value }
                                                             })}
                                                             placeholder="Type printer name (e.g. billing-printer)" 
-                                                            style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                            style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                                         />
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setBillingCustomActive(false)}
-                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
                                                         >
                                                             ◀ Select from detected list
                                                         </button>
@@ -641,8 +702,8 @@ const Profile = () => {
                                             </div>
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>IP ADDRESS</label>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>IP ADDRESS</label>
                                                     <input 
                                                         value={printerConfig.billing.ip} 
                                                         onChange={e => setPrinterConfig({
@@ -650,11 +711,11 @@ const Profile = () => {
                                                             billing: { ...printerConfig.billing, ip: e.target.value }
                                                         })}
                                                         placeholder="e.g. 192.168.1.100" 
-                                                        style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                                                        style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
                                                     />
                                                 </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>PORT</label>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PORT</label>
                                                     <input 
                                                         type="number"
                                                         value={printerConfig.billing.port} 
@@ -663,13 +724,13 @@ const Profile = () => {
                                                             billing: { ...printerConfig.billing, port: parseInt(e.target.value) || 9100 }
                                                         })}
                                                         placeholder="9100" 
-                                                        style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                                                        style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
                                                     />
                                                 </div>
                                             </div>
                                         )}
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>PAPER ROLL SIZE</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PAPER ROLL SIZE</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                 <select 
                                                     value={printerConfig.billing.paperSize || '80mm'} 
@@ -677,25 +738,25 @@ const Profile = () => {
                                                         ...printerConfig,
                                                         billing: { ...printerConfig.billing, paperSize: e.target.value }
                                                     })}
-                                                    style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
                                                     <option value="80mm">Standard Receipt (80mm)</option>
                                                     <option value="58mm">Compact Receipt (58mm)</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
-                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700 }}>Receipt column alignment is auto-calculated based on selected paper width</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>Receipt column alignment is auto-calculated based on selected paper width</span>
                                         </div>
                                     </div>
  
                                     {/* Kitchen Printer Form */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
-                                        <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
+                                        <h3 style={{fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }}></span>
                                             Kitchen KOT Printer
                                         </h3>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>CONNECTION TYPE</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>CONNECTION TYPE</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                 <select 
                                                     value={printerConfig.kitchen.type} 
@@ -703,7 +764,7 @@ const Profile = () => {
                                                         ...printerConfig,
                                                         kitchen: { ...printerConfig.kitchen, type: e.target.value }
                                                     })}
-                                                    style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
                                                     <option value="usb">USB / Windows Spooled</option>
                                                     <option value="network">Network (LAN/Wi-Fi)</option>
@@ -712,28 +773,28 @@ const Profile = () => {
                                             </div>
                                         </div>
                                         {printerConfig.kitchen.type === 'usb' ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>WINDOWS SHARED / PORT NAME</label>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>WINDOWS SHARED / PORT NAME</label>
                                                 
                                                 {!kitchenCustomActive ? (
                                                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                         <select 
                                                             value={printerConfig.kitchen.printerName} 
                                                             onChange={e => {
-                                                                if (e.target.value === '__custom__') {
-                                                                    setKitchenCustomActive(true);
-                                                                    setPrinterConfig({
-                                                                        ...printerConfig,
-                                                                        kitchen: { ...printerConfig.kitchen, printerName: '' }
-                                                                    });
-                                                                } else {
-                                                                    setPrinterConfig({
-                                                                        ...printerConfig,
-                                                                        kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
-                                                                    });
-                                                                }
+                                                                 if (e.target.value === '__custom__') {
+                                                                     setKitchenCustomActive(true);
+                                                                     setPrinterConfig({
+                                                                         ...printerConfig,
+                                                                         kitchen: { ...printerConfig.kitchen, printerName: '' }
+                                                                     });
+                                                                 } else {
+                                                                     setPrinterConfig({
+                                                                         ...printerConfig,
+                                                                         kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
+                                                                     });
+                                                                 }
                                                             }}
-                                                            style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                            style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                         >
                                                             <option value="">-- Select Installed Printer --</option>
                                                             {installedPrinters.map(p => (
@@ -755,12 +816,12 @@ const Profile = () => {
                                                                 kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
                                                             })}
                                                             placeholder="Type printer name (e.g. kitchen-printer)" 
-                                                            style={{width: '100%', padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} 
+                                                            style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                                         />
                                                         <button 
                                                             type="button" 
                                                             onClick={() => setKitchenCustomActive(false)}
-                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                                                            style={{ alignSelf: 'flex-start', background: 'none', border: 'none', color: '#0ea5e9', fontSize: '11px', fontWeight: 600, cursor: 'pointer', padding: 0 }}
                                                         >
                                                             ◀ Select from detected list
                                                         </button>
@@ -769,8 +830,8 @@ const Profile = () => {
                                             </div>
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>IP ADDRESS</label>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>IP ADDRESS</label>
                                                     <input 
                                                         value={printerConfig.kitchen.ip} 
                                                         onChange={e => setPrinterConfig({
@@ -778,11 +839,11 @@ const Profile = () => {
                                                             kitchen: { ...printerConfig.kitchen, ip: e.target.value }
                                                         })}
                                                         placeholder="e.g. 192.168.1.101" 
-                                                        style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                                                        style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
                                                     />
                                                 </div>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>PORT</label>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PORT</label>
                                                     <input 
                                                         type="number"
                                                         value={printerConfig.kitchen.port} 
@@ -791,13 +852,13 @@ const Profile = () => {
                                                             kitchen: { ...printerConfig.kitchen, port: parseInt(e.target.value) || 9100 }
                                                         })}
                                                         placeholder="9100" 
-                                                        style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                                                        style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
                                                     />
                                                 </div>
                                             </div>
                                         )}
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>PAPER ROLL SIZE</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PAPER ROLL SIZE</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                 <select 
                                                     value={printerConfig.kitchen.paperSize || '80mm'} 
@@ -805,22 +866,22 @@ const Profile = () => {
                                                         ...printerConfig,
                                                         kitchen: { ...printerConfig.kitchen, paperSize: e.target.value }
                                                     })}
-                                                    style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
                                                     <option value="80mm">Standard Receipt (80mm)</option>
                                                     <option value="58mm">Compact Receipt (58mm)</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
-                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700 }}>KOT column alignment is auto-calculated based on selected paper width</span>
+                                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>KOT column alignment is auto-calculated based on selected paper width</span>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '16px' }}>
-                                        <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#10b981', color: 'white', padding: '14px 28px', borderRadius: '14px', fontWeight: 1000, cursor: 'pointer', border: 'none', boxShadow: '0 8px 16px rgba(16, 185, 129, 0.2)', width: 'fit-content' }}>
-                                            <Save size={18} />
-                                            Save Printer Settings
-                                        </button>
-                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
+                                    <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#10b981', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content' }}>
+                                        <Save size={18} />
+                                        Save Printer Settings
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -830,17 +891,17 @@ const Profile = () => {
 
             {/* Local Network & Staff Connection Card */}
             {isOwner && (
-                <div style={{ width: '100%', marginTop: '32px' }}>
+                <div style={{ width: '100%' }}>
                     <div 
                         onClick={() => setShowNetworkConfig(!showNetworkConfig)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showNetworkConfig ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showNetworkConfig ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <Globe size={32} style={{ color: '#0ea5e9' }} />
-                            <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>Local Network & Staff Connection</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Globe size={22} style={{ color: '#0ea5e9' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Local Network & Staff Connection</h2>
                         </div>
                         <ChevronDown 
-                            size={28} 
+                            size={20} 
                             style={{ 
                                 color: 'var(--text-muted)', 
                                 transform: showNetworkConfig ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -849,22 +910,22 @@ const Profile = () => {
                         />
                     </div>
                     {showNetworkConfig && (
-                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
-                            <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '40px', alignItems: 'start' }}>
+                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                            <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', alignItems: 'start' }}>
                                     {/* Left Column: IP dropdown */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6' }}>
                                             Select the LAN IP address of this computer. Guests on your hotel Wi-Fi scan the room QR codes to open the guest ordering app. 
                                             Waiters can also scan the staff QR code on the right to access the login page directly from their mobile phones.
                                         </p>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>GUEST PORTAL LOCAL IP</label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>GUEST PORTAL LOCAL IP</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                                                 <select 
                                                     value={selectedGuestIp} 
                                                     onChange={e => setSelectedGuestIp(e.target.value)}
-                                                    style={{width: '100%', padding: '14px', paddingRight: '40px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, appearance: 'none', outline: 'none' }}
+                                                    style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
                                                     <option value="">-- Select Active Local IP (Autodetect) --</option>
                                                     {availableIps.map(ip => (
@@ -874,11 +935,11 @@ const Profile = () => {
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
                                             {selectedGuestIp && (
-                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '8px' }}>
+                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500, marginBottom: '4px' }}>
                                                     Target URL: <strong style={{ color: '#0ea5e9' }}>http://{selectedGuestIp}:5000/#/guest/order/{user?.hotel_id || '1'}</strong>
                                                 </span>
                                             )}
-                                            <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '14px 28px', borderRadius: '14px', fontWeight: 1000, cursor: 'pointer', border: 'none', boxShadow: '0 8px 16px rgba(14, 165, 233, 0.2)', width: 'fit-content', marginTop: '12px' }}>
+                                            <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content', marginTop: '8px' }}>
                                                 <Save size={18} />
                                                 Save Configurations
                                             </button>
@@ -886,19 +947,19 @@ const Profile = () => {
                                     </div>
 
                                     {/* Right Column: Waiter Login QR Code */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', padding: '24px', borderRadius: '24px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', textAlign: 'center' }}>
-                                        <div style={{backgroundcolor: 'var(--text-primary)', padding: '16px', borderRadius: '16px', display: 'inline-block' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', textAlign: 'center' }}>
+                                        <div style={{ backgroundColor: 'var(--text-primary)', padding: '12px', borderRadius: '12px', display: 'inline-block' }}>
                                             <QRCodeCanvas 
                                                 id="staff-login-qr"
                                                 value={`http://${selectedGuestIp || '127.0.0.1'}:5000`}
-                                                size={140}
+                                                size={120}
                                                 level="H"
                                                 includeMargin={false}
                                             />
                                         </div>
                                         <div>
-                                            <h4 style={{fontSize: '14px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Staff Login QR</h4>
-                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, margin: 0 }}>Scan to login from waiter phone/tablet</p>
+                                            <h4 style={{fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Staff Login QR</h4>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 500, margin: 0 }}>Scan to login from waiter phone/tablet</p>
                                         </div>
                                         <button 
                                             type="button"
@@ -912,7 +973,7 @@ const Profile = () => {
                                                 link.click();
                                                 toast.success('Staff Login QR Downloaded');
                                             }}
-                                            style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer' }}
+                                            style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                                         >
                                             <Download size={16} /> Download Staff QR
                                         </button>
@@ -925,17 +986,17 @@ const Profile = () => {
             )}
             {/* Staff Section */}
             {isOwner && kotEnabled && (
-                <div style={{ width: '100%', marginTop: '32px' }}>
+                <div style={{ width: '100%' }}>
                     <div 
                         onClick={() => setShowStaffSection(!showStaffSection)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showStaffSection ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showStaffSection ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <Users size={32} style={{ color: '#f59e0b' }} />
-                            <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>Add New Staff</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Users size={22} style={{ color: '#f59e0b' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Add New Staff</h2>
                         </div>
                         <ChevronDown 
-                            size={28} 
+                            size={20} 
                             style={{ 
                                 color: 'var(--text-muted)', 
                                 transform: showStaffSection ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -945,24 +1006,24 @@ const Profile = () => {
                     </div>
                     
                     {showStaffSection && (
-                        <div className="responsive-grid-12" style={{ gap: '48px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
-                            <div style={{ gridColumn: 'span 5', backgroundColor: 'var(--bg-base)', borderRadius: '24px', padding: '32px', border: '1px solid var(--border-rgba-05)' }}>
-                                <h3 style={{fontSize: '15px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '24px' }}>Hire New Staff</h3>
-                                <form onSubmit={handleHiring} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                    <input required placeholder="Staff Name" value={staffForm.name} onChange={e => setStaffForm({...staffForm, name: e.target.value})} style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
-                                    <input required type="email" placeholder="Login Email" value={staffForm.email} onChange={e => setStaffForm({...staffForm, email: e.target.value})} style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
-                                    <input required type="password" placeholder="Initial Passcode" value={staffForm.password} onChange={e => setStaffForm({...staffForm, password: e.target.value})} style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
-                                    <button type="submit" disabled={hiring} style={{ backgroundColor: '#f59e0b', color: 'white', padding: '16px', borderRadius: '16px', fontWeight: 1000, cursor: 'pointer', border: 'none' }}>Onboard Staff</button>
+                        <div className="responsive-grid-12" style={{ gap: '24px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                            <div style={{ gridColumn: 'span 5', backgroundColor: 'var(--bg-base)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                                <h3 style={{fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>Hire New Staff</h3>
+                                <form onSubmit={handleHiring} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                    <input required placeholder="Staff Name" value={staffForm.name} onChange={e => setStaffForm({...staffForm, name: e.target.value})} style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
+                                    <input required type="email" placeholder="Login Email" value={staffForm.email} onChange={e => setStaffForm({...staffForm, email: e.target.value})} style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
+                                    <input required type="password" placeholder="Initial Passcode" value={staffForm.password} onChange={e => setStaffForm({...staffForm, password: e.target.value})} style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)' }} />
+                                    <button type="submit" disabled={hiring} style={{ backgroundColor: '#f59e0b', color: 'white', padding: '12px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none' }}>Onboard Staff</button>
                                 </form>
                             </div>
                             <div style={{ gridColumn: 'span 7', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                                 {staff.length === 0 ? (
-                                    <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-base)', borderRadius: '24px', border: '2px dashed var(--bg-border)' }}>No active waitstaff protocol</div>
+                                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', backgroundColor: 'var(--bg-base)', borderRadius: '12px', border: '2px dashed var(--bg-border)' }}>No active waitstaff protocol</div>
                                 ) : (
                                     staff.map(s => (
-                                        <div key={s.id} style={{ padding: '24px', backgroundColor: 'var(--bg-base)', borderRadius: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.03)' }}>
+                                        <div key={s.id} style={{ padding: '12px 16px', backgroundColor: 'var(--bg-base)', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.03)' }}>
                                             <div>
-                                                <div style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '16px' }}>{s.name}</div>
+                                                <div style={{color: 'var(--text-primary)', fontWeight: 600, fontSize: '15px' }}>{s.name}</div>
                                                 <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{s.email}</div>
                                             </div>
                                             <button onClick={() => removeStaff(s.id)} style={{ color: '#f43f5e', padding: '12px', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={24} /></button>
@@ -977,17 +1038,17 @@ const Profile = () => {
 
             {/* System Add-ons Section */}
             {isOwner && (
-                <div style={{ width: '100%', marginTop: '48px' }}>
+                <div style={{ width: '100%' }}>
                     <div 
                         onClick={() => setShowModules(!showModules)}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showModules ? '24px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showModules ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                            <ShieldCheck size={32} style={{ color: '#f43f5e' }} />
-                            <h2 style={{fontSize: '24px', fontWeight: 950, color: 'var(--text-primary)', margin: 0 }}>System Modules & Licensing</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={22} style={{ color: '#f43f5e' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>System Modules & Licensing</h2>
                         </div>
                         <ChevronDown 
-                            size={28} 
+                            size={20} 
                             style={{ 
                                 color: 'var(--text-muted)', 
                                 transform: showModules ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -996,20 +1057,20 @@ const Profile = () => {
                         />
                     </div>
                     {showModules && (
-                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '32px', border: '1px solid var(--border-rgba-05)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
                             {/* Lodging Module */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
-                                <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Lodging & Room Management</h3>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Lodging & Room Management</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
                                     Enable room configurations, lodging layouts, and guest digital room-service ordering portals. 
                                     This module requires a premium license passcode to unlock.
                                 </p>
                             </div>
                             
                             {/* Toggle / Radio Control */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: 'var(--bg-base)', padding: '12px 24px', borderRadius: '16px', border: '1px solid var(--bg-border)' }}>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="lodgingModule"
@@ -1019,7 +1080,7 @@ const Profile = () => {
                                     />
                                     Disabled
                                 </label>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="lodgingModule"
@@ -1034,18 +1095,18 @@ const Profile = () => {
 
                         {/* KOT Module */}
                         <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
-                                <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Kitchen Order Ticket (KOT)</h3>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Kitchen Order Ticket (KOT)</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
                                     Enable kitchen routing, chef KOT dashboard, and waitstaff onboarding for order taking. 
                                     This module requires a premium license passcode to unlock.
                                 </p>
                             </div>
                             
                             {/* Toggle / Radio Control */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: 'var(--bg-base)', padding: '12px 24px', borderRadius: '16px', border: '1px solid var(--bg-border)' }}>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="kotModule"
@@ -1055,7 +1116,7 @@ const Profile = () => {
                                     />
                                     Disabled
                                 </label>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="kotModule"
@@ -1070,18 +1131,18 @@ const Profile = () => {
 
                         {/* WhatsApp Billing Module */}
                         <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
-                                <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>WhatsApp Billing</h3>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>WhatsApp Billing</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
                                     Enable customer mobile entry and direct bill sharing via WhatsApp.
                                     This module requires a passcode to unlock.
                                 </p>
                             </div>
                             
                             {/* Toggle / Radio Control */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: 'var(--bg-base)', padding: '12px 24px', borderRadius: '16px', border: '1px solid var(--bg-border)' }}>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="whatsAppBillingModule"
@@ -1091,7 +1152,7 @@ const Profile = () => {
                                     />
                                     Disabled
                                 </label>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
                                     <input 
                                         type="radio" 
                                         name="whatsAppBillingModule"
@@ -1104,13 +1165,49 @@ const Profile = () => {
                             </div>
                         </div>
 
+                        {/* Inventory Management Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Inventory Management</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable recipe mappings, stock transaction tracking, purchase logs, and ledger reports.
+                                    This module requires a passcode to unlock.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="inventoryModule"
+                                        checked={!inventoryEnabled} 
+                                        onChange={() => handleToggleInventory(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="inventoryModule"
+                                        checked={inventoryEnabled} 
+                                        onChange={() => handleToggleInventory(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
                     </div>
                 )}
             </div>
         )}
 
-            <div style={{ textAlign: 'center', marginTop: '32px' }}>
-                 <p style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>BestBill Identity Protection — Secure Role-Based Access Control Active</p>
+            <div style={{ textAlign: 'center', marginTop: '24px' }}>
+                 <p style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 500 }}>BestBill Identity Protection — Secure Role-Based Access Control Active</p>
             </div>
 
             {/* Lodging Activation Modal */}
@@ -1240,6 +1337,50 @@ const Profile = () => {
                                 onClick={handleWhatsAppBillingModalSubmit}
                                 style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: whatsAppBillingModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: whatsAppBillingModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
                             >{whatsAppBillingModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Inventory Activation Modal */}
+            {showInventoryModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowInventoryModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: inventoryModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                                {inventoryModalMode === 'enable' ? 'Activate Inventory Module' : 'Deactivate Inventory Module'}
+                            </h3>
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            {inventoryModalMode === 'enable'
+                                ? 'Enter the license passcode to unlock and enable Inventory Management.'
+                                : 'Are you sure you want to deactivate Inventory Management? Please enter the passcode to confirm deactivation.'
+                            }
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
+                                {inventoryModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
+                            </label>
+                            <input
+                                type="password"
+                                value={inventoryPassword}
+                                onChange={e => setInventoryPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleInventoryModalSubmit()}
+                                placeholder={inventoryModalMode === 'enable' ? "Enter passcode" : "Enter passcode"}
+                                autoFocus
+                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowInventoryModal(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleInventoryModalSubmit}
+                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: inventoryModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: inventoryModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                            >{inventoryModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
                         </div>
                     </div>
                 </div>

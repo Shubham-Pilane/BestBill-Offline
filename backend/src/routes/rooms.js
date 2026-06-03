@@ -3,6 +3,7 @@ const db = require('../db/db');
 const auth = require('../middleware/auth');
 const router = express.Router();
 const { notifyUpdate } = require('../socket');
+const inventoryService = require('../services/inventoryService');
 
 // Get all rooms for a hotel
 router.get('/', auth, async (req, res) => {
@@ -410,11 +411,14 @@ router.post('/:roomId/bill', auth, async (req, res) => {
     const { roomId } = req.params;
     const { discount_percentage } = req.body;
     
+    const client = await db.getClient();
     try {
+      await client.query('BEGIN');
+
       const [hotelRes, roomRes, orderRes] = await Promise.all([
-        db.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
-        db.query('SELECT * FROM rooms WHERE id = $1', [roomId]),
-        db.query(`
+        client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
+        client.query('SELECT * FROM rooms WHERE id = $1', [roomId]),
+        client.query(`
           SELECT o.id as order_id, oi.quantity, mi.name, mi.price
           FROM orders o
           JOIN order_items oi ON oi.order_id = o.id
@@ -423,7 +427,10 @@ router.post('/:roomId/bill', auth, async (req, res) => {
         `, [roomId])
       ]);
   
-      if (orderRes.rows.length === 0) return res.status(404).json({ message: 'No active order or empty items' });
+      if (orderRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'No active order or empty items' });
+      }
       
       const orderId = orderRes.rows[0].order_id;
       const gstRate = parseFloat(hotelRes.rows[0].gst_percentage || 0);
@@ -436,17 +443,22 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       const initialTotal = subtotal + gst;
       const discount = parseFloat(discount_percentage) || 0;
       const finalAmount = initialTotal - (initialTotal * (discount / 100));
+
+      // Deduct stock from inventory
+      await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
   
-      const billRes = await db.query(
+      const billRes = await client.query(
         `INSERT INTO bills (order_id, total_amount, gst, final_amount, discount_percentage) 
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [orderId, subtotal, gst, finalAmount, discount]
       );
-      await db.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
-      const bill = { rows: billRes.rows };
+
+      await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
+      
+      await client.query('COMMIT');
       
       const responsePayload = {
-        ...bill.rows[0],
+        ...billRes.rows[0],
         subtotal: subtotal,
         final_amount: finalAmount,
         room_charge: roomCharge,
@@ -458,14 +470,15 @@ router.post('/:roomId/bill', auth, async (req, res) => {
         hotel_phone: hotelRes.rows[0].phone,
         hotel_location: hotelRes.rows[0].location
       };
-
-
-
+ 
       notifyUpdate(req.user.hotel_id, 'room-update');
       res.json(responsePayload);
     } catch (err) {
+      await client.query('ROLLBACK');
       console.error(err);
-      res.status(500).json({ message: 'Billing error' });
+      res.status(500).json({ message: 'Billing error', error: err.message });
+    } finally {
+      client.release();
     }
 });
 

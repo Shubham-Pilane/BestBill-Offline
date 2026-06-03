@@ -106,14 +106,14 @@ const KitchenKOT = () => {
     }
 
     return (
-        <div style={{display: 'flex', flexDirection: 'column', gap: '32px', width: '100%', color: 'var(--text-primary)' }}>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', color: 'var(--text-primary)' }}>
             {/* Header section */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                   <h2 style={{ fontSize: '28px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
-                       <ChefHat style={{ color: themeColor }} size={32} /> Kitchen Display (KOT)
+                   <h2 style={{ fontSize: '22px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                       <ChefHat style={{ color: themeColor }} size={24} /> Kitchen Display (KOT)
                    </h2>
-                   <p style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '14px', margin: '4px 0 0 0' }}>
+                   <p style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '13px', margin: '4px 0 0 0' }}>
                        Live orders being prepared by the kitchen crew.
                    </p>
                 </div>
@@ -124,44 +124,44 @@ const KitchenKOT = () => {
                     style={{ 
                         display: 'flex', 
                         alignItems: 'center', 
-                        gap: '8px', 
+                        gap: '6px', 
                         backgroundColor: audioEnabled ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-border)', 
                         color: audioEnabled ? themeColor : 'var(--text-muted)', 
                         border: `1px solid ${audioEnabled ? themeColor : 'var(--bg-border)'}`, 
-                        padding: '10px 20px', 
-                        borderRadius: '14px', 
-                        fontSize: '14px', 
-                        fontWeight: 900, 
+                        padding: '8px 16px', 
+                        borderRadius: '8px', 
+                        fontSize: '13px', 
+                        fontWeight: 600, 
                         cursor: 'pointer',
                         transition: 'all 0.2s ease'
                     }}
                 >
-                    {audioEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                    {audioEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
                     KITCHEN ALERT: {audioEnabled ? 'ON' : 'OFF'}
                 </button>
             </div>
 
             {/* Compact unified List view */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Flame size={20} color={themeColor} />
-                    <h3 style={{ margin: 0, fontWeight: 900, fontSize: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Flame size={18} color={themeColor} />
+                    <h3 style={{ margin: 0, fontWeight: 600, fontSize: '16px' }}>
                         Active Kitchen Orders ({orders.length})
                     </h3>
                 </div>
 
                 {orders.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '120px 40px', backgroundColor: 'var(--bg-card)', borderRadius: '32px', border: '2px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(245, 158, 11, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ChefHat size={40} style={{ color: 'var(--text-muted)' }} />
+                    <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '2px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                        <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(245, 158, 11, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ChefHat size={30} style={{ color: 'var(--text-muted)' }} />
                         </div>
                         <div>
-                            <h4 style={{margin: '0 0 8px 0', fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)' }}>All Caught Up!</h4>
-                            <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0, fontSize: '14px' }}>No active waiter KOT orders are waiting in the kitchen.</p>
+                            <h4 style={{margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>All Caught Up!</h4>
+                            <p style={{ color: 'var(--text-muted)', fontWeight: 500, margin: 0, fontSize: '13px' }}>No active waiter KOT orders are waiting in the kitchen.</p>
                         </div>
                     </div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {orders.map(order => {
                             const isExpanded = !!expandedOrders[order.order_id];
                             return (
@@ -169,14 +169,14 @@ const KitchenKOT = () => {
                                     key={order.order_id} 
                                     style={{ 
                                         backgroundColor: 'var(--bg-card)', 
-                                        borderRadius: '28px', 
-                                        padding: isExpanded ? '28px 32px' : '20px 32px', 
+                                        borderRadius: '12px', 
+                                        padding: isExpanded ? '14px 20px' : '10px 20px', 
                                         border: '1px solid var(--bg-border)', 
-                                        boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                         display: 'flex',
                                         flexDirection: 'column',
-                                        gap: isExpanded ? '20px' : '0px',
-                                        transition: 'all 0.25s ease',
+                                        gap: isExpanded ? '12px' : '0px',
+                                        transition: 'all 0.2s ease',
                                         animation: 'fadeIn 0.3s ease'
                                     }}
                                 >
@@ -186,44 +186,44 @@ const KitchenKOT = () => {
                                         justifyContent: 'space-between', 
                                         alignItems: 'center', 
                                         borderBottom: isExpanded ? '1px dashed var(--bg-border)' : 'none', 
-                                        paddingBottom: isExpanded ? '16px' : '0px', 
+                                        paddingBottom: isExpanded ? '10px' : '0px', 
                                         flexWrap: 'wrap', 
-                                        gap: '12px' 
+                                        gap: '10px' 
                                     }}>
-                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                                             <div style={{ 
-                                                width: '12px', 
-                                                height: '12px', 
+                                                width: '10px', 
+                                                height: '10px', 
                                                 borderRadius: '50%', 
                                                 backgroundColor: themeColor,
-                                                boxShadow: `0 0 10px ${themeColor}`
+                                                boxShadow: `0 0 8px ${themeColor}`
                                             }} />
                                             <div>
-                                                <h4 style={{margin: 0, fontWeight: 950, fontSize: '20px', color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
+                                                <h4 style={{margin: 0, fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
                                                     TABLE {order.table_number}
                                                 </h4>
-                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>
+                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
                                                     Location: {order.table_floor}
                                                 </span>
                                             </div>
                                         </div>
 
                                         {/* Order Metadata */}
-                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                                             {order.status !== 'active' && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '13px', fontWeight: 900, backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '6px 14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
                                                     <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cleared</span>
                                                 </div>
                                             )}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
-                                                <User size={14} color="#0ea5e9" style={{ flexShrink: 0 }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-rgba-05)' }}>
+                                                <User size={12} color="#0ea5e9" style={{ flexShrink: 0 }} />
                                                 <span>Waiter: <span style={{color: 'var(--text-primary)' }}>{order.waiter_name || 'Waiter'}</span></span>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 800, backgroundColor: 'rgba(255,255,255,0.03)', padding: '6px 14px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
-                                                <Calendar size={14} style={{ flexShrink: 0 }} />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-rgba-05)' }}>
+                                                <Calendar size={12} style={{ flexShrink: 0 }} />
                                                 <span>Sent: <span style={{color: 'var(--text-primary)' }}>{formatDateTime(order.kot_sent_at)}</span></span>
                                             </div>
-                                            <div style={{ fontSize: '18px', color: '#10b981', fontWeight: 1000, marginRight: '8px' }}>
+                                            <div style={{ fontSize: '15px', color: '#10b981', fontWeight: 600, marginRight: '4px' }}>
                                                  ₹{parseFloat(order.total_amount || 0).toFixed(0)}
                                             </div>
                                             <button
@@ -231,58 +231,44 @@ const KitchenKOT = () => {
                                                 style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
-                                                    gap: '6px',
+                                                    gap: '4px',
                                                     backgroundColor: isExpanded ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-border)',
                                                     color: isExpanded ? themeColor : 'var(--text-secondary)',
                                                     border: `1px solid ${isExpanded ? themeColor : '#334155'}`,
-                                                    padding: '8px 16px',
-                                                    borderRadius: '12px',
-                                                    fontSize: '13px',
-                                                    fontWeight: 900,
+                                                    padding: '6px 12px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 600,
                                                     cursor: 'pointer',
                                                     transition: 'all 0.2s ease',
                                                     outline: 'none'
                                                 }}
                                             >
                                                 <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
-                                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                                             </button>
                                         </div>
                                     </div>
 
                                     {/* KOT Row Body (Items List & Instructions) */}
                                     {isExpanded && (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeIn 0.2s ease-out', marginTop: '16px' }}>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', animation: 'fadeIn 0.2s ease-out', marginTop: '10px' }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                                 {order.items.map((item, idx) => (
                                                     <div key={idx} style={{ 
                                                         display: 'flex', 
                                                         alignItems: 'center', 
-                                                        gap: '12px',
+                                                        gap: '8px',
                                                         backgroundColor: 'var(--bg-base)', 
-                                                        padding: '12px 20px', 
-                                                        borderRadius: '16px',
+                                                        padding: '6px 12px', 
+                                                        borderRadius: '8px',
                                                         border: '1px solid var(--bg-border)',
-                                                        minWidth: '200px',
-                                                        justifyContent: 'space-between'
+                                                        fontSize: '13px',
+                                                        fontWeight: 600,
+                                                        color: 'var(--text-primary)'
                                                     }}>
-                                                        <span style={{fontWeight: 800, color: 'var(--text-primary)', fontSize: '15px' }}>
-                                                            {item.name}
-                                                        </span>
-                                                        <div style={{ 
-                                                            width: '32px', 
-                                                            height: '32px', 
-                                                            backgroundColor: 'rgba(245, 158, 11, 0.1)', 
-                                                            color: themeColor, 
-                                                            borderRadius: '10px', 
-                                                            display: 'flex', 
-                                                            alignItems: 'center', 
-                                                            justifyContent: 'center', 
-                                                            fontSize: '14px', 
-                                                            fontWeight: 1000 
-                                                        }}>
-                                                            x{item.quantity}
-                                                        </div>
+                                                        <span>{item.name}</span>
+                                                        <span style={{ color: themeColor, fontWeight: 800 }}>x{item.quantity}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -291,17 +277,17 @@ const KitchenKOT = () => {
                                             {order.guest_note && (
                                                 <div style={{ 
                                                     display: 'flex', 
-                                                    gap: '10px', 
+                                                    gap: '8px', 
                                                     backgroundColor: 'rgba(16, 185, 129, 0.05)', 
                                                     border: '1px solid rgba(16, 185, 129, 0.15)', 
-                                                    padding: '12px 18px', 
-                                                    borderRadius: '16px',
+                                                    padding: '8px 14px', 
+                                                    borderRadius: '8px',
                                                     marginTop: '4px'
                                                 }}>
-                                                    <AlertTriangle size={16} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                                    <AlertTriangle size={14} color="#10b981" style={{ flexShrink: 0, marginTop: '2px' }} />
                                                     <div>
-                                                        <span style={{ fontSize: '11px', fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cooking Instruction: </span>
-                                                        <span style={{ fontSize: '13px', color: '#34d399', fontWeight: 700 }}>"{order.guest_note}"</span>
+                                                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Instruction: </span>
+                                                        <span style={{ fontSize: '12px', color: '#34d399', fontWeight: 500 }}>"{order.guest_note}"</span>
                                                     </div>
                                                 </div>
                                             )}
