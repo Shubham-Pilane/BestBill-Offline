@@ -160,7 +160,7 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, hotel_id: finalHotelId, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '3650d' }
+      { expiresIn: '18250d' }
     );
 
     const configManager = require('../config/configManager');
