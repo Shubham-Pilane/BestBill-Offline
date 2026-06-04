@@ -66,7 +66,7 @@ C:\Users\<USERNAME>\AppData\Roaming\bestbill-desktop\license.txt
    #
    # Contact Customer Care to purchase or request your activation key:
    #   Phone: +91 9822401802
-   #   Email: bestbillcustomercare@gmail.com
+   #   Email: bestbillsolutions@gmail.com
    # =====================================================================
 
    ACTIVATION_KEY=TRIAL_MODE

@@ -119,7 +119,7 @@ router.post('/login', async (req, res) => {
           message: 'SERVICE_BLOCKED',
           reason: 'Your hotel service has been temporarily suspended by the administrator. Please contact customer care.',
           contact_phone: '9822401802',
-          contact_email: 'bestbillcustomercare@gmail.com'
+          contact_email: 'bestbillsolutions@gmail.com'
         });
       }
 
@@ -140,7 +140,7 @@ router.post('/login', async (req, res) => {
               message: 'PLAN_EXPIRED',
               reason: 'Your 30-day offline free trial has expired. Please contact Shubham Pilane to renew or activate your license. Mobile: 9822401802',
               contact_phone: '9822401802',
-              contact_email: 'bestbillcustomercare@gmail.com'
+              contact_email: 'bestbillsolutions@gmail.com'
             });
           }
         } else {
@@ -149,7 +149,7 @@ router.post('/login', async (req, res) => {
             message: 'PLAN_EXPIRED',
             reason: `Your ${details.type} license key has expired. Please contact Shubham Pilane to renew your subscription. Mobile: 9822401802`,
             contact_phone: '9822401802',
-            contact_email: 'bestbillcustomercare@gmail.com'
+            contact_email: 'bestbillsolutions@gmail.com'
           });
         }
       }
