@@ -188,6 +188,27 @@ const MenuManagement = () => {
     }
   };
 
+  const deleteAllMenu = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Purge Entire Menu?',
+      message: 'This will permanently delete ALL categories/groups and ALL menu items. Active tables will lose item references. This action is irreversible!',
+      onConfirm: async () => {
+        const loadingToast = toast.loading('Purging all menu categories and items...');
+        try {
+          await api.delete('/menu/purge-all');
+          fetchData(1, '');
+          setCurrentPage(1);
+          setSearchTerm('');
+          toast.success('All menu items and categories successfully deleted', { id: loadingToast });
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Purge failed', { id: loadingToast });
+        }
+      }
+    });
+  };
+
   // Smart paginator — shows: ‹ Prev  1  2  3  ...  n-1  n  Next ›
   const SmartPagination = ({ currentPage, totalPages, onPageChange, activeColor = '#6366f1' }) => {
     if (totalPages <= 1) return null;
@@ -306,9 +327,14 @@ const MenuManagement = () => {
               </div>
               <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Add To Live Menu</h2>
             </div>
-            <button onClick={() => fileInputRef.current?.click()} type="button" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s' }}>
-              <UploadCloud size={18} /> Import CSV
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+              <button onClick={() => fileInputRef.current?.click()} type="button" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '160px', justifyContent: 'center' }}>
+                <UploadCloud size={18} /> Import CSV
+              </button>
+              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '160px', justifyContent: 'center' }}>
+                <Trash2 size={18} /> Delete All
+              </button>
+            </div>
             <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
           </div>
 

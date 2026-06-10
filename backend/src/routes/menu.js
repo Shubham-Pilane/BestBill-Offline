@@ -237,4 +237,31 @@ router.post('/items/bulk', auth, async (req, res) => {
   }
 });
 
+// Purge all menu items and categories
+router.delete('/purge-all', auth, async (req, res) => {
+  const hotelId = req.user.hotel_id;
+  try {
+    // Try hard deleting menu items first
+    try {
+      await db.query('DELETE FROM menu_items WHERE hotel_id = $1', [hotelId]);
+    } catch (err) {
+      // Soft delete if referenced in active orders / bills
+      await db.query('UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
+    }
+
+    // Try hard deleting categories first
+    try {
+      await db.query('DELETE FROM categories WHERE hotel_id = $1', [hotelId]);
+    } catch (err) {
+      // Soft delete if referenced
+      await db.query('UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
+    }
+
+    res.json({ message: 'Menu and categories cleared successfully' });
+  } catch (err) {
+    console.error('[PURGE ALL ERROR]', err);
+    res.status(500).json({ message: 'Failed to purge menu' });
+  }
+});
+
 module.exports = router;
