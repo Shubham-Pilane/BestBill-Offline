@@ -16,13 +16,32 @@ router.get('/categories', auth, async (req, res) => {
 // Create category
 router.post('/categories', auth, async (req, res) => {
   const { name } = req.body;
+  const hotelId = req.user.hotel_id;
   try {
+    const trimmedName = name.trim();
+    const existing = await db.query(
+      'SELECT * FROM categories WHERE hotel_id = $1 AND LOWER(name) = LOWER($2)',
+      [hotelId, trimmedName]
+    );
+
+    if (existing.rows.length > 0) {
+      const cat = existing.rows[0];
+      if (cat.is_deleted === 1 || cat.is_deleted === true) {
+        // Restore category
+        await db.query('UPDATE categories SET is_deleted = 0 WHERE id = $1', [cat.id]);
+        const restored = await db.query('SELECT * FROM categories WHERE id = $1', [cat.id]);
+        return res.status(201).json(restored.rows[0]);
+      }
+      return res.status(200).json(cat);
+    }
+
     const newCategory = await db.query(
       'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING *',
-      [req.user.hotel_id, name]
+      [hotelId, trimmedName]
     );
     res.status(201).json(newCategory.rows[0]);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: 'Server error creating category' });
   }
 });
@@ -76,8 +95,8 @@ router.get('/items', auth, async (req, res) => {
 
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      params.push(searchParam);
-      queryStr += ` AND LOWER(mi.name) LIKE $${params.length}`;
+      params.push(searchParam, searchParam);
+      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
     }
 
     if (category_id && category_id !== 'all') {
@@ -102,8 +121,8 @@ router.get('/items', auth, async (req, res) => {
     const countParams = [req.user.hotel_id];
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      countParams.push(searchParam);
-      countQueryStr += ` AND LOWER(mi.name) LIKE $${countParams.length}`;
+      countParams.push(searchParam, searchParam);
+      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
     }
     if (category_id && category_id !== 'all') {
       countParams.push(parseInt(category_id));
@@ -199,7 +218,7 @@ router.post('/items/bulk', auth, async (req, res) => {
     const categoriesResult = await db.query('SELECT * FROM categories WHERE hotel_id = $1', [hotelId]);
     const categoriesMap = new Map();
     categoriesResult.rows.forEach(c => {
-      categoriesMap.set(c.name.toLowerCase().trim(), c.id);
+      categoriesMap.set(c.name.toLowerCase().trim(), c);
     });
 
     // 2. Get existing menu items
@@ -217,16 +236,25 @@ router.post('/items/bulk', auth, async (req, res) => {
       
       const catName = item.category.trim();
       const catKey = catName.toLowerCase();
-      let categoryId = categoriesMap.get(catKey);
+      let categoryId;
 
-      // Create category if it doesn't exist
-      if (!categoryId) {
+      if (categoriesMap.has(catKey)) {
+        const existingCat = categoriesMap.get(catKey);
+        categoryId = existingCat.id;
+        
+        // If the category was soft-deleted, restore it
+        if (existingCat.is_deleted === 1 || existingCat.is_deleted === true) {
+          await db.query('UPDATE categories SET is_deleted = 0 WHERE id = $1', [categoryId]);
+          existingCat.is_deleted = 0;
+        }
+      } else {
+        // Create category if it doesn't exist
         const newCat = await db.query(
           'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING id',
           [hotelId, catName]
         );
         categoryId = newCat.rows[0].id;
-        categoriesMap.set(catKey, categoryId);
+        categoriesMap.set(catKey, { id: categoryId, name: catName, is_deleted: 0 });
       }
 
       const lowercaseName = item.name.trim().toLowerCase();

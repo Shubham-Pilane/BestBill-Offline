@@ -96,13 +96,13 @@ class CreditRepository {
       const searchPattern = `%${search}%`;
       queryStr += ` AND (
         c.customer_name LIKE $${paramIndex} OR 
-        c.customer_phone LIKE $${paramIndex} OR 
-        s.name LIKE $${paramIndex} OR 
-        s.phone LIKE $${paramIndex} OR 
-        CAST(c.bill_id AS TEXT) LIKE $${paramIndex}
+        c.customer_phone LIKE $${paramIndex + 1} OR 
+        s.name LIKE $${paramIndex + 2} OR 
+        s.phone LIKE $${paramIndex + 3} OR 
+        CAST(c.bill_id AS TEXT) LIKE $${paramIndex + 4}
       )`;
-      params.push(searchPattern);
-      paramIndex++;
+      params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+      paramIndex += 5;
     }
 
     // Order: pending first, then newest first

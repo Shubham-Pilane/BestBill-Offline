@@ -97,12 +97,21 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
       const query = searchQuery.toLowerCase().replace(/\s/g, '');
       filtered = filtered.filter(i => {
         const name = i.name.toLowerCase();
-        if (name.includes(searchQuery.toLowerCase())) return true;
+        const categoryName = (i.category_name || '').toLowerCase();
+        if (name.includes(searchQuery.toLowerCase()) || categoryName.includes(searchQuery.toLowerCase())) return true;
+        
         let patternIdx = 0;
         for (let char of name) {
           if (char === query[patternIdx]) patternIdx++;
           if (patternIdx === query.length) return true;
         }
+
+        patternIdx = 0;
+        for (let char of categoryName) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+
         return false;
       });
     }

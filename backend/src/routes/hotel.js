@@ -200,7 +200,7 @@ router.post('/toggle-lodging', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '864291') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.lodgingEnabled = !!enabled;
@@ -229,7 +229,7 @@ router.post('/toggle-kot', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '517382') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.kotEnabled = !!enabled;
@@ -258,7 +258,7 @@ router.post('/toggle-whatsapp-billing', auth, (req, res) => { // wait, let's kee
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '928614') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.whatsAppBillingEnabled = !!enabled;
@@ -288,7 +288,7 @@ router.post('/toggle-inventory', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '346875') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.inventoryEnabled = !!enabled;
@@ -317,7 +317,7 @@ router.post('/toggle-token-counter', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '791523') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.tokenCounterEnabled = !!enabled;
@@ -346,7 +346,7 @@ router.post('/toggle-simple-kot', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '231018') {
+    if (passcode !== '185746') {
       return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
     }
     config.simpleKotEnabled = !!enabled;
