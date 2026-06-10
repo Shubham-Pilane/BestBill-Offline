@@ -4,7 +4,7 @@ import api from '../services/api';
 import OrderModal from '../components/OrderModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint, Sun, Moon } from 'lucide-react';
+import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint, Sun, Moon, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import SwapModal from '../components/SwapModal';
@@ -37,6 +37,7 @@ const Dashboard = () => {
   const [menuData, setMenuData] = useState({ categories: [], items: [] });
   const [subStatus, setSubStatus] = useState(null);
   const [timeRemainingStr, setTimeRemainingStr] = useState('');
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
 
   const fetchSubscriptionStatus = async () => {
     try {
@@ -230,15 +231,35 @@ const Dashboard = () => {
     }
   };
 
+  const createTokenCounter = async (e) => {
+    e.preventDefault();
+    if (!isOwner) return;
+    try {
+      await api.post('/tables/batch', { tableNumbers: ['Token Counter'], floor: 'Counter' });
+      toast.success('Token Counter activated!');
+      fetchTables();
+    } catch (err) {
+      toast.error('Failed to create Token Counter');
+    }
+  };
+
   // Extract Parcel Counter tables (any table with "parcel" in its name)
   const parcelTables = useMemo(() => {
     return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('parcel'));
   }, [tables]);
 
-  // Group tables by floor - Memoized for performance (excluding parcel counters)
+  // Extract Token Counter tables (any table with "token" in its name)
+  const tokenTables = useMemo(() => {
+    return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('token'));
+  }, [tables]);
+
+  // Group tables by floor - Memoized for performance (excluding parcel and token counters)
   const groupedTables = useMemo(() => {
     return (tables || [])
-      .filter(t => !String(t.table_number || '').toLowerCase().includes('parcel'))
+      .filter(t => {
+        const name = String(t.table_number || '').toLowerCase();
+        return !name.includes('parcel') && !name.includes('token');
+      })
       .reduce((acc, table) => {
         let floor = table.floor || 'Floor 1';
         if (!acc[floor]) acc[floor] = [];
@@ -476,48 +497,146 @@ const Dashboard = () => {
           </div>
         </div>
         {isOwner && (
-          <div style={{ display: 'flex', gap: '16px' }}>
+          <div style={{ position: 'relative' }}>
             <button
-              onClick={createParcelCounter}
+              onClick={() => setShowCreateDropdown(!showCreateDropdown)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
-                backgroundColor: 'transparent',
-                border: '2px solid #0ea5e9',
-                color: '#0ea5e9',
-                padding: '12px 24px',
-                borderRadius: '16px',
-                fontWeight: 800,
-                fontSize: '15px',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-            >
-              <PlusCircle size={20} />
-              Parcel Counter
-            </button>
-            <button
-              onClick={() => { setIsCustomFloor(false); setCustomFloorName(''); setNewTableFloor('Floor 1'); setAddTableOpen(true); }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
+                gap: '8px',
                 backgroundColor: '#0ea5e9',
                 color: 'white',
-                padding: '14px 28px',
-                borderRadius: '16px',
+                padding: '10px 20px',
+                borderRadius: '12px',
                 fontWeight: 800,
-                fontSize: '15px',
+                fontSize: '13px',
                 cursor: 'pointer',
                 border: 'none',
-                boxShadow: '0 8px 16px rgba(14, 165, 233, 0.2)',
-                transition: 'all 0.2s'
+                boxShadow: '0 4px 12px rgba(14, 165, 233, 0.15)',
+                transition: 'all 0.2s',
+                justifyContent: 'center',
+                width: '180px'
               }}
             >
-              <PlusCircle size={20} />
-              Create New Tables
+              <PlusCircle size={16} />
+              Create New...
+              <ChevronDown 
+                size={14} 
+                style={{ 
+                  transform: showCreateDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s ease',
+                  marginLeft: 'auto'
+                }} 
+              />
             </button>
+
+            {showCreateDropdown && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '8px',
+                backgroundColor: 'var(--bg-card)',
+                border: '1px solid var(--bg-border)',
+                borderRadius: '12px',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+                zIndex: 100,
+                padding: '6px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+                width: '180px'
+              }}>
+                <button
+                  onClick={(e) => {
+                    setShowCreateDropdown(false);
+                    createParcelCounter(e);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: '#0ea5e9',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    width: '100%',
+                    textAlign: 'left',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#0ea5e9' }}></span>
+                  Parcel Counter
+                </button>
+
+                {user?.tokenCounterEnabled && (
+                  <button
+                    onClick={(e) => {
+                      setShowCreateDropdown(false);
+                      createTokenCounter(e);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: '#10b981',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'left',
+                      transition: 'all 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-border)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+                    Token Counter
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowCreateDropdown(false);
+                    setIsCustomFloor(false);
+                    setCustomFloorName('');
+                    setNewTableFloor('Floor 1');
+                    setAddTableOpen(true);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    width: '100%',
+                    textAlign: 'left',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-border)'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--text-secondary)' }}></span>
+                  Dining Table
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -547,14 +666,14 @@ const Dashboard = () => {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '64px' }}>
           
-          {/* Fallback for only parcel counters, no floors */}
-          {floors.length === 0 && parcelTables.length > 0 && (
+          {/* Fallback for only parcel counters or token counters, no floors */}
+          {floors.length === 0 && (parcelTables.length > 0 || tokenTables.length > 0) && (
              <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
                 gap: '24px'
              }}>
-                {parcelTables.map((table) => (
+                {[...parcelTables, ...tokenTables].map((table) => (
                     <TableCard 
                       key={table.id} 
                       table={table} 
@@ -573,7 +692,7 @@ const Dashboard = () => {
           )}
 
           {floors.map((floor, floorIndex) => {
-             const floorTables = floorIndex === 0 ? [...parcelTables, ...groupedTables[floor]] : groupedTables[floor];
+             const floorTables = floorIndex === 0 ? [...parcelTables, ...tokenTables, ...groupedTables[floor]] : groupedTables[floor];
              const tableCount = floorTables.length;
              return (
                <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -823,7 +942,12 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          {table.table_number === 'Parcel Counter' ? 'SERVICE DESK' : `TABLE ${table.table_number}`}
+          {String(table.table_number || '').toLowerCase().includes('parcel') 
+            ? 'SERVICE DESK' 
+            : String(table.table_number || '').toLowerCase().includes('token')
+              ? 'TOKEN COUNTER'
+              : `TABLE ${table.table_number}`
+          }
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
            {isOwner && (
@@ -839,7 +963,7 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
                     style={{ color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                  >
                     <Trash2 size={14} />
-                 </button>
+                  </button>
               </div>
            )}
            <div style={{
@@ -853,7 +977,15 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3 style={{fontSize: table.table_number === 'Parcel Counter' ? '36px' : '48px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.05em' }}>{table.table_number}</h3>
+        <h3 style={{
+          fontSize: (String(table.table_number || '').toLowerCase().includes('parcel') || String(table.table_number || '').toLowerCase().includes('token')) 
+            ? '30px' 
+            : '48px', 
+          fontWeight: 900, 
+          color: 'var(--text-primary)', 
+          margin: 0, 
+          letterSpacing: '-0.05em' 
+        }}>{table.table_number}</h3>
         <span style={{ fontSize: '12px', fontWeight: 800, color: table.active_order_id ? '#f43f5e' : '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           {table.active_order_id ? 'OCCUPIED' : 'AVAILABLE'}
         </span>

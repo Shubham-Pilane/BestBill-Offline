@@ -401,10 +401,22 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
         <div className="order-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-rgba-05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             <div style={{width: '64px', height: '64px', backgroundColor: table.active_order_id ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '28px' }}>
-              {table.table_number === 'Parcel Counter' ? 'PC' : table.table_number}
+              {String(table.table_number || '').toLowerCase().includes('parcel') 
+                ? 'PC' 
+                : String(table.table_number || '').toLowerCase().includes('token') 
+                  ? 'TC' 
+                  : table.table_number
+              }
             </div>
             <div>
-              <h2 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Position Summary</h2>
+              <h2 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                {String(table.table_number || '').toLowerCase().includes('parcel') 
+                  ? 'Parcel Counter Summary' 
+                  : String(table.table_number || '').toLowerCase().includes('token') 
+                    ? 'Token Counter Summary' 
+                    : `Table ${table.table_number} Summary`
+                }
+              </h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>BestBill POS</span>
                  {table.active_order_id && !showBill && (

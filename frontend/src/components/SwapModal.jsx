@@ -3,7 +3,10 @@ import { X } from 'lucide-react';
 const SwapModal = ({ isOpen, onClose, tables, onSwap, currentTable }) => {
    if (!isOpen) return null;
    
-   const availableTables = (tables || []).filter(t => !t.active_order_id && t.id !== currentTable?.id && !String(t.table_number || '').toLowerCase().includes('parcel'));
+   const availableTables = (tables || []).filter(t => {
+      const name = String(t.table_number || '').toLowerCase();
+      return !t.active_order_id && t.id !== currentTable?.id && !name.includes('parcel') && !name.includes('token');
+   });
    const grouped = availableTables.reduce((acc, t) => {
       const f = t.floor || 'Floor 1';
       if (!acc[f]) acc[f] = [];

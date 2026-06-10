@@ -71,6 +71,12 @@ const Profile = () => {
     const [inventoryPassword, setInventoryPassword] = useState('');
     const [inventoryModalMode, setInventoryModalMode] = useState('enable');
 
+    // Token Counter State
+    const [tokenCounterEnabled, setTokenCounterEnabled] = useState(false);
+    const [showTokenCounterModal, setShowTokenCounterModal] = useState(false);
+    const [tokenCounterPassword, setTokenCounterPassword] = useState('');
+    const [tokenCounterModalMode, setTokenCounterModalMode] = useState('enable');
+
     const [showStaffSection, setShowStaffSection] = useState(false);
     const [showNetworkConfig, setShowNetworkConfig] = useState(false);
     const [showSecurityCore, setShowSecurityCore] = useState(false);
@@ -87,6 +93,7 @@ const Profile = () => {
             fetchKotStatus();
             fetchWhatsAppBillingStatus();
             fetchInventoryStatus();
+            fetchTokenCounterStatus();
         }
     }, [isOwner]);
 
@@ -299,6 +306,60 @@ const Profile = () => {
                     updateUser({ inventoryEnabled: false });
                     toast.success("Inventory Management Module deactivated.");
                     setShowInventoryModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect deactivation password");
+            }
+        }
+    };
+
+    const fetchTokenCounterStatus = async () => {
+        try {
+            const res = await api.get('/hotel/token-counter-status');
+            setTokenCounterEnabled(res.data.tokenCounterEnabled);
+            updateUser({ tokenCounterEnabled: res.data.tokenCounterEnabled });
+        } catch (err) {
+            console.error('Failed to fetch token counter status', err);
+        }
+    };
+
+    const handleToggleTokenCounter = (shouldEnable) => {
+        if (shouldEnable) {
+            setTokenCounterModalMode('enable');
+            setTokenCounterPassword('');
+            setShowTokenCounterModal(true);
+        } else {
+            setTokenCounterModalMode('disable');
+            setTokenCounterPassword('');
+            setShowTokenCounterModal(true);
+        }
+    };
+
+    const handleTokenCounterModalSubmit = async () => {
+        if (!tokenCounterPassword) {
+            toast.error("Password cannot be blank");
+            return;
+        }
+        if (tokenCounterModalMode === 'enable') {
+            try {
+                const res = await api.post('/hotel/toggle-token-counter', { enabled: true, passcode: tokenCounterPassword });
+                if (res.data.success) {
+                    setTokenCounterEnabled(true);
+                    updateUser({ tokenCounterEnabled: true });
+                    toast.success("Token Counter module activated!");
+                    setShowTokenCounterModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect activation password");
+            }
+        } else {
+            try {
+                const res = await api.post('/hotel/toggle-token-counter', { enabled: false, passcode: tokenCounterPassword });
+                if (res.data.success) {
+                    setTokenCounterEnabled(false);
+                    updateUser({ tokenCounterEnabled: false });
+                    toast.success("Token Counter module deactivated.");
+                    setShowTokenCounterModal(false);
                 }
             } catch (err) {
                 toast.error(err.response?.data?.message || "Incorrect deactivation password");
@@ -1239,6 +1300,42 @@ const Profile = () => {
                             </div>
                         </div>
 
+                        {/* Token Counter Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Token Counter</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable token counters on the dashboard. Receipts printed from token counters will only print items list and grand totals.
+                                    This module requires a passcode to unlock.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="tokenCounterModule"
+                                        checked={!tokenCounterEnabled} 
+                                        onChange={() => handleToggleTokenCounter(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="tokenCounterModule"
+                                        checked={tokenCounterEnabled} 
+                                        onChange={() => handleToggleTokenCounter(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
                     </div>
                 )}
             </div>
@@ -1419,6 +1516,50 @@ const Profile = () => {
                                 onClick={handleInventoryModalSubmit}
                                 style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: inventoryModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: inventoryModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
                             >{inventoryModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Token Counter Activation Modal */}
+            {showTokenCounterModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowTokenCounterModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: tokenCounterModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                                {tokenCounterModalMode === 'enable' ? 'Activate Token Counter Module' : 'Deactivate Token Counter Module'}
+                            </h3>
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            {tokenCounterModalMode === 'enable'
+                                ? 'Enter the license passcode to unlock and enable Token Counter.'
+                                : 'Are you sure you want to deactivate Token Counter? Please enter the passcode to confirm deactivation.'
+                            }
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
+                                {tokenCounterModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
+                            </label>
+                            <input
+                                type="password"
+                                value={tokenCounterPassword}
+                                onChange={e => setTokenCounterPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleTokenCounterModalSubmit()}
+                                placeholder={tokenCounterModalMode === 'enable' ? "Enter passcode" : "Enter passcode"}
+                                autoFocus
+                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowTokenCounterModal(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleTokenCounterModalSubmit}
+                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: tokenCounterModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: tokenCounterModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                            >{tokenCounterModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
                         </div>
                     </div>
                 </div>

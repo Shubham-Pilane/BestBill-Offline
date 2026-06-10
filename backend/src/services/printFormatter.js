@@ -258,6 +258,75 @@ function formatBill(data) {
   const mg = '';
   
   const builder = new EscposBuilder(is58mm);
+
+  const ACTUAL_ITEM_LEN = is58mm ? 15 : (LINE_WIDTH === 48 ? 25 : 19);
+  const PRC_LEN = is58mm ? 5 : 8;
+  const QTY_LEN = is58mm ? 3 : 4;
+  const TOT_LEN = is58mm ? 5 : 8;
+
+  const isToken = String(data.table || '').toLowerCase().includes('token');
+
+  if (isToken) {
+    builder.alignLeft();
+    builder.bold(true);
+    builder.text(
+      mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
+      padText('PRICE', PRC_LEN, 'right') + ' ' + 
+      padText('QTY', QTY_LEN, 'right') + ' ' + 
+      padText('TOTAL', TOT_LEN, 'right')
+    );
+    builder.line('-', LINE_WIDTH);
+    builder.bold(false);
+
+    (data.items || []).forEach(i => {
+      const qty = i.quantity || i.qty || 1;
+      const nameStr = toTitleCase(String(i.name));
+      const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
+      let remainingStr = nameStr.substring(ACTUAL_ITEM_LEN);
+      
+      builder.text(
+        mg + padText(firstChunk, ACTUAL_ITEM_LEN) + ' ' +
+        padText(Math.round(i.price), PRC_LEN, 'right') + ' ' + 
+        padText(qty, QTY_LEN, 'right') + ' ' + 
+        padText(Math.round(i.price * qty), TOT_LEN, 'right')
+      );
+
+      const SUB_CHUNK_LEN = ACTUAL_ITEM_LEN - 2;
+      while (remainingStr.length > 0) {
+        const subChunk = remainingStr.substring(0, SUB_CHUNK_LEN);
+        builder.text(mg + "  " + padText(subChunk, LINE_WIDTH - 2));
+        remainingStr = remainingStr.substring(SUB_CHUNK_LEN);
+      }
+    });
+    
+    builder.line('-', LINE_WIDTH);
+    
+    const subtotalVal = parseFloat(data.subtotal || 0);
+    const gstVal = parseFloat(data.gst || 0);
+    const finalAmount = parseFloat(data.finalAmount || data.total || 0);
+    
+    let addedSubItems = false;
+    if (gstVal > 0) {
+      builder.text(mg + padText(`GST (${data.gst_percentage || 5}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
+    
+    if (data.discountPercentage > 0) {
+      const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
+      builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
+    
+    if (addedSubItems) {
+      builder.line('-', LINE_WIDTH);
+    }
+    
+    const totalText = 'TOTAL: Rs ' + Math.round(finalAmount);
+    builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+    builder.line('-', LINE_WIDTH);
+    builder.feed(3).cut();
+    return builder.build();
+  }
   
   // Header
   builder.alignCenter()
@@ -305,11 +374,6 @@ function formatBill(data) {
   builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
   
   builder.line('-', LINE_WIDTH);
-  
-  const ACTUAL_ITEM_LEN = is58mm ? 15 : (LINE_WIDTH === 48 ? 25 : 19);
-  const PRC_LEN = is58mm ? 5 : 8;
-  const QTY_LEN = is58mm ? 3 : 4;
-  const TOT_LEN = is58mm ? 5 : 8;
   
   builder.text(
     mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +

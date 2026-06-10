@@ -300,5 +300,34 @@ router.post('/toggle-inventory', auth, (req, res) => {
   }
 });
 
+// Get Token Counter Activation Status
+router.get('/token-counter-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ tokenCounterEnabled: !!config.tokenCounterEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking token counter status' });
+  }
+});
+
+router.post('/toggle-token-counter', auth, (req, res) => {
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '231018') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.tokenCounterEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, tokenCounterEnabled: config.tokenCounterEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating token counter configuration' });
+  }
+});
+
 module.exports = router;
 
