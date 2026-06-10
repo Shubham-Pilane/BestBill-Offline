@@ -22,9 +22,11 @@ const BillingHistory = () => {
     const itemsPerPage = 15;
 
     const [activeView, setActiveView] = useState('history'); // 'history' or 'analytics'
-    const [analyticsFilter, setAnalyticsFilter] = useState('Today'); // 'Today', 'Month', 'Year'
+    const [analyticsFilter, setAnalyticsFilter] = useState('Today'); // 'Today', 'Month', 'Year', 'Custom'
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth().toString());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [itemSortConfig, setItemSortConfig] = useState({ key: 'quantity', direction: 'desc' });
     const [itemSearchTerm, setItemSearchTerm] = useState('');
 
@@ -84,6 +86,12 @@ const BillingHistory = () => {
                 return billDate.getMonth().toString() === selectedMonth && billDate.getFullYear().toString() === selectedYear;
             } else if (analyticsFilter === 'Year') {
                 return billDate.getFullYear().toString() === selectedYear;
+            } else if (analyticsFilter === 'Custom') {
+                const year = billDate.getFullYear();
+                const month = String(billDate.getMonth() + 1).padStart(2, '0');
+                const day = String(billDate.getDate()).padStart(2, '0');
+                const billLocalDateStr = `${year}-${month}-${day}`;
+                return billLocalDateStr >= startDate && billLocalDateStr <= endDate;
             }
             return false;
         });
@@ -239,8 +247,14 @@ const BillingHistory = () => {
             defaultStyle: { fontSize: 10 }
         };
 
-        if (analyticsFilter === 'Month') {
-            docDefinition.content.push({ text: `Selected Month: ${monthsList.find(m => m.value === selectedMonth)?.label} ${selectedYear}`, margin: [0, 0, 0, 10] });
+        if (analyticsFilter === 'Today' || analyticsFilter === 'Custom' || analyticsFilter === 'Month') {
+            if (analyticsFilter === 'Today') {
+                docDefinition.content.push({ text: `Date: ${new Date().toLocaleDateString()}`, margin: [0, 0, 0, 10] });
+            } else if (analyticsFilter === 'Custom') {
+                docDefinition.content.push({ text: `Period: ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`, margin: [0, 0, 0, 10] });
+            } else {
+                docDefinition.content.push({ text: `Selected Month: ${monthsList.find(m => m.value === selectedMonth)?.label} ${selectedYear}`, margin: [0, 0, 0, 10] });
+            }
             
             // Revenue Summary
             docDefinition.content.push({
@@ -357,7 +371,7 @@ const BillingHistory = () => {
                     {activeView === 'history' ? (
                         <>
                             <BarChart2 size={28} color="white" />
-                            <span style={{ fontSize: '20px', fontWeight: 900, color: 'white' }}>Today's Sales Analytics</span>
+                            <span style={{ fontSize: '20px', fontWeight: 900, color: 'white' }}>Sales Analytics</span>
                         </>
                     ) : (
                         <>
@@ -461,11 +475,12 @@ const BillingHistory = () => {
                             <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>Detailed breakdown of revenue, orders, and item popularity.</p>
                         </div>
                         
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <select value={analyticsFilter} onChange={e => setAnalyticsFilter(e.target.value)} style={{ padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer' }}>
                                 <option value="Today">Today</option>
                                 <option value="Month">Monthly</option>
                                 <option value="Year">Yearly</option>
+                                <option value="Custom">Custom Range</option>
                             </select>
 
                             {analyticsFilter === 'Month' && (
@@ -485,11 +500,27 @@ const BillingHistory = () => {
                                 </select>
                             )}
 
-                            {(analyticsFilter === 'Month' || analyticsFilter === 'Year') && (
-                                <button onClick={exportPDF} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#f43f5e', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
-                                    <Download size={16} /> Export PDF
-                                </button>
+                            {analyticsFilter === 'Custom' && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <input 
+                                        type="date" 
+                                        value={startDate} 
+                                        onChange={e => setStartDate(e.target.value)} 
+                                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer' }}
+                                    />
+                                    <span style={{ color: 'var(--text-muted)', fontWeight: 800 }}>to</span>
+                                    <input 
+                                        type="date" 
+                                        value={endDate} 
+                                        onChange={e => setEndDate(e.target.value)} 
+                                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer' }}
+                                    />
+                                </div>
                             )}
+
+                            <button onClick={exportPDF} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px', border: 'none', backgroundColor: '#f43f5e', color: 'white', fontWeight: 800, cursor: 'pointer' }}>
+                                <Download size={16} /> Export PDF
+                            </button>
                         </div>
                     </div>
 
@@ -579,7 +610,7 @@ const BillingHistory = () => {
                             </div>
                         </div>
                     )}
-                    {analyticsFilter === 'Today' && (
+                    {(analyticsFilter === 'Today' || analyticsFilter === 'Custom') && (
                         <div style={{ marginTop: '16px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Item Sales Summary</h4>
