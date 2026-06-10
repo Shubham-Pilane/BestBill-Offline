@@ -202,7 +202,15 @@ router.post('/items/bulk', auth, async (req, res) => {
       categoriesMap.set(c.name.toLowerCase().trim(), c.id);
     });
 
-    let importedCount = 0;
+    // 2. Get existing menu items
+    const existingItemsResult = await db.query('SELECT * FROM menu_items WHERE hotel_id = $1', [hotelId]);
+    const existingItemsMap = new Map();
+    existingItemsResult.rows.forEach(item => {
+      existingItemsMap.set(item.name.toLowerCase().trim(), item);
+    });
+
+    let createdCount = 0;
+    let updatedCount = 0;
 
     for (const item of items) {
       if (!item.name || !item.price || !item.category) continue;
@@ -211,7 +219,7 @@ router.post('/items/bulk', auth, async (req, res) => {
       const catKey = catName.toLowerCase();
       let categoryId = categoriesMap.get(catKey);
 
-      // 2. Create category if it doesn't exist
+      // Create category if it doesn't exist
       if (!categoryId) {
         const newCat = await db.query(
           'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING id',
@@ -221,16 +229,37 @@ router.post('/items/bulk', auth, async (req, res) => {
         categoriesMap.set(catKey, categoryId);
       }
 
-      // 3. Insert the item
       const lowercaseName = item.name.trim().toLowerCase();
-      await db.query(
-        'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6)',
-        [hotelId, categoryId, lowercaseName, item.price, item.description || '', true]
-      );
-      importedCount++;
+
+      if (existingItemsMap.has(lowercaseName)) {
+        const existingItem = existingItemsMap.get(lowercaseName);
+        const newPrice = parseFloat(item.price);
+        const hasPriceChanged = parseFloat(existingItem.price) !== newPrice;
+        const hasCategoryChanged = existingItem.category_id !== categoryId;
+        const wasDeleted = existingItem.is_deleted === 1;
+
+        if (hasPriceChanged || hasCategoryChanged || wasDeleted) {
+          await db.query(
+            'UPDATE menu_items SET category_id = $1, price = $2, description = $3, is_deleted = 0, is_available = true WHERE id = $4',
+            [categoryId, newPrice, item.description || existingItem.description || '', existingItem.id]
+          );
+          updatedCount++;
+        }
+      } else {
+        // Insert new item
+        await db.query(
+          'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6)',
+          [hotelId, categoryId, lowercaseName, parseFloat(item.price), item.description || '', true]
+        );
+        createdCount++;
+      }
     }
 
-    res.status(201).json({ message: `Successfully imported ${importedCount} items`, importedCount });
+    res.status(201).json({ 
+      message: `Successfully imported menu: ${createdCount} new items added, ${updatedCount} items updated.`, 
+      createdCount, 
+      updatedCount 
+    });
   } catch (err) {
     console.error('[BULK IMPORT ERROR]', err);
     res.status(500).json({ message: 'Server error importing items' });
