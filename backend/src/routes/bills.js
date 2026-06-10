@@ -84,6 +84,7 @@ router.put('/:id/pay', auth, async (req, res) => {
 router.post('/:id/print', auth, async (req, res) => {
   try {
     const { id } = req.params;
+    const { paymentMethod } = req.body;
     const bill = await db.query(`
       SELECT b.*, o.room_id, o.table_id,
              h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.upi_id, h.printer_size, h.fssai_number, h.email as hotel_email
@@ -141,6 +142,10 @@ router.post('/:id/print', auth, async (req, res) => {
       }
     }
 
+    const pMethod = paymentMethod || billData.payment_method || 'upi';
+    const isPaid = billData.is_paid || false;
+    const showUPI = !isPaid && (pMethod === 'upi' || pMethod === 'online');
+
     const printService = require('../services/printService');
     const payload = {
       type: 'FINAL_BILL',
@@ -159,8 +164,8 @@ router.post('/:id/print', auth, async (req, res) => {
       hotelEmail: billData.hotel_email,
       hotelFssai: billData.fssai_number,
       gst_percentage: Number(billData.gst_percentage || 0),
-      upiId: billData.upi_id || '',
-      isPaid: billData.is_paid || false,
+      upiId: showUPI ? (billData.upi_id || '') : '',
+      isPaid: isPaid,
       room_charge: roomCharge,
       booking_days: bookingDays,
       printerSize: billData.printer_size || '80mm'

@@ -24,6 +24,8 @@ class EscposBuilder {
     this.is58mm = is58mm;
     // Force Font A (standard 12x24 font) for both sizes to ensure consistent, readable text
     this.bufferList.push(Buffer.from([ESC, 0x4D, 0x00])); 
+    // Set custom compact line spacing: ESC 3 28 (28 dots)
+    this.bufferList.push(Buffer.from([ESC, 0x33, 28]));
     // Use standard normal font to prevent aspect ratio distortion
     this.normalFont = CMD_TEXT_NORMAL;
   }
@@ -95,8 +97,8 @@ class EscposBuilder {
  */
 function formatKOT(data) {
   const is58mm = data.printerSize === '58mm';
-  // 576 dots / 12 dots per char = 48 characters for 80mm standard Font A
-  const LINE_WIDTH = is58mm ? 31 : 48;
+  // Use character limit from settings if provided, otherwise default to 31 (58mm) or 42 (80mm)
+  const LINE_WIDTH = data.charLimit ? Number(data.charLimit) : (is58mm ? 31 : 42);
   const mg = '';
   
   const builder = new EscposBuilder(is58mm);
@@ -165,7 +167,7 @@ function formatKOT(data) {
       .line('-', LINE_WIDTH);
   }
 
-  builder.feed(5)
+  builder.feed(3)
     .cut();
 
   return builder.build();
@@ -197,8 +199,8 @@ function getQRCodeBuffer(dataStr, is58mm = true) {
     
     const printerWidthDots = is58mm ? 384 : 576;
     
-    // Scale so the QR occupies about 60% of the paper width
-    const targetSize = printerWidthDots * 0.6;
+    // Scale so the QR occupies about 60% of the paper width for 58mm, and 42% for 80mm (to keep it compact and elegant)
+    const targetSize = printerWidthDots * (is58mm ? 0.6 : 0.42);
     const scale = Math.floor(targetSize / size) || 1;
     
     const qrSizeDots = size * scale;
@@ -251,8 +253,8 @@ function formatBill(data) {
   const hPhone = data.hotelPhone || '';
   
   const is58mm = data.printerSize === '58mm';
-  // 576 dots / 12 dots per char = 48 characters for 80mm standard Font A
-  const LINE_WIDTH = is58mm ? 31 : 48; 
+  // Use character limit from settings if provided, otherwise default to 31 (58mm) or 42 (80mm)
+  const LINE_WIDTH = data.charLimit ? Number(data.charLimit) : (is58mm ? 31 : 42); 
   const mg = '';
   
   const builder = new EscposBuilder(is58mm);
@@ -304,7 +306,7 @@ function formatBill(data) {
   
   builder.line('-', LINE_WIDTH);
   
-  const ACTUAL_ITEM_LEN = is58mm ? 15 : 19;
+  const ACTUAL_ITEM_LEN = is58mm ? 15 : (LINE_WIDTH === 48 ? 25 : 19);
   const PRC_LEN = is58mm ? 5 : 8;
   const QTY_LEN = is58mm ? 3 : 4;
   const TOT_LEN = is58mm ? 5 : 8;
@@ -387,7 +389,7 @@ function formatBill(data) {
     builder.bufferList.push(qrBuffer);
   }
   
-  builder.feed(5)
+  builder.feed(3)
     .cut();
      
   return builder.build();

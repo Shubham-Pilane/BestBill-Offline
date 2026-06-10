@@ -28,6 +28,10 @@ const Dashboard = () => {
   const [editingTable, setEditingTable] = useState(null);
   const [editData, setEditData] = useState({ table_number: '', floor: 'Floor 1' });
   const [newTableFloor, setNewTableFloor] = useState('Floor 1');
+  const [isCustomFloor, setIsCustomFloor] = useState(false);
+  const [customFloorName, setCustomFloorName] = useState('');
+  const [isEditCustomFloor, setIsEditCustomFloor] = useState(false);
+  const [editCustomFloorName, setEditCustomFloorName] = useState('');
 
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [menuData, setMenuData] = useState({ categories: [], items: [] });
@@ -63,9 +67,13 @@ const Dashboard = () => {
       const secs = totalSecs % 60;
       const totalMins = Math.floor(totalSecs / 60);
       const mins = totalMins % 60;
-      const hours = Math.floor(totalMins / 60);
+      const totalHours = Math.floor(totalMins / 60);
+      const hours = totalHours % 24;
+      const days = Math.floor(totalHours / 24);
 
-      if (hours > 0) {
+      if (days > 0) {
+        setTimeRemainingStr(`${days}d ${hours}h ${mins}m`);
+      } else if (hours > 0) {
         setTimeRemainingStr(`${hours}h ${mins}m`);
       } else if (mins > 0) {
         setTimeRemainingStr(`${mins}m ${secs}s`);
@@ -140,6 +148,8 @@ const Dashboard = () => {
     if (!isOwner) return;
     setEditingTable(table);
     setEditData({ table_number: table.table_number, floor: table.floor || 'Floor 1' });
+    setIsEditCustomFloor(false);
+    setEditCustomFloorName('');
     setEditModalOpen(true);
   };
 
@@ -220,27 +230,31 @@ const Dashboard = () => {
     }
   };
 
-  // Group tables by floor - Memoized for performance
-  const groupedTables = useMemo(() => {
-    const groups = (tables || []).reduce((acc, table) => {
-      let floor = table.floor || 'Floor 1';
-      if (table.table_number === 'Parcel Counter') {
-        floor = 'Floor 1';
-      }
-      if (!acc[floor]) acc[floor] = [];
-      acc[floor].push(table);
-      return acc;
-    }, {});
+  // Extract Parcel Counter tables (any table with "parcel" in its name)
+  const parcelTables = useMemo(() => {
+    return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('parcel'));
+  }, [tables]);
 
-    if (groups['Floor 1']) {
-      const pcIndex = groups['Floor 1'].findIndex(t => t.table_number === 'Parcel Counter');
-      if (pcIndex !== -1) {
-        const pc = groups['Floor 1'].splice(pcIndex, 1)[0];
-        groups['Floor 1'].unshift(pc);
-      }
-    }
-    return groups;
-  }, [tables, isOwner]);
+  // Group tables by floor - Memoized for performance (excluding parcel counters)
+  const groupedTables = useMemo(() => {
+    return (tables || [])
+      .filter(t => !String(t.table_number || '').toLowerCase().includes('parcel'))
+      .reduce((acc, table) => {
+        let floor = table.floor || 'Floor 1';
+        if (!acc[floor]) acc[floor] = [];
+        acc[floor].push(table);
+        return acc;
+      }, {});
+  }, [tables]);
+
+  // Dynamically resolve existing floors for selector lists
+  const existingFloors = useMemo(() => {
+    const defaultFloors = ['Floor 1', 'Floor 2', 'Main Hall', 'Party Hall', 'Rooftop', 'Garden', 'Family Section'];
+    const floorsInTables = (tables || [])
+      .map(t => t.floor)
+      .filter(f => f && f !== 'Counter' && !defaultFloors.includes(f));
+    return Array.from(new Set([...defaultFloors, ...floorsInTables]));
+  }, [tables]);
 
   const floorOrder = (name) => {
     if (name.startsWith('Floor ')) return parseInt(name.replace('Floor ', '')) || 99;
@@ -484,7 +498,7 @@ const Dashboard = () => {
               Parcel Counter
             </button>
             <button
-              onClick={() => setAddTableOpen(true)}
+              onClick={() => { setIsCustomFloor(false); setCustomFloorName(''); setNewTableFloor('Floor 1'); setAddTableOpen(true); }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -532,38 +546,67 @@ const Dashboard = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '64px' }}>
+          
+          {/* Fallback for only parcel counters, no floors */}
+          {floors.length === 0 && parcelTables.length > 0 && (
+             <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: '24px'
+             }}>
+                {parcelTables.map((table) => (
+                    <TableCard 
+                      key={table.id} 
+                      table={table} 
+                      isOwner={isOwner} 
+                      onOpen={openTable}
+                      onEdit={initiateEditTable}
+                      onDelete={initiateDeleteTable}
+                      onSwap={(e) => {
+                        e.stopPropagation();
+                        setSelectedTable(table);
+                        setSwapModalOpen(true);
+                      }}
+                    />
+                 ))}
+             </div>
+          )}
 
-          {floors.map(floor => (
-            <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-secondary)', letterSpacing: '0.05em', margin: 0, textTransform: 'uppercase' }}>{floor}</h2>
-                  <div style={{ flex: 1, height: '2px', backgroundColor: 'var(--bg-border)' }}></div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{groupedTables[floor].length} TABLES</span>
+          {floors.map((floor, floorIndex) => {
+             const floorTables = floorIndex === 0 ? [...parcelTables, ...groupedTables[floor]] : groupedTables[floor];
+             const tableCount = floorTables.length;
+             return (
+               <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                     <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-secondary)', letterSpacing: '0.05em', margin: 0, textTransform: 'uppercase' }}>{floor}</h2>
+                     <div style={{ flex: 1, height: '2px', backgroundColor: 'var(--bg-border)' }}></div>
+                     <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{tableCount} TABLES</span>
+                  </div>
+                  
+                  <div style={{
+                     display: 'grid',
+                     gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                     gap: '24px'
+                  }}>
+                     {floorTables.map((table) => (
+                         <TableCard 
+                           key={table.id} 
+                           table={table} 
+                           isOwner={isOwner} 
+                           onOpen={openTable}
+                           onEdit={initiateEditTable}
+                           onDelete={initiateDeleteTable}
+                           onSwap={(e) => {
+                             e.stopPropagation();
+                             setSelectedTable(table);
+                             setSwapModalOpen(true);
+                           }}
+                         />
+                      ))}
+                  </div>
                </div>
-               
-               <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                  gap: '24px'
-               }}>
-                  {groupedTables[floor].map((table) => (
-                      <TableCard 
-                        key={table.id} 
-                        table={table} 
-                        isOwner={isOwner} 
-                        onOpen={openTable}
-                        onEdit={initiateEditTable}
-                        onDelete={initiateDeleteTable}
-                        onSwap={(e) => {
-                          e.stopPropagation();
-                          setSelectedTable(table);
-                          setSwapModalOpen(true);
-                        }}
-                      />
-                   ))}
-               </div>
-            </div>
-          ))}
+             );
+          })}
         </div>
       )}
 
@@ -600,19 +643,38 @@ const Dashboard = () => {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                      <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>Select Floor</label>
                      <select 
-                        value={newTableFloor}
-                        onChange={(e) => setNewTableFloor(e.target.value)}
-                        style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', outline: 'none' }}
+                        value={isCustomFloor ? '__custom__' : newTableFloor}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setIsCustomFloor(true);
+                            setNewTableFloor('');
+                          } else {
+                            setIsCustomFloor(false);
+                            setNewTableFloor(e.target.value);
+                          }
+                        }}
+                        style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', outline: 'none', fontWeight: 600 }}
                      >
-                        {[...Array(5)].map((_, i) => (
-                           <option key={i+1} value={`Floor ${i+1}`}>Floor {i+1}</option>
+                        {existingFloors.map(f => (
+                           <option key={f} value={f}>{f}</option>
                         ))}
-                        <option value="Main Hall">Main Hall</option>
-                        <option value="Party Hall">Party Hall</option>
-                        <option value="Rooftop">Rooftop</option>
-                        <option value="Garden">Garden</option>
-                        <option value="Family Section">Family Section</option>
+                        <option value="__custom__">➕ Add Custom Floor...</option>
                      </select>
+                     {isCustomFloor && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                           <input 
+                             type="text"
+                             value={customFloorName}
+                             onChange={(e) => {
+                               setCustomFloorName(e.target.value);
+                               setNewTableFloor(e.target.value);
+                             }}
+                             placeholder="Type custom floor name (e.g. AC Cabin)..."
+                             required
+                             style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px 14px', borderRadius: '12px', outline: 'none', fontWeight: 600 }}
+                           />
+                        </div>
+                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                      <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginLeft: '4px' }}>How many tables?</label>
@@ -652,22 +714,41 @@ const Dashboard = () => {
                     />
                  </div>
                  <div>
-                    <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Floor</label>
-                      <select 
-                        value={editData.floor} 
-                        onChange={(e) => setEditData({...editData, floor: e.target.value})}
-                        style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px' }}
-                      >
-                          {[...Array(5)].map((_, i) => (
-                             <option key={i+1} value={`Floor ${i+1}`}>Floor {i+1}</option>
-                          ))}
-                          <option value="Main Hall">Main Hall</option>
-                          <option value="Party Hall">Party Hall</option>
-                          <option value="Rooftop">Rooftop</option>
-                          <option value="Garden">Garden</option>
-                          <option value="Family Section">Family Section</option>
-                      </select>
-                 </div>
+                     <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Floor</label>
+                       <select 
+                         value={isEditCustomFloor ? '__custom__' : editData.floor} 
+                         onChange={(e) => {
+                           if (e.target.value === '__custom__') {
+                             setIsEditCustomFloor(true);
+                             setEditData({...editData, floor: ''});
+                           } else {
+                             setIsEditCustomFloor(false);
+                             setEditData({...editData, floor: e.target.value});
+                           }
+                         }}
+                         style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', outline: 'none', fontWeight: 600 }}
+                       >
+                           {existingFloors.map(f => (
+                              <option key={f} value={f}>{f}</option>
+                           ))}
+                           <option value="__custom__">➕ Add Custom Floor...</option>
+                       </select>
+                       {isEditCustomFloor && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                             <input 
+                               type="text"
+                               value={editCustomFloorName}
+                               onChange={(e) => {
+                                 setEditCustomFloorName(e.target.value);
+                                 setEditData({...editData, floor: e.target.value});
+                               }}
+                               placeholder="Type custom floor name (e.g. AC Cabin)..."
+                               required
+                               style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px 14px', borderRadius: '12px', outline: 'none', fontWeight: 600 }}
+                             />
+                          </div>
+                       )}
+                  </div>
                  <div style={{ display: 'flex', gap: '12px' }}>
                     <button type="button" onClick={() => setEditModalOpen(false)} style={{flex: 1, backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', padding: '14px', borderRadius: '16px', border: 'none' }}>Cancel</button>
                     <button type="submit" style={{ flex: 2, backgroundColor: '#0ea5e9', color: 'white', padding: '14px', borderRadius: '16px', border: 'none' }}>Change</button>

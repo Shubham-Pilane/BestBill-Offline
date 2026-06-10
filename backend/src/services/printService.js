@@ -23,6 +23,19 @@ class PrintService {
   }
 
   /**
+   * Resolves per-printer character limit from config.json, falling back to 42.
+   */
+  _resolveCharLimit(printerKey, payload, paperSize) {
+    if (paperSize === '58mm') return 31;
+    try {
+      const config = configManager.getConfig();
+      const printerCfg = config.printers?.[printerKey];
+      if (printerCfg?.charLimit) return Number(printerCfg.charLimit);
+    } catch (e) { /* fallback */ }
+    return 42; // default
+  }
+
+  /**
    * Spools a print job to both the local physical printer queue and remote socket clients.
    * @param {number|string} hotelId 
    * @param {object} payload 
@@ -44,12 +57,14 @@ class PrintService {
       if (payload.type === 'KOT') {
         // Resolve per-printer paper size from config (kitchen printer)
         const paperSize = this._resolvePaperSize('kitchen', payload);
-        const binaryBuffer = printFormatter.formatKOT({ ...payload, printerSize: paperSize });
+        const charLimit = this._resolveCharLimit('kitchen', payload, paperSize);
+        const binaryBuffer = printFormatter.formatKOT({ ...payload, printerSize: paperSize, charLimit });
         printerManager.queueJob({ type: 'KOT', payload: binaryBuffer });
       } else if (payload.type === 'FINAL_BILL') {
         // Resolve per-printer paper size from config (billing printer)
         const paperSize = this._resolvePaperSize('billing', payload);
-        const binaryBuffer = printFormatter.formatBill({ ...payload, printerSize: paperSize });
+        const charLimit = this._resolveCharLimit('billing', payload, paperSize);
+        const binaryBuffer = printFormatter.formatBill({ ...payload, printerSize: paperSize, charLimit });
         printerManager.queueJob({ type: 'FINAL_BILL', payload: binaryBuffer });
       }
 

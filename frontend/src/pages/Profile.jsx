@@ -36,8 +36,8 @@ const Profile = () => {
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [printerConfig, setPrinterConfig] = useState({
-        billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm' },
-        kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm' }
+        billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42 },
+        kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42 }
     });
     const [installedPrinters, setInstalledPrinters] = useState([]);
     const [availableIps, setAvailableIps] = useState([]);
@@ -333,8 +333,8 @@ const Profile = () => {
             const res = await api.get('/hotel/printers-config');
             if (res.data) {
                 setPrinterConfig({
-                    billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', ...(res.data.printers?.billing || {}) },
-                    kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', ...(res.data.printers?.kitchen || {}) }
+                    billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.billing || {}) },
+                    kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.kitchen || {}) }
                 });
                 setSelectedGuestIp(res.data.guestIp || '');
             }
@@ -745,6 +745,25 @@ const Profile = () => {
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
+                                            {printerConfig.billing.paperSize === '80mm' && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>80MM CHARACTER LIMIT</label>
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <select 
+                                                            value={printerConfig.billing.charLimit || 42} 
+                                                            onChange={e => setPrinterConfig({
+                                                                ...printerConfig,
+                                                                billing: { ...printerConfig.billing, charLimit: Number(e.target.value) }
+                                                            })}
+                                                            style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                        >
+                                                            <option value={42}>42 Characters per Line (Compact - Recommended)</option>
+                                                            <option value={48}>48 Characters per Line (Wide)</option>
+                                                        </select>
+                                                        <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                    </div>
+                                                </div>
+                                            )}
                                             <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>Receipt column alignment is auto-calculated based on selected paper width</span>
                                         </div>
                                     </div>
@@ -873,6 +892,25 @@ const Profile = () => {
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
+                                            {printerConfig.kitchen.paperSize === '80mm' && (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>80MM CHARACTER LIMIT</label>
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <select 
+                                                            value={printerConfig.kitchen.charLimit || 42} 
+                                                            onChange={e => setPrinterConfig({
+                                                                ...printerConfig,
+                                                                kitchen: { ...printerConfig.kitchen, charLimit: Number(e.target.value) }
+                                                            })}
+                                                            style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                        >
+                                                            <option value={42}>42 Characters per Line (Compact - Recommended)</option>
+                                                            <option value={48}>48 Characters per Line (Wide)</option>
+                                                        </select>
+                                                        <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                    </div>
+                                                </div>
+                                            )}
                                             <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>KOT column alignment is auto-calculated based on selected paper width</span>
                                         </div>
                                     </div>

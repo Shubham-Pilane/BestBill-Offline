@@ -280,7 +280,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const printBill = async () => {
     if (!billData) return;
     try {
-      await api.post(`/bills/${billData.id}/print`);
+      await api.post(`/bills/${billData.id}/print`, { paymentMethod: selectedPaymentMethod });
       toast.success('Sent to printer successfully!');
       if (!billData.is_paid) {
         await confirmPayment(selectedPaymentMethod);
