@@ -640,7 +640,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                 >
                   SEND TO KITCHEN
                 </button>
-              ) : table.table_number === 'Parcel Counter' ? (
+              ) : (table.table_number === 'Parcel Counter' || user?.simpleKotEnabled) ? (
                 <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
                   <button disabled={orderItems.length === 0} onClick={sendToKitchen} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SEND TO KITCHEN</button>
                   <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>

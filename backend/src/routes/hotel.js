@@ -329,5 +329,34 @@ router.post('/toggle-token-counter', auth, (req, res) => {
   }
 });
 
+// Get Simple KOT Activation Status
+router.get('/simple-kot-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ simpleKotEnabled: !!config.simpleKotEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking simple KOT status' });
+  }
+});
+
+router.post('/toggle-simple-kot', auth, (req, res) => {
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '231018') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.simpleKotEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, simpleKotEnabled: config.simpleKotEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating simple KOT configuration' });
+  }
+});
+
 module.exports = router;
 
