@@ -372,6 +372,19 @@ function formatBill(data) {
   const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + 
                   d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
+
+  if (data.guestName) {
+    builder.text(mg + padText(`Guest: ${data.guestName.toUpperCase()}`, LINE_WIDTH));
+  }
+  if (data.checkInDate) {
+    const checkInDateObj = new Date(data.checkInDate);
+    const checkOutDateObj = new Date(checkInDateObj.getTime() + (data.booking_days || 1) * 86400000);
+    const checkInStr = checkInDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const checkOutStr = checkOutDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    builder.text(mg + padText(`Check-In: ${checkInStr}`, LINE_WIDTH));
+    builder.text(mg + padText(`Check-Out: ${checkOutStr}`, LINE_WIDTH));
+  }
   
   builder.line('-', LINE_WIDTH);
   

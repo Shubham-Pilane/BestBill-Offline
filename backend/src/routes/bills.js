@@ -87,6 +87,7 @@ router.post('/:id/print', auth, async (req, res) => {
     const { paymentMethod } = req.body || {};
     const bill = await db.query(`
       SELECT b.*, o.room_id, o.table_id,
+             r.guest_name, r.check_in_date, r.booking_days, r.total_cost as room_cost,
              h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.upi_id, h.printer_size, h.fssai_number, h.email as hotel_email
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
@@ -134,12 +135,13 @@ router.post('/:id/print', auth, async (req, res) => {
 
     let roomCharge = 0;
     let bookingDays = 0;
+    let checkInDate = null;
+    let guestName = null;
     if (billData.room_id) {
-      const roomQuery = await db.query('SELECT total_cost, booking_days FROM rooms WHERE id = $1', [billData.room_id]);
-      if (roomQuery.rows.length > 0) {
-        roomCharge = parseFloat(roomQuery.rows[0].total_cost || 0);
-        bookingDays = parseInt(roomQuery.rows[0].booking_days || 1);
-      }
+      roomCharge = parseFloat(billData.room_cost || 0);
+      bookingDays = parseInt(billData.booking_days || 1);
+      checkInDate = billData.check_in_date;
+      guestName = billData.guest_name;
     }
 
     const pMethod = paymentMethod || billData.payment_method || 'upi';
@@ -168,6 +170,8 @@ router.post('/:id/print', auth, async (req, res) => {
       isPaid: isPaid,
       room_charge: roomCharge,
       booking_days: bookingDays,
+      guestName: guestName,
+      checkInDate: checkInDate,
       printerSize: billData.printer_size || '80mm'
     };
 

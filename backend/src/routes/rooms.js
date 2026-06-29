@@ -91,7 +91,7 @@ router.post('/batch', auth, async (req, res) => {
 // Update room details (rename or update stay)
 router.put('/:id', auth, async (req, res) => {
   const { id } = req.params;
-  const { room_number, room_name, floor, status, booking_days, total_cost, guest_name, guest_phone } = req.body;
+  const { room_number, room_name, floor, status, booking_days, total_cost, guest_name, guest_phone, check_in_date } = req.body;
   try {
     const result = await db.query(
       `UPDATE rooms SET 
@@ -102,9 +102,10 @@ router.put('/:id', auth, async (req, res) => {
        booking_days = COALESCE($5, booking_days),
        total_cost = COALESCE($6, total_cost),
        guest_name = COALESCE($7, guest_name),
-       guest_phone = COALESCE($8, guest_phone)
-       WHERE id = $9 AND hotel_id = $10 RETURNING *`,
-      [room_number, room_name, floor, status, booking_days, total_cost, guest_name, guest_phone, id, req.user.hotel_id]
+       guest_phone = COALESCE($8, guest_phone),
+       check_in_date = COALESCE($9, check_in_date)
+       WHERE id = $10 AND hotel_id = $11 RETURNING *`,
+      [room_number, room_name, floor, status, booking_days, total_cost, guest_name, guest_phone, check_in_date, id, req.user.hotel_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Room not found' });
     notifyUpdate(req.user.hotel_id, 'room-update');
@@ -133,10 +134,11 @@ router.delete('/:id', auth, async (req, res) => {
 // Book a room
 router.post('/:id/book', auth, async (req, res) => {
     const { id } = req.params;
-    const { guest_name, guest_phone, booking_days, total_cost } = req.body;
+    const { guest_name, guest_phone, booking_days, total_cost, check_in_date } = req.body;
     try {
         await db.query('BEGIN');
         
+        const checkIn = check_in_date ? new Date(check_in_date).toISOString() : new Date().toISOString();
         const result = await db.query(
             `UPDATE rooms SET 
              status = 'occupied', 
@@ -144,9 +146,9 @@ router.post('/:id/book', auth, async (req, res) => {
              guest_phone = $2, 
              booking_days = $3, 
              total_cost = $4,
-             check_in_date = CURRENT_TIMESTAMP
-             WHERE id = $5 AND hotel_id = $6 RETURNING *`,
-            [guest_name, guest_phone, booking_days, total_cost, id, req.user.hotel_id]
+             check_in_date = $5
+             WHERE id = $6 AND hotel_id = $7 RETURNING *`,
+            [guest_name, guest_phone, booking_days, total_cost, checkIn, id, req.user.hotel_id]
         );
 
         if (result.rows.length === 0) {
@@ -415,35 +417,38 @@ router.post('/:roomId/bill', auth, async (req, res) => {
     try {
       await client.query('BEGIN');
 
-      const [hotelRes, roomRes, orderRes] = await Promise.all([
+      const [hotelRes, roomRes, activeOrderRes] = await Promise.all([
         client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
         client.query('SELECT * FROM rooms WHERE id = $1', [roomId]),
-        client.query(`
-          SELECT o.id as order_id, oi.quantity, mi.name, mi.price
-          FROM orders o
-          JOIN order_items oi ON oi.order_id = o.id
-          JOIN menu_items mi ON oi.menu_item_id = mi.id
-          WHERE o.room_id = $1 AND o.status = 'active'
-        `, [roomId])
+        client.query("SELECT id FROM orders WHERE room_id = $1 AND status = 'active' ORDER BY id DESC LIMIT 1", [roomId])
       ]);
   
-      if (orderRes.rows.length === 0) {
+      if (activeOrderRes.rows.length === 0) {
         await client.query('ROLLBACK');
-        return res.status(404).json({ message: 'No active order or empty items' });
+        return res.status(404).json({ message: 'No active order found' });
       }
       
-      const orderId = orderRes.rows[0].order_id;
+      const orderId = activeOrderRes.rows[0].id;
+      
+      const orderItemsQuery = await client.query(`
+        SELECT oi.quantity, mi.name, mi.price
+        FROM order_items oi
+        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        WHERE oi.order_id = $1
+      `, [orderId]);
+
+      const orderItems = orderItemsQuery.rows;
       const gstRate = parseFloat(hotelRes.rows[0].gst_percentage || 0);
       const room = roomRes.rows[0];
       const roomCharge = parseFloat(room.total_cost || 0);
   
-      const foodSubtotal = orderRes.rows.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
+      const foodSubtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
       const subtotal = foodSubtotal + roomCharge;
       const gst = subtotal * (gstRate / 100);
       const initialTotal = subtotal + gst;
       const discount = parseFloat(discount_percentage) || 0;
       const finalAmount = initialTotal - (initialTotal * (discount / 100));
-
+ 
       // Deduct stock from inventory
       await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
   
@@ -452,7 +457,7 @@ router.post('/:roomId/bill', auth, async (req, res) => {
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         [orderId, subtotal, gst, finalAmount, discount]
       );
-
+ 
       await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
       
       await client.query('COMMIT');
@@ -465,7 +470,7 @@ router.post('/:roomId/bill', auth, async (req, res) => {
         guest_name: room.guest_name,
         room_number: room.room_number,
         gst_percentage: gstRate,
-        items: orderRes.rows, 
+        items: orderItems, 
         hotel_name: hotelRes.rows[0].name,
         hotel_phone: hotelRes.rows[0].phone,
         hotel_location: hotelRes.rows[0].location

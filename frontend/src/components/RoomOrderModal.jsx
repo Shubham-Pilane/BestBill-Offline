@@ -24,26 +24,45 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [isEditingStay, setEditingStay] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [extensionDays, setExtensionDays] = useState(0);
-  const [extensionCost, setExtensionCost] = useState(0);
+  const [editStayCheckIn, setEditStayCheckIn] = useState('');
+  const [editStayCheckOut, setEditStayCheckOut] = useState('');
+  const [editStayTotalCost, setEditStayTotalCost] = useState('');
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editPriceValue, setEditPriceValue] = useState('');
   const [syncingItems, setSyncingItems] = useState(new Set());
   const isOccupied = room.status === 'occupied';
+  
+  const calculateDaysBetween = (startStr, endStr) => {
+    if (!startStr || !endStr) return 1;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 1;
+  };
+
   const [bookingData, setBookingData] = useState({
     guest_name: room.guest_name || '',
     guest_phone: room.guest_phone || '',
     booking_days: room.booking_days || '1',
-    total_cost: room.total_cost || ''
+    total_cost: room.total_cost || '',
+    check_in_date: room.check_in_date ? new Date(room.check_in_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    check_out_date: room.check_in_date ? new Date(new Date(room.check_in_date).getTime() + (room.booking_days || 1) * 86400000).toISOString().split('T')[0] : new Date(Date.now() + 86400000).toISOString().split('T')[0]
   });
 
   useEffect(() => {
     if (room) {
+      const checkIn = room.check_in_date ? new Date(room.check_in_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const checkOut = room.check_in_date ? new Date(new Date(room.check_in_date).getTime() + (room.booking_days || 1) * 86400000).toISOString().split('T')[0] : new Date(Date.now() + 86400000).toISOString().split('T')[0];
       setBookingData({
         guest_name: room.guest_name || '',
         guest_phone: room.guest_phone || '',
         booking_days: room.booking_days || '1',
-        total_cost: room.total_cost || ''
+        total_cost: room.total_cost || '',
+        check_in_date: checkIn,
+        check_out_date: checkOut
       });
       setCustomerPhone(room.guest_phone || '');
     }
@@ -228,20 +247,29 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     }
   };
 
+  const handleStartEditStay = () => {
+    const checkIn = room.check_in_date ? new Date(room.check_in_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const checkOut = room.check_in_date ? new Date(new Date(room.check_in_date).getTime() + (room.booking_days || 1) * 86400000).toISOString().split('T')[0] : new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    setEditStayCheckIn(checkIn);
+    setEditStayCheckOut(checkOut);
+    setEditStayTotalCost(room.total_cost || '0');
+    setEditingStay(true);
+  };
+
   const updateStayDetails = async () => {
     try {
-      const finalDays = extensionDays > 0 ? (Number(room.booking_days) + Number(extensionDays)) : bookingData.booking_days;
-      const finalCost = extensionCost > 0 ? (Number(room.total_cost) + Number(extensionCost)) : bookingData.total_cost;
+      const finalDays = calculateDaysBetween(editStayCheckIn, editStayCheckOut);
+      const finalCost = parseFloat(editStayTotalCost) || 0;
+      const finalCheckIn = new Date(editStayCheckIn).toISOString();
 
       await api.put(`/rooms/${room.id}`, {
         booking_days: finalDays,
-        total_cost: finalCost
+        total_cost: finalCost,
+        check_in_date: finalCheckIn
       });
       setEditingStay(false);
-      setExtensionDays(0);
-      setExtensionCost(0);
       onRefresh();
-      toast.success('Stay Extension Applied');
+      toast.success('Stay Details Updated');
     } catch (err) {
       toast.error('Update failed');
     }
@@ -444,15 +472,71 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                       <input type="text" placeholder="Guest Name" required value={bookingData.guest_name} onChange={(e) => setBookingData({...bookingData, guest_name: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
                       <input type="text" placeholder="Phone Number" required value={bookingData.guest_phone} onChange={(e) => setBookingData({...bookingData, guest_phone: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                           <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>STAY DAYS</label>
-                           <input type="number" required value={bookingData.booking_days} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, booking_days: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
-                         </div>
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                           <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>TOTAL RENT</label>
-                           <input type="number" required value={bookingData.total_cost} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, total_cost: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
-                         </div>
-                      </div>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                         <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>CHECK-IN DATE</label>
+                         <input 
+                           type="date" 
+                           required 
+                           value={bookingData.check_in_date || ''} 
+                           onChange={(e) => {
+                             const newCheckIn = e.target.value;
+                             const newCheckOut = bookingData.check_out_date || new Date(Date.now() + 86400000).toISOString().split('T')[0];
+                             const days = calculateDaysBetween(newCheckIn, newCheckOut);
+                             setBookingData({
+                               ...bookingData,
+                               check_in_date: newCheckIn,
+                               booking_days: String(days)
+                             });
+                           }} 
+                           style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                         />
+                       </div>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                         <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>CHECK-OUT DATE</label>
+                         <input 
+                           type="date" 
+                           required 
+                           value={bookingData.check_out_date || ''} 
+                           onChange={(e) => {
+                             const newCheckOut = e.target.value;
+                             const newCheckIn = bookingData.check_in_date || new Date().toISOString().split('T')[0];
+                             const days = calculateDaysBetween(newCheckIn, newCheckOut);
+                             setBookingData({
+                               ...bookingData,
+                               check_out_date: newCheckOut,
+                               booking_days: String(days)
+                             });
+                           }} 
+                           style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                         />
+                       </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                         <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>STAY DAYS</label>
+                         <input 
+                           type="number" 
+                           required 
+                           value={bookingData.booking_days} 
+                           onFocus={e => e.target.select()} 
+                           onChange={(e) => {
+                             const days = parseInt(e.target.value) || 1;
+                             const checkIn = bookingData.check_in_date || new Date().toISOString().split('T')[0];
+                             const checkOutDateObj = new Date(new Date(checkIn).getTime() + days * 86400000);
+                             setBookingData({
+                               ...bookingData,
+                               booking_days: String(days),
+                               check_out_date: checkOutDateObj.toISOString().split('T')[0]
+                             });
+                           }} 
+                           style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} 
+                         />
+                       </div>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                         <label style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 900 }}>TOTAL RENT</label>
+                         <input type="number" required value={bookingData.total_cost} onFocus={e => e.target.select()} onChange={(e) => setBookingData({...bookingData, total_cost: e.target.value})} style={{padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700 }} />
+                       </div>
+                    </div>
                       <button type="submit" disabled={isSubmitting} style={{padding: '20px', borderRadius: '20px', backgroundColor: isSubmitting ? 'var(--bg-border)' : '#10b981', color: 'var(--text-primary)', border: 'none', fontWeight: 1000, fontSize: '18px', cursor: isSubmitting ? 'not-allowed' : 'pointer', marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
                         {isSubmitting ? <><RefreshCcw size={20} className="animate-spin" /> PROVISIONING...</> : 'CHECK-IN GUEST'}
                       </button>
@@ -462,43 +546,70 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                       <div style={{ padding: '32px', borderBottom: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-card)' }}>
                          {isEditingStay ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                              <div style={{ padding: '12px', backgroundColor: 'var(--bg-base)', borderRadius: '14px', border: '1px dashed var(--bg-border)' }}>
-                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>CURRENT STAY: {room.booking_days} NIGHTS / ₹{room.total_cost}</div>
-                              </div>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <div style={{ flex: 1 }}>
-                                  <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>EXTEND BY (DAYS)</label>
-                                  <input type="number" value={extensionDays} onFocus={e => e.target.select()} onChange={e => setExtensionDays(e.target.value)} style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} placeholder="+ Days" />
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>EXTRA CHARGE</label>
-                                  <input type="number" value={extensionCost} onFocus={e => e.target.select()} onChange={e => setExtensionCost(e.target.value)} style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} placeholder="+ Amount" />
-                                </div>
-                              </div>
-                              <div style={{ padding: '16px', backgroundColor: '#0ea5e910', borderRadius: '14px', border: '1px solid #0ea5e9' }}>
-                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ fontSize: '11px', color: '#0ea5e9', fontWeight: 900 }}>NEW TOTAL: {Number(room.booking_days) + Number(extensionDays)} NIGHTS</span>
-                                    <span style={{ fontSize: '15px', color: '#0ea5e9', fontWeight: 1000 }}>₹{Number(room.total_cost) + Number(extensionCost)}</span>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                               <div style={{ padding: '12px', backgroundColor: 'var(--bg-base)', borderRadius: '14px', border: '1px dashed var(--bg-border)' }}>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>CURRENT STAY: {room.booking_days} NIGHTS / ₹{room.total_cost}</div>
+                               </div>
+                               <div style={{ display: 'flex', gap: '8px' }}>
+                                 <div style={{ flex: 1 }}>
+                                   <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CHECK-IN DATE</label>
+                                   <input 
+                                     type="date" 
+                                     value={editStayCheckIn} 
+                                     onChange={e => {
+                                       const newCheckIn = e.target.value;
+                                       setEditStayCheckIn(newCheckIn);
+                                     }} 
+                                     style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} 
+                                   />
+                                 </div>
+                                 <div style={{ flex: 1 }}>
+                                   <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>CHECK-OUT DATE</label>
+                                   <input 
+                                     type="date" 
+                                     value={editStayCheckOut} 
+                                     onChange={e => {
+                                       const newCheckOut = e.target.value;
+                                       setEditStayCheckOut(newCheckOut);
+                                     }} 
+                                     style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} 
+                                   />
+                                 </div>
+                               </div>
+                               <div>
+                                 <label style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 900, marginBottom: '4px', display: 'block' }}>TOTAL RENT (₹)</label>
+                                 <input 
+                                   type="number" 
+                                   value={editStayTotalCost} 
+                                   onFocus={e => e.target.select()}
+                                   onChange={e => setEditStayTotalCost(e.target.value)} 
+                                   style={{width: '100%', padding: '12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }} 
+                                   placeholder="Total Rent" 
+                                 />
+                               </div>
+                               <div style={{ padding: '16px', backgroundColor: '#0ea5e910', borderRadius: '14px', border: '1px solid #0ea5e9' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                     <span style={{ fontSize: '11px', color: '#0ea5e9', fontWeight: 900 }}>NEW STAY DURATION</span>
+                                     <span style={{ fontSize: '15px', color: '#0ea5e9', fontWeight: 1000 }}>{calculateDaysBetween(editStayCheckIn, editStayCheckOut)} Nights</span>
+                                  </div>
+                               </div>
+                               <div style={{ display: 'flex', gap: '8px' }}>
+                                 <button onClick={() => setEditingStay(false)} style={{flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
+                                 <button onClick={updateStayDetails} style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Save Stay Details</button>
+                               </div>
+                             </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                 <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><User size={24} /></div>
+                                 <div>
+                                    <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{room.guest_name}</div>
+                                    <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{room.guest_phone}</div>
                                  </div>
                               </div>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button onClick={() => setEditingStay(false)} style={{flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, cursor: 'pointer' }}>Cancel</button>
-                                <button onClick={updateStayDetails} style={{ flex: 2, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#0ea5e9', color: 'white', fontWeight: 800, cursor: 'pointer' }}>Apply Extension</button>
-                              </div>
+                              <button onClick={handleStartEditStay} style={{ padding: '8px 12px', borderRadius: '10px', backgroundColor: 'var(--bg-border)', color: '#0ea5e9', border: 'none', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}>EDIT STAY</button>
                             </div>
-                         ) : (
-                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '14px', backgroundColor: '#f43f5e', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}><User size={24} /></div>
-                                <div>
-                                   <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{room.guest_name}</div>
-                                   <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{room.guest_phone}</div>
-                                </div>
-                             </div>
-                             <button onClick={() => setEditingStay(true)} style={{ padding: '8px 12px', borderRadius: '10px', backgroundColor: 'var(--bg-border)', color: '#0ea5e9', border: 'none', fontSize: '11px', fontWeight: 800, cursor: 'pointer' }}>EDIT STAY</button>
-                           </div>
-                         )}
+                          )}
                       </div>
                       
                       <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
@@ -622,6 +733,10 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                        <span>BILL NO: #{billData?.id}</span>
                     </div>
                     <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 800, marginTop: '4px' }}>
+                       <span>CHECK-IN: {room?.check_in_date ? new Date(room.check_in_date).toLocaleDateString() : ''}</span>
+                       <span>CHECK-OUT: {room?.check_in_date ? new Date(new Date(room.check_in_date).getTime() + (room.booking_days || 1) * 86400000).toLocaleDateString() : ''}</span>
+                    </div>
                  </div>
 
                  <div style={{ marginBottom: '24px' }}>
@@ -656,7 +771,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                  </div>
 
                  {!billData?.is_paid && (
-                   <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '1px solid var(--border-rgba-1)', backgroundColor: 'var(--bg-border)', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
+                   <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
                  )}
               </div>
               <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
