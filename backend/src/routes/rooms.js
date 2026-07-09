@@ -481,7 +481,11 @@ router.post('/:roomId/bill', auth, async (req, res) => {
     } catch (err) {
       await client.query('ROLLBACK');
       console.error(err);
-      res.status(500).json({ message: 'Billing error', error: err.message });
+      if (err.message && err.message.includes('Insufficient stock')) {
+        res.status(400).json({ message: `Ingredients added to this dish in inventory are not enough to make this dish. ${err.message}` });
+      } else {
+        res.status(500).json({ message: 'Billing error', error: err.message });
+      }
     } finally {
       client.release();
     }

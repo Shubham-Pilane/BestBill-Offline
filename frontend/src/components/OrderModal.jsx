@@ -468,7 +468,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                   </button>
                 )}
                 {suggestions.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)', borderRadius: '16px', marginTop: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid var(--bg-border)', overflowY: 'auto', maxHeight: '350px' }}>
+                  <div className="search-suggestions-scrollbar" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)', borderRadius: '16px', marginTop: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid var(--bg-border)', overflowY: 'auto', maxHeight: '350px' }}>
                     {suggestions.map(s => (
                       <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{padding: '14px 20px', cursor: 'pointer', borderBottom: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: '0.2s' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -478,6 +478,34 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                         <span style={{ color: '#10b981' }}>₹{s.price}</span>
                       </div>
                     ))}
+                    {suggestions.length > 6 && (
+                      <div style={{
+                        position: 'sticky',
+                        bottom: 0,
+                        backgroundColor: 'var(--bg-card)',
+                        padding: '10px 20px',
+                        textAlign: 'center',
+                        fontSize: '11px',
+                        color: '#0ea5e9',
+                        fontWeight: 900,
+                        borderTop: '1px solid var(--bg-border)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        opacity: 0.95,
+                        backdropFilter: 'blur(8px)',
+                        boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.25)',
+                        borderBottomLeftRadius: '16px',
+                        borderBottomRightRadius: '16px',
+                        pointerEvents: 'none'
+                      }}>
+                        <span>Scroll for more results</span>
+                        <span className="bounce-arrow" style={{ display: 'inline-block' }}>↓</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

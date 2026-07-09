@@ -101,11 +101,51 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-border);
+  background: rgba(255, 255, 255, 0.18);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Custom scrollbar for search suggestions dropdown */
+.search-suggestions-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.search-suggestions-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 0 16px 16px 0;
+}
+
+.search-suggestions-scrollbar::-webkit-scrollbar-thumb {
+  background: #0ea5e9;
+  border-radius: 10px;
+  border: 2px solid var(--bg-card);
+}
+
+.search-suggestions-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+.bounce-arrow {
+  animation: bounce 1.2s infinite;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
