@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -13,8 +13,20 @@ import {
   X, 
   Trash2,
   Sliders,
-  DollarSign
+  DollarSign,
+  Calendar,
+  Download,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowRightLeft,
+  FileText
 } from 'lucide-react';
+import pdfMake from 'pdfmake/build/pdfmake';
+import pdfFonts from 'pdfmake/build/vfs_fonts';
+
+if (pdfFonts && pdfFonts.pdfMake) {
+  pdfMake.vfs = pdfFonts.pdfMake.vfs;
+}
 
 const InventoryManagement = () => {
     const { user } = useAuth();
@@ -51,14 +63,15 @@ const InventoryManagement = () => {
     const [editingItem, setEditingItem] = useState(null);
     const [itemName, setItemName] = useState('');
     const [itemUnit, setItemUnit] = useState('KG');
-    const [itemStock, setItemStock] = useState('0');
-    const [itemMinStock, setItemMinStock] = useState('0');
-    const [itemRate, setItemRate] = useState('0');
+    const [itemStock, setItemStock] = useState('');
+    const [itemMinStock, setItemMinStock] = useState('');
+    const [itemRate, setItemRate] = useState('');
 
     // Adjust Stock Form State
     const [selectedAdjustItemId, setSelectedAdjustItemId] = useState('');
-    const [adjustQty, setAdjustQty] = useState('0');
+    const [adjustQty, setAdjustQty] = useState('');
     const [adjustRemarks, setAdjustRemarks] = useState('');
+    const [showValuationModal, setShowValuationModal] = useState(false);
 
     // Recipe Form State
     const [selectedMenuItem, setSelectedMenuItem] = useState(null);
@@ -89,6 +102,166 @@ const InventoryManagement = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    // --- REPORTING & TRANSACTIONS STATE ---
+    const [transactions, setTransactions] = useState([]);
+    const [txLoading, setTxLoading] = useState(false);
+    const [txDateFilter, setTxDateFilter] = useState('Today'); // 'Today', 'CurrentMonth', 'LastMonth', 'ThisYear', 'Custom'
+    const [txCustomStart, setTxCustomStart] = useState(new Date().toISOString().split('T')[0]);
+    const [txCustomEnd, setTxCustomEnd] = useState(new Date().toISOString().split('T')[0]);
+    const [txTypeFilter, setTxTypeFilter] = useState('ALL'); // 'ALL', 'SALE', 'PURCHASE', 'ADJUSTMENT', 'WASTAGE'
+    const [txItemFilter, setTxItemFilter] = useState('ALL'); // 'ALL' or specific itemId
+    const [txCurrentPage, setTxCurrentPage] = useState(1);
+    const txPerPage = 15;
+
+    const getDateRange = (option, customStart, customEnd) => {
+        const now = new Date();
+        const formatDate = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        if (option === 'Today') {
+            const todayStr = formatDate(now);
+            return { start: todayStr, end: todayStr };
+        } else if (option === 'CurrentMonth') {
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            return { start: formatDate(firstDay), end: formatDate(lastDay) };
+        } else if (option === 'LastMonth') {
+            const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+            return { start: formatDate(firstDay), end: formatDate(lastDay) };
+        } else if (option === 'ThisYear') {
+            const firstDay = new Date(now.getFullYear(), 0, 1);
+            const lastDay = new Date(now.getFullYear(), 11, 31);
+            return { start: formatDate(firstDay), end: formatDate(lastDay) };
+        } else if (option === 'Custom') {
+            return { start: customStart, end: customEnd };
+        }
+        return { start: '', end: '' };
+    };
+
+    const fetchTransactions = async () => {
+        try {
+            setTxLoading(true);
+            const { start, end } = getDateRange(txDateFilter, txCustomStart, txCustomEnd);
+            
+            const params = {};
+            if (start) params.startDate = start;
+            if (end) params.endDate = end;
+            if (txTypeFilter !== 'ALL') params.type = txTypeFilter;
+            if (txItemFilter !== 'ALL') params.itemId = txItemFilter;
+
+            const res = await api.get('/inventory/reports/transactions', { params });
+            setTransactions(res.data || []);
+            setTxCurrentPage(1);
+        } catch (err) {
+            console.error('Failed to load transaction reports:', err);
+            toast.error('Could not fetch inventory transactions');
+        } finally {
+            setTxLoading(false);
+        }
+    };
+
+    const exportPDF = () => {
+        const { start, end } = getDateRange(txDateFilter, txCustomStart, txCustomEnd);
+        let datePeriodText = '';
+        if (txDateFilter === 'Today') {
+            datePeriodText = `Date: ${new Date(start).toLocaleDateString()}`;
+        } else if (txDateFilter === 'CurrentMonth') {
+            datePeriodText = `Period: Current Month (${new Date(start).toLocaleDateString()} to ${new Date(end).toLocaleDateString()})`;
+        } else if (txDateFilter === 'LastMonth') {
+            datePeriodText = `Period: Last Month (${new Date(start).toLocaleDateString()} to ${new Date(end).toLocaleDateString()})`;
+        } else if (txDateFilter === 'ThisYear') {
+            datePeriodText = `Period: Year ${new Date(start).getFullYear()}`;
+        } else {
+            datePeriodText = `Period: ${new Date(start).toLocaleDateString()} to ${new Date(end).toLocaleDateString()}`;
+        }
+
+        const tableBody = [
+            [
+                { text: 'Date & Time', style: 'tableHeader' },
+                { text: 'Ingredient', style: 'tableHeader' },
+                { text: 'Type', style: 'tableHeader' },
+                { text: 'Quantity Changed', style: 'tableHeader' },
+                { text: 'Remarks / Reference', style: 'tableHeader' }
+            ]
+        ];
+
+        transactions.forEach(tx => {
+            const formattedDate = new Date(tx.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+            const prefix = tx.quantity > 0 ? '+' : '';
+            const qtyText = `${prefix}${tx.quantity} ${tx.unit}`;
+            
+            tableBody.push([
+                formattedDate,
+                tx.item_name,
+                tx.type,
+                qtyText,
+                tx.remarks || '-'
+            ]);
+        });
+
+        const docDefinition = {
+            content: [
+                { text: (user?.hotel_name || 'BESTBILL').toUpperCase(), style: 'header', alignment: 'center' },
+                { text: user?.hotel_location || 'Address not available', alignment: 'center', margin: [0, 0, 0, 5] },
+                { text: `Mobile: ${user?.hotel_phone || 'N/A'}`, alignment: 'center' },
+                user?.fssai_number ? { text: `FSSAI: ${user.fssai_number}`, alignment: 'center' } : {},
+                { text: 'Inventory Ledger & Transaction Report', style: 'subheader', alignment: 'center', margin: [0, 15, 0, 10] },
+                { text: datePeriodText, alignment: 'center', margin: [0, 0, 0, 15], bold: true },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['auto', '*', 'auto', 'auto', '*'],
+                        body: tableBody
+                    },
+                    layout: 'lightHorizontalLines'
+                }
+            ],
+            styles: {
+                header: { fontSize: 20, bold: true },
+                subheader: { fontSize: 14, bold: true },
+                tableHeader: { bold: true, fontSize: 10, color: 'black', fillColor: '#eeeeee' }
+            },
+            defaultStyle: { fontSize: 9 }
+        };
+
+        pdfMake.createPdf(docDefinition).download(`Inventory_Ledger_Report_${start}_to_${end}.pdf`);
+    };
+
+    useEffect(() => {
+        if (tab === 'reports') {
+            fetchTransactions();
+        }
+    }, [tab, txDateFilter, txCustomStart, txCustomEnd, txTypeFilter, txItemFilter]);
+
+    const txSummary = useMemo(() => {
+        let inflow = 0;
+        let outflow = 0;
+        transactions.forEach(tx => {
+            const qty = parseFloat(tx.quantity);
+            if (qty > 0) {
+                inflow += qty;
+            } else {
+                outflow += Math.abs(qty);
+            }
+        });
+        return {
+            inflow,
+            outflow,
+            net: inflow - outflow
+        };
+    }, [transactions]);
+
+    const txTotalPages = Math.ceil(transactions.length / txPerPage) || 1;
+    const paginatedTxs = useMemo(() => {
+        const startIndex = (txCurrentPage - 1) * txPerPage;
+        return transactions.slice(startIndex, startIndex + txPerPage);
+    }, [transactions, txCurrentPage]);
 
     // --- ITEM SAVE & DELETE ---
     const handleSaveItem = async (e) => {
@@ -134,9 +307,9 @@ const InventoryManagement = () => {
         setEditingItem(null);
         setItemName('');
         setItemUnit('KG');
-        setItemStock('0');
-        setItemMinStock('0');
-        setItemRate('0');
+        setItemStock('');
+        setItemMinStock('');
+        setItemRate('');
     };
 
     const openEditItem = (item) => {
@@ -154,20 +327,36 @@ const InventoryManagement = () => {
         e.preventDefault();
         if (!selectedAdjustItemId) return toast.error('Please select an ingredient');
 
+        const selectedItem = items.find(i => String(i.id) === String(selectedAdjustItemId));
+        if (!selectedItem) return toast.error('Selected ingredient not found');
+
+        const addedQty = parseFloat(adjustQty) || 0;
+        if (addedQty <= 0) return toast.error('Please enter a quantity greater than 0');
+
+        // New total stock = current stock + added stock
+        const newPhysicalStock = parseFloat(selectedItem.current_stock) + addedQty;
+
         try {
             await api.post('/inventory/adjustments', {
                 inventory_item_id: Number(selectedAdjustItemId),
-                physical_stock: parseFloat(adjustQty) || 0,
-                remarks: adjustRemarks
+                physical_stock: newPhysicalStock,
+                remarks: adjustRemarks || `Added ${addedQty} ${selectedItem.unit} to stock.`
             });
-            toast.success('Stock adjusted successfully');
+            toast.success('Stock added successfully');
             setShowAdjustModal(false);
-            setAdjustQty('0');
+            setAdjustQty('');
             setAdjustRemarks('');
             fetchData();
         } catch (err) {
-            toast.error('Adjustment failed');
+            toast.error('Failed to add stock');
         }
+    };
+
+    const openAddStockModal = (item) => {
+        setSelectedAdjustItemId(String(item.id));
+        setAdjustQty('');
+        setAdjustRemarks('');
+        setShowAdjustModal(true);
     };
 
     // --- RECIPE MAPPING ---
@@ -356,16 +545,6 @@ const InventoryManagement = () => {
                     >
                         <PlusCircle size={18} /> Add Raw Ingredient
                     </button>
-                    <button 
-                        onClick={() => {
-                            if (items.length === 0) return toast.error('No items registered to adjust stock');
-                            setSelectedAdjustItemId(String(items[0].id));
-                            setShowAdjustModal(true);
-                        }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, fontSize: '14px', cursor: 'pointer' }}
-                    >
-                        <Sliders size={18} /> Adjust Physical Stock
-                    </button>
                 </div>
             </div>
 
@@ -391,14 +570,35 @@ const InventoryManagement = () => {
                     </div>
                 </div>
 
-                <div style={{ backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <DollarSign color="#10b981" size={24} />
+                <div style={{ backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '24px', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <DollarSign color="#10b981" size={24} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>Total Inventory Value</span>
+                            <span style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>₹{Number(metrics.inventoryValue || 0).toFixed(2)}</span>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>Stock Value (Valuation)</span>
-                        <span style={{ fontSize: '24px', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>₹{Number(metrics.inventoryValue || 0).toFixed(2)}</span>
-                    </div>
+                    <button 
+                        onClick={() => setShowValuationModal(true)}
+                        style={{
+                            padding: '6px 12px',
+                            borderRadius: '8px',
+                            border: '1px solid #10b981',
+                            backgroundColor: 'transparent',
+                            color: '#10b981',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            transition: '0.2s',
+                            alignSelf: 'center'
+                        }}
+                        onMouseOver={e => { e.currentTarget.style.backgroundColor = 'rgba(16,185,129,0.1)'; }}
+                        onMouseOut={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    >
+                        View Details
+                    </button>
                 </div>
             </div>
 
@@ -411,7 +611,7 @@ const InventoryManagement = () => {
                         backgroundColor: 'transparent', 
                         border: 'none', 
                         borderBottom: tab === 'overview' ? '2px solid #0ea5e9' : '2px solid transparent',
-                        color: tab === 'overview' ? '#0ea5e9' : 'var(--text-muted)',
+                        color: tab === 'overview' ? '#0ea5e9' : 'var(--text-secondary)',
                         fontWeight: 800,
                         cursor: 'pointer',
                         fontSize: '15px'
@@ -426,13 +626,28 @@ const InventoryManagement = () => {
                         backgroundColor: 'transparent', 
                         border: 'none', 
                         borderBottom: tab === 'recipes' ? '2px solid #0ea5e9' : '2px solid transparent',
-                        color: tab === 'recipes' ? '#0ea5e9' : 'var(--text-muted)',
+                        color: tab === 'recipes' ? '#0ea5e9' : 'var(--text-secondary)',
                         fontWeight: 800,
                         cursor: 'pointer',
                         fontSize: '15px'
                     }}
                 >
                     Recipes & BOM Mappings
+                </button>
+                <button 
+                    onClick={() => setTab('reports')} 
+                    style={{
+                        padding: '12px 24px', 
+                        backgroundColor: 'transparent', 
+                        border: 'none', 
+                        borderBottom: tab === 'reports' ? '2px solid #0ea5e9' : '2px solid transparent',
+                        color: tab === 'reports' ? '#0ea5e9' : 'var(--text-secondary)',
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        fontSize: '15px'
+                    }}
+                >
+                    Inventory Reports
                 </button>
             </div>
 
@@ -511,6 +726,12 @@ const InventoryManagement = () => {
                                                             Edit
                                                         </button>
                                                         <button 
+                                                            onClick={() => openAddStockModal(item)}
+                                                            style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981', cursor: 'pointer', fontWeight: 700 }}
+                                                        >
+                                                            Add Stock
+                                                        </button>
+                                                        <button 
                                                             onClick={() => handleDeleteItem(item.id)}
                                                             style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', cursor: 'pointer', fontWeight: 700 }}
                                                         >
@@ -535,9 +756,7 @@ const InventoryManagement = () => {
                         </div>
                     )}
                 </div>
-            ) : (
-                
-                /* TAB 2: RECIPES & BOM */
+            ) : tab === 'recipes' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
                         <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>Menu Recipes (BOM)</h3>
@@ -625,6 +844,237 @@ const InventoryManagement = () => {
                         </div>
                     )}
                 </div>
+            ) : (
+                
+                /* TAB 3: STOCK LEDGER & REPORTS */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    
+                    {/* Filters & Control Panel */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--bg-border)' }}>
+                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            {/* Date Presets Selector */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Time Period</label>
+                                <select 
+                                    value={txDateFilter} 
+                                    onChange={e => setTxDateFilter(e.target.value)} 
+                                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '13px' }}
+                                >
+                                    <option value="Today">Today</option>
+                                    <option value="CurrentMonth">Current Month</option>
+                                    <option value="LastMonth">Last Month</option>
+                                    <option value="ThisYear">This Year</option>
+                                    <option value="Custom">Custom Range</option>
+                                </select>
+                            </div>
+
+                            {/* Custom Dates (visible only if Custom selected) */}
+                            {txDateFilter === 'Custom' && (
+                                <>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>From</label>
+                                        <input 
+                                            type="date" 
+                                            value={txCustomStart} 
+                                            onChange={e => setTxCustomStart(e.target.value)} 
+                                            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '13px' }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                        <label style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>To</label>
+                                        <input 
+                                            type="date" 
+                                            value={txCustomEnd} 
+                                            onChange={e => setTxCustomEnd(e.target.value)} 
+                                            style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '13px' }}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Raw Ingredient Selector */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Ingredient</label>
+                                <select 
+                                    value={txItemFilter} 
+                                    onChange={e => setTxItemFilter(e.target.value)} 
+                                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '13px', minWidth: '150px' }}
+                                >
+                                    <option value="ALL">All Ingredients</option>
+                                    {items.map(item => (
+                                        <option key={item.id} value={item.id}>{item.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Transaction Type Selector */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <label style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Type</label>
+                                <select 
+                                    value={txTypeFilter} 
+                                    onChange={e => setTxTypeFilter(e.target.value)} 
+                                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', cursor: 'pointer', fontSize: '13px' }}
+                                >
+                                    <option value="ALL">All Types</option>
+                                    <option value="PURCHASE">Purchase (+)</option>
+                                    <option value="SALE">Sale (-)</option>
+                                    <option value="ADJUSTMENT">Adjustment (±)</option>
+                                    <option value="WASTAGE">Wastage (-)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={exportPDF} 
+                            disabled={transactions.length === 0}
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                padding: '10px 20px', 
+                                borderRadius: '10px', 
+                                border: 'none', 
+                                backgroundColor: transactions.length === 0 ? 'var(--bg-border)' : '#f43f5e', 
+                                color: transactions.length === 0 ? 'var(--text-muted)' : 'white', 
+                                fontWeight: 800, 
+                                cursor: transactions.length === 0 ? 'default' : 'pointer',
+                                transition: '0.2s',
+                                fontSize: '13px'
+                            }}
+                        >
+                            <Download size={16} /> Export PDF
+                        </button>
+                    </div>
+
+                    {/* Summary Metrics Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <ArrowUpRight color="#10b981" size={20} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>Total Inflow</span>
+                                <span style={{ fontSize: '18px', fontWeight: 900, color: '#10b981', marginTop: '2px' }}>
+                                    {txSummary.inflow.toFixed(2)} units
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(244, 63, 94, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <ArrowDownLeft color="#f43f5e" size={20} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>Total Outflow</span>
+                                <span style={{ fontSize: '18px', fontWeight: 900, color: '#f43f5e', marginTop: '2px' }}>
+                                    {txSummary.outflow.toFixed(2)} units
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style={{ backgroundColor: 'var(--bg-card)', padding: '20px', borderRadius: '16px', border: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(14, 165, 233, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <ArrowRightLeft color="#0ea5e9" size={20} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase' }}>Net Stock Impact</span>
+                                <span style={{ fontSize: '18px', fontWeight: 900, color: txSummary.net >= 0 ? '#10b981' : '#f43f5e', marginTop: '2px' }}>
+                                    {txSummary.net >= 0 ? '+' : ''}{txSummary.net.toFixed(2)} units
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Table View */}
+                    <div style={{ position: 'relative' }}>
+                        {txLoading && (
+                            <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.7)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '16px', backdropFilter: 'blur(2px)' }}>
+                                <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid var(--bg-border)', borderTopColor: '#0ea5e9', animation: 'spin 1s linear infinite' }}></div>
+                            </div>
+                        )}
+
+                        <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-card)' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                                        <th style={{ padding: '16px', borderBottom: '2px solid var(--bg-border)', color: 'var(--text-muted)', fontWeight: 800 }}>Date & Time</th>
+                                        <th style={{ padding: '16px', borderBottom: '2px solid var(--bg-border)', color: 'var(--text-muted)', fontWeight: 800 }}>Ingredient Name</th>
+                                        <th style={{ padding: '16px', borderBottom: '2px solid var(--bg-border)', color: 'var(--text-muted)', fontWeight: 800 }}>Type</th>
+                                        <th style={{ padding: '16px', borderBottom: '2px solid var(--bg-border)', color: 'var(--text-muted)', fontWeight: 800 }}>Quantity</th>
+                                        <th style={{ padding: '16px', borderBottom: '2px solid var(--bg-border)', color: 'var(--text-muted)', fontWeight: 800 }}>Reference / Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paginatedTxs.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="5" style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                No inventory transactions found for this period.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginatedTxs.map(tx => {
+                                            const isPositive = parseFloat(tx.quantity) > 0;
+                                            
+                                            // Badge Styles
+                                            let badgeBg = 'rgba(100, 116, 139, 0.1)';
+                                            let badgeColor = 'var(--text-muted)';
+                                            if (tx.type === 'SALE') {
+                                                badgeBg = 'rgba(14, 165, 233, 0.1)';
+                                                badgeColor = '#0ea5e9';
+                                            } else if (tx.type === 'PURCHASE') {
+                                                badgeBg = 'rgba(16, 185, 129, 0.1)';
+                                                badgeColor = '#10b981';
+                                            } else if (tx.type === 'WASTAGE') {
+                                                badgeBg = 'rgba(244, 63, 94, 0.1)';
+                                                badgeColor = '#f43f5e';
+                                            } else if (tx.type === 'ADJUSTMENT') {
+                                                badgeBg = 'rgba(245, 158, 11, 0.1)';
+                                                badgeColor = '#f59e0b';
+                                            }
+
+                                            return (
+                                                <tr key={tx.id} style={{ borderBottom: '1px solid var(--border-rgba-05)', transition: 'background-color 0.2s' }} onMouseOver={e => e.currentTarget.style.backgroundColor = 'var(--bg-base)'} onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}>
+                                                    <td style={{ padding: '16px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                                        {new Date(tx.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                                                    </td>
+                                                    <td style={{ padding: '16px', fontWeight: 700 }}>{tx.item_name}</td>
+                                                    <td style={{ padding: '16px' }}>
+                                                        <span style={{ 
+                                                            padding: '4px 8px', 
+                                                            borderRadius: '6px', 
+                                                            fontSize: '11px', 
+                                                            fontWeight: 900, 
+                                                            textTransform: 'uppercase', 
+                                                            backgroundColor: badgeBg, 
+                                                            color: badgeColor 
+                                                        }}>
+                                                            {tx.type}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ padding: '16px', fontWeight: 800, color: isPositive ? '#10b981' : '#f43f5e' }}>
+                                                        {isPositive ? '+' : ''}{parseFloat(tx.quantity).toFixed(4)} {tx.unit}
+                                                    </td>
+                                                    <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>
+                                                        {tx.remarks || '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Report Pagination */}
+                    {txTotalPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                            <button disabled={txCurrentPage === 1} onClick={() => setTxCurrentPage(p => p - 1)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', cursor: txCurrentPage === 1 ? 'default' : 'pointer', fontWeight: 800 }}>Prev</button>
+                            <span style={{ padding: '8px 16px', fontWeight: 800, color: 'var(--text-primary)' }}>{txCurrentPage} / {txTotalPages}</span>
+                            <button disabled={txCurrentPage === txTotalPages} onClick={() => setTxCurrentPage(p => p + 1)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)', cursor: txCurrentPage === txTotalPages ? 'default' : 'pointer', fontWeight: 800 }}>Next</button>
+                        </div>
+                    )}
+                </div>
             )}
 
             {/* MODAL 1: ADD / EDIT RAW MATERIAL */}
@@ -647,7 +1097,7 @@ const InventoryManagement = () => {
                                     onChange={e => setItemName(e.target.value)} 
                                     placeholder="e.g. Rice, Chicken, Cooking Oil"
                                     required
-                                    style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                    style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
                                 />
                             </div>
 
@@ -657,7 +1107,7 @@ const InventoryManagement = () => {
                                     <select 
                                         value={itemUnit} 
                                         onChange={e => setItemUnit(e.target.value)} 
-                                        style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
                                     >
                                         <option value="KG">Kilogram (KG)</option>
                                         <option value="Gram">Gram (g)</option>
@@ -676,7 +1126,7 @@ const InventoryManagement = () => {
                                         value={itemStock} 
                                         onChange={e => setItemStock(e.target.value)} 
                                         disabled={!!editingItem} // stock adjustments should be logged separately
-                                        style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
                                     />
                                 </div>
                             </div>
@@ -689,7 +1139,7 @@ const InventoryManagement = () => {
                                         step="any"
                                         value={itemMinStock} 
                                         onChange={e => setItemMinStock(e.target.value)} 
-                                        style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -699,7 +1149,7 @@ const InventoryManagement = () => {
                                         step="any"
                                         value={itemRate} 
                                         onChange={e => setItemRate(e.target.value)} 
-                                        style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
                                     />
                                 </div>
                             </div>
@@ -724,69 +1174,68 @@ const InventoryManagement = () => {
                 </div>
             )}
 
-            {/* MODAL 2: ADJUST STOCK LEVEL */}
+            {/* MODAL 2: ADD STOCK LEVEL */}
             {showAdjustModal && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(8px)' }} onClick={() => setShowAdjustModal(false)}>
                     <div style={{ backgroundColor: 'var(--bg-card)', padding: '36px', borderRadius: '32px', width: '90%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '24px', border: '1px solid var(--bg-border)', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3 style={{ margin: 0, fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)' }}>Adjust Stock Level</h3>
+                            <h3 style={{ margin: 0, fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)' }}>Add Stock</h3>
                             <button onClick={() => setShowAdjustModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={20}/></button>
                         </div>
 
-                        <form onSubmit={handleAdjustStock} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Select Ingredient</label>
-                                <select 
-                                    value={selectedAdjustItemId} 
-                                    onChange={e => setSelectedAdjustItemId(e.target.value)} 
-                                    style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
-                                >
-                                    {items.map(item => (
-                                        <option key={item.id} value={item.id}>{item.name} (Current: {item.current_stock} {item.unit})</option>
-                                    ))}
-                                </select>
-                            </div>
+                        {(() => {
+                            const selectedItem = items.find(i => String(i.id) === String(selectedAdjustItemId));
+                            return (
+                                <form onSubmit={handleAdjustStock} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Ingredient Name</label>
+                                        <div style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700 }}>
+                                            {selectedItem ? `${selectedItem.name} (Current: ${selectedItem.current_stock} ${selectedItem.unit})` : 'N/A'}
+                                        </div>
+                                    </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>New Physical Stock Quantity</label>
-                                <input 
-                                    type="number" 
-                                    step="any"
-                                    value={adjustQty} 
-                                    onChange={e => setAdjustQty(e.target.value)} 
-                                    placeholder="Enter actual stock level audited"
-                                    required
-                                    style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
-                                />
-                            </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Quantity to Add</label>
+                                        <input 
+                                            type="number" 
+                                            step="any"
+                                            value={adjustQty} 
+                                            onChange={e => setAdjustQty(e.target.value)} 
+                                            placeholder={`Enter quantity in ${selectedItem?.unit || 'units'}`}
+                                            required
+                                            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        />
+                                    </div>
 
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Audit Notes / Remarks</label>
-                                <input 
-                                    type="text" 
-                                    value={adjustRemarks} 
-                                    onChange={e => setAdjustRemarks(e.target.value)} 
-                                    placeholder="e.g. Monthly Physical stock verification"
-                                    style={{ padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
-                                />
-                            </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Notes / Remarks</label>
+                                        <input 
+                                            type="text" 
+                                            value={adjustRemarks} 
+                                            onChange={e => setAdjustRemarks(e.target.value)} 
+                                            placeholder="e.g. Purchased extra, supplier delivery"
+                                            style={{ width: '100%', boxSizing: 'border-box', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }}
+                                        />
+                                    </div>
 
-                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
-                                <button 
-                                    type="button" 
-                                    onClick={() => setShowAdjustModal(false)}
-                                    style={{ padding: '12px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800 }}
-                                >
-                                    Cancel
-                                </button>
-                                <button 
-                                    type="submit"
-                                    style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: '#0ea5e9', color: 'white', fontWeight: 800, boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)' }}
-                                >
-                                    Save Adjustment
-                                </button>
-                            </div>
-                        </form>
+                                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowAdjustModal(false)}
+                                            style={{ padding: '12px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800 }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            type="submit"
+                                            style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: '#0ea5e9', color: 'white', fontWeight: 800, boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)' }}
+                                        >
+                                            Add Stock
+                                        </button>
+                                    </div>
+                                </form>
+                            );
+                        })()}
                     </div>
                 </div>
             )}
@@ -902,6 +1351,67 @@ const InventoryManagement = () => {
                                 style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: '#10b981', color: 'white', fontWeight: 800, boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}
                             >
                                 Save Recipe BOM
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL 4: INVENTORY VALUATION BREAKDOWN */}
+            {showValuationModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(8px)' }} onClick={() => setShowValuationModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', padding: '36px', borderRadius: '32px', width: '90%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: '20px', border: '1px solid var(--bg-border)', boxShadow: '0 30px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)' }}>Inventory Valuation Breakdown</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700, margin: '4px 0 0 0' }}>Itemized list of current stock value</p>
+                            </div>
+                            <button onClick={() => setShowValuationModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={20}/></button>
+                        </div>
+
+                        <div style={{ overflowY: 'auto', flex: 1, borderRadius: '16px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-card)', zIndex: 1 }}>
+                                    <tr style={{ borderBottom: '2px solid var(--bg-border)' }}>
+                                        <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: 800 }}>Ingredient</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: 800, textAlign: 'right' }}>Current Stock</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: 800, textAlign: 'right' }}>Purchase Rate</th>
+                                        <th style={{ padding: '12px 16px', color: 'var(--text-muted)', fontWeight: 800, textAlign: 'right' }}>Total Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>No ingredients cataloged.</td>
+                                        </tr>
+                                    ) : (
+                                        items.map(item => {
+                                            const totalItemVal = parseFloat(item.current_stock) * parseFloat(item.purchase_rate || 0);
+                                            return (
+                                                <tr key={item.id} style={{ borderBottom: '1px solid var(--border-rgba-05)' }}>
+                                                    <td style={{ padding: '12px 16px', fontWeight: 700 }}>{item.name}</td>
+                                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>{item.current_stock} {item.unit}</td>
+                                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>₹{parseFloat(item.purchase_rate).toFixed(2)}</td>
+                                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: totalItemVal > 0 ? '#10b981' : 'var(--text-primary)' }}>₹{totalItemVal.toFixed(2)}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid var(--bg-border)', paddingTop: '16px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 900, color: 'var(--text-muted)' }}>GRAND TOTAL</span>
+                            <span style={{ fontSize: '20px', fontWeight: 950, color: '#10b981' }}>₹{Number(metrics.inventoryValue || 0).toFixed(2)}</span>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button 
+                                onClick={() => setShowValuationModal(false)}
+                                style={{ padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }}
+                            >
+                                Close Breakdown
                             </button>
                         </div>
                     </div>

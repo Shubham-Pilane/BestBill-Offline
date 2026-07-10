@@ -574,4 +574,61 @@ router.get('/reports/valuation', auth, async (req, res) => {
   }
 });
 
+// 8. General Transactions Report (ledger history for all items)
+router.get('/reports/transactions', auth, async (req, res) => {
+  try {
+    const { startDate, endDate, type, itemId } = req.query;
+
+    let queryStr = `
+      SELECT st.*, ii.name as item_name, ii.unit
+      FROM stock_transactions st
+      JOIN inventory_items ii ON st.inventory_item_id = ii.id
+      WHERE st.hotel_id = $1
+    `;
+    const params = [req.user.hotel_id];
+    let paramIdx = 2;
+
+    if (itemId) {
+      queryStr += ` AND st.inventory_item_id = $${paramIdx++}`;
+      params.push(parseInt(itemId));
+    }
+
+    if (type) {
+      queryStr += ` AND st.transaction_type = $${paramIdx++}`;
+      params.push(type);
+    }
+
+    queryStr += ' ORDER BY st.created_at DESC';
+
+    const result = await db.query(queryStr, params);
+
+    const report = [];
+    for (const tx of result.rows) {
+      const txDateStr = tx.created_at.split(' ')[0];
+      let matches = true;
+      if (startDate && txDateStr < startDate) matches = false;
+      if (endDate && txDateStr > endDate) matches = false;
+
+      if (matches) {
+        report.push({
+          id: tx.id,
+          date: tx.created_at,
+          item_id: tx.inventory_item_id,
+          item_name: tx.item_name,
+          type: tx.transaction_type,
+          quantity: inventoryService.fromBaseUnit(tx.quantity, tx.unit),
+          unit: tx.unit,
+          remarks: tx.remarks,
+          reference_type: tx.reference_type,
+          reference_id: tx.reference_id
+        });
+      }
+    }
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ message: 'Error generating general transactions report', error: err.message });
+  }
+});
+
 module.exports = router;
