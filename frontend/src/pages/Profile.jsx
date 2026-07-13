@@ -83,6 +83,26 @@ const Profile = () => {
     const [simpleKotPassword, setSimpleKotPassword] = useState('');
     const [simpleKotModalMode, setSimpleKotModalMode] = useState('enable');
 
+    // Email Report State
+    const [emailReportModuleEnabled, setEmailReportModuleEnabled] = useState(false);
+    const [showEmailReportModal, setShowEmailReportModal] = useState(false);
+    const [emailReportPassword, setEmailReportPassword] = useState('');
+    const [emailReportModalMode, setEmailReportModalMode] = useState('enable');
+    const [emailReportConfig, setEmailReportConfig] = useState({
+        emailReportEnabled: false,
+        emailReportProvider: 'gmail',
+        emailReportSender: '',
+        emailReportPassword: '',
+        emailReportRecipient: '',
+        emailReportTime: '23:00',
+        emailReportFrequency: 'daily',
+        emailReportSmtpHost: 'smtp.gmail.com',
+        emailReportSmtpPort: 465,
+        emailReportSmtpSecure: true
+    });
+    const [testingEmailReport, setTestingEmailReport] = useState(false);
+    const [showEmailReportSection, setShowEmailReportSection] = useState(false);
+
     const [showStaffSection, setShowStaffSection] = useState(false);
     const [showNetworkConfig, setShowNetworkConfig] = useState(false);
     const [showSecurityCore, setShowSecurityCore] = useState(false);
@@ -101,6 +121,8 @@ const Profile = () => {
             fetchInventoryStatus();
             fetchTokenCounterStatus();
             fetchSimpleKotStatus();
+            fetchEmailReportStatus();
+            fetchEmailReportConfig();
         }
     }, [isOwner]);
 
@@ -425,6 +447,102 @@ const Profile = () => {
             } catch (err) {
                 toast.error(err.response?.data?.message || "Incorrect deactivation password");
             }
+        }
+    };
+
+    const fetchEmailReportStatus = async () => {
+        try {
+            const res = await api.get('/hotel/email-report-status');
+            setEmailReportModuleEnabled(res.data.emailReportModuleEnabled);
+            updateUser({ emailReportModuleEnabled: res.data.emailReportModuleEnabled });
+        } catch (err) {
+            console.error('Failed to fetch email report status', err);
+        }
+    };
+
+    const handleToggleEmailReport = (shouldEnable) => {
+        if (shouldEnable) {
+            setEmailReportModalMode('enable');
+            setEmailReportPassword('');
+            setShowEmailReportModal(true);
+        } else {
+            setEmailReportModalMode('disable');
+            setEmailReportPassword('');
+            setShowEmailReportModal(true);
+        }
+    };
+
+    const handleEmailReportModalSubmit = async () => {
+        if (!emailReportPassword) {
+            toast.error("Password cannot be blank");
+            return;
+        }
+        if (emailReportModalMode === 'enable') {
+            try {
+                const res = await api.post('/hotel/toggle-email-report', { enabled: true, passcode: emailReportPassword });
+                if (res.data.success) {
+                    setEmailReportModuleEnabled(true);
+                    updateUser({ emailReportModuleEnabled: true });
+                    toast.success("Automated Email Reports module activated!");
+                    setShowEmailReportModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect activation password");
+            }
+        } else {
+            try {
+                const res = await api.post('/hotel/toggle-email-report', { enabled: false, passcode: emailReportPassword });
+                if (res.data.success) {
+                    setEmailReportModuleEnabled(false);
+                    updateUser({ emailReportModuleEnabled: false });
+                    toast.success("Automated Email Reports module deactivated.");
+                    setShowEmailReportModal(false);
+                }
+            } catch (err) {
+                toast.error(err.response?.data?.message || "Incorrect deactivation password");
+            }
+        }
+    };
+
+    const fetchEmailReportConfig = async () => {
+        try {
+            const res = await api.get('/hotel/email-report-config');
+            if (res.data) {
+                setEmailReportConfig(res.data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch email report configs', err);
+        }
+    };
+
+    const handleEmailReportConfigSubmit = async (e) => {
+        e.preventDefault();
+        const t = toast.loading('Saving email report configurations...');
+        try {
+            await api.post('/hotel/email-report-config', emailReportConfig);
+            toast.success('Email configurations updated successfully!', { id: t });
+            fetchEmailReportConfig();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update email configurations', { id: t });
+        }
+    };
+
+    const handleTestEmailConnection = async () => {
+        if (!emailReportConfig.emailReportSender || !emailReportConfig.emailReportPassword || !emailReportConfig.emailReportRecipient) {
+            toast.error('Please configure Sender, Password, and Recipient before testing.');
+            return;
+        }
+        setTestingEmailReport(true);
+        const t = toast.loading('Establishing SMTP connection & sending verification mail...');
+        try {
+            const res = await api.post('/hotel/email-report/test', emailReportConfig);
+            if (res.data.success) {
+                toast.success(res.data.message || 'Test email dispatched!', { id: t });
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.error || err.response?.data?.message || 'SMTP Connection failed. Verify credentials.', { id: t });
+        } finally {
+            setTestingEmailReport(false);
         }
     };
 
@@ -1196,6 +1314,219 @@ const Profile = () => {
                 </div>
             )}
 
+            {/* Daily Email Reports Settings Card */}
+            {isOwner && emailReportModuleEnabled && (
+                <div style={{ width: '100%' }}>
+                    <div 
+                        onClick={() => setShowEmailReportSection(!showEmailReportSection)}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showEmailReportSection ? '12px' : '0', cursor: 'pointer', backgroundColor: 'var(--bg-card)', padding: '14px 20px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)', transition: 'all 0.2s' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Mail size={22} style={{ color: '#0ea5e9' }} />
+                            <h2 style={{fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Daily Email Reports</h2>
+                        </div>
+                        <ChevronDown 
+                            size={20} 
+                            style={{ 
+                                color: 'var(--text-muted)', 
+                                transform: showEmailReportSection ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.3s ease'
+                            }} 
+                        />
+                    </div>
+                    {showEmailReportSection && (
+                        <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
+                            <form onSubmit={handleEmailReportConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                
+                                {/* Enable Toggle & Basic Settings */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <label style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input 
+                                                type="checkbox"
+                                                checked={emailReportConfig.emailReportEnabled}
+                                                onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportEnabled: e.target.checked })}
+                                                style={{ width: '18px', height: '18px', accentColor: '#0ea5e9', cursor: 'pointer' }}
+                                            />
+                                            Enable Daily Sales Reports
+                                        </label>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>
+                                            When enabled, reports will be compiled and sent in the background at the specified time.
+                                        </p>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>RECIPIENT EMAIL ADDRESS</label>
+                                        <input 
+                                            required={emailReportConfig.emailReportEnabled}
+                                            type="email"
+                                            value={emailReportConfig.emailReportRecipient} 
+                                            onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportRecipient: e.target.value })} 
+                                            placeholder="owner@example.com"
+                                            style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
+                                        />
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '11px', margin: 0 }}>The owner email where report PDFs will be sent.</p>
+                                    </div>
+                                </div>
+
+                                {/* Conditionally render SMTP details only if email reports are toggled to be enabled */}
+                                {emailReportConfig.emailReportEnabled && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                        
+                                        {/* Time & Frequency */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>REPORT TIME</label>
+                                                <input 
+                                                    type="time" 
+                                                    value={emailReportConfig.emailReportTime} 
+                                                    onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportTime: e.target.value })} 
+                                                    style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600 }}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>REPORT FREQUENCY</label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <select 
+                                                        value={emailReportConfig.emailReportFrequency} 
+                                                        onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportFrequency: e.target.value })}
+                                                        style={{ width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                    >
+                                                        <option value="daily">Daily Sales Report</option>
+                                                        <option value="weekly">Weekly Sales Report (Last 7 Days)</option>
+                                                        <option value="monthly">Monthly Sales Report (Last 30 Days)</option>
+                                                    </select>
+                                                    <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* SMTP Server Configuration */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
+                                            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#0ea5e9' }}></span>
+                                                Sender Email Server Settings (SMTP)
+                                            </h3>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>EMAIL SERVICE PROVIDER</label>
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <select 
+                                                            value={emailReportConfig.emailReportProvider} 
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                setEmailReportConfig({
+                                                                    ...emailReportConfig,
+                                                                    emailReportProvider: val,
+                                                                    emailReportSmtpHost: val === 'gmail' ? 'smtp.gmail.com' : '',
+                                                                    emailReportSmtpPort: val === 'gmail' ? 465 : 587,
+                                                                    emailReportSmtpSecure: val === 'gmail'
+                                                                });
+                                                            }}
+                                                            style={{ width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                        >
+                                                            <option value="gmail">Gmail (Easy Setup)</option>
+                                                            <option value="custom">Custom SMTP Server (Advanced)</option>
+                                                        </select>
+                                                        <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                    </div>
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>SENDER EMAIL ADDRESS</label>
+                                                    <input 
+                                                        required
+                                                        type="email"
+                                                        value={emailReportConfig.emailReportSender} 
+                                                        onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportSender: e.target.value })} 
+                                                        placeholder="e.g. billing-system@gmail.com"
+                                                        style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', alignItems: 'start' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>
+                                                        {emailReportConfig.emailReportProvider === 'gmail' ? 'GMAIL APP PASSWORD' : 'SMTP PASSWORD'}
+                                                    </label>
+                                                    <input 
+                                                        required
+                                                        type="password"
+                                                        value={emailReportConfig.emailReportPassword} 
+                                                        onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportPassword: e.target.value })} 
+                                                        placeholder={emailReportConfig.emailReportProvider === 'gmail' ? "16-digit App Password" : "Email password"}
+                                                        style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
+                                                    />
+                                                    {emailReportConfig.emailReportProvider === 'gmail' && (
+                                                        <p style={{ color: 'var(--text-muted)', fontSize: '10px', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                                                            💡 Gmail accounts require generating a 16-character <b>App Password</b> from Google Account settings. Standard passwords will be blocked.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {emailReportConfig.emailReportProvider === 'custom' && (
+                                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginTop: '8px' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>SMTP HOST</label>
+                                                        <input 
+                                                            required
+                                                            value={emailReportConfig.emailReportSmtpHost} 
+                                                            onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportSmtpHost: e.target.value })} 
+                                                            placeholder="smtp.example.com"
+                                                            style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PORT</label>
+                                                        <input 
+                                                            required
+                                                            type="number"
+                                                            value={emailReportConfig.emailReportSmtpPort} 
+                                                            onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportSmtpPort: parseInt(e.target.value) || 587 })} 
+                                                            placeholder="587"
+                                                            style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} 
+                                                        />
+                                                    </div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%', justifyContent: 'center' }}>
+                                                        <label style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '14px' }}>
+                                                            <input 
+                                                                type="checkbox"
+                                                                checked={emailReportConfig.emailReportSmtpSecure}
+                                                                onChange={e => setEmailReportConfig({ ...emailReportConfig, emailReportSmtpSecure: e.target.checked })}
+                                                                style={{ accentColor: '#0ea5e9' }}
+                                                            />
+                                                            SSL Secure
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                        </div>
+
+                                        {/* Test SMTP connection button */}
+                                        <button 
+                                            type="button"
+                                            disabled={testingEmailReport}
+                                            onClick={handleTestEmailConnection}
+                                            style={{ width: 'fit-content', alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                                        >
+                                            <Globe size={16} style={{ color: '#10b981' }} />
+                                            {testingEmailReport ? 'Verifying...' : 'Test Connection & Send Test Email'}
+                                        </button>
+                                    </div>
+                                )}
+
+                                <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content' }}>
+                                    <Save size={18} />
+                                    Save Report Settings
+                                </button>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            )}
+
             {/* System Add-ons Section */}
             {isOwner && (
                 <div style={{ width: '100%' }}>
@@ -1426,6 +1757,42 @@ const Profile = () => {
                                         name="simpleKotModule"
                                         checked={simpleKotEnabled} 
                                         onChange={() => handleToggleSimpleKot(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Automated Email Reports Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Automated Email Reports</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Automatically compile sales statistics into a premium PDF report and email it in the background at your scheduled time.
+                                    This module requires a passcode to unlock.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="emailReportModule"
+                                        checked={!emailReportModuleEnabled} 
+                                        onChange={() => handleToggleEmailReport(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="emailReportModule"
+                                        checked={emailReportModuleEnabled} 
+                                        onChange={() => handleToggleEmailReport(true)}
                                         style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
                                     />
                                     Enabled
@@ -1701,6 +2068,50 @@ const Profile = () => {
                                 onClick={handleSimpleKotModalSubmit}
                                 style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: simpleKotModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: simpleKotModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
                             >{simpleKotModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Email Report Activation Modal */}
+            {showEmailReportModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowEmailReportModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: emailReportModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                                {emailReportModalMode === 'enable' ? 'Activate Email Reports' : 'Deactivate Email Reports'}
+                            </h3>
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            {emailReportModalMode === 'enable'
+                                ? 'Enter the license passcode to unlock and enable Automated Email Reports.'
+                                : 'Are you sure you want to deactivate Automated Email Reports? Please enter the passcode to confirm.'
+                            }
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
+                                {emailReportModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
+                            </label>
+                            <input
+                                type="password"
+                                value={emailReportPassword}
+                                onChange={e => setEmailReportPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleEmailReportModalSubmit()}
+                                placeholder="Enter passcode"
+                                autoFocus
+                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowEmailReportModal(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleEmailReportModalSubmit}
+                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: emailReportModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: emailReportModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                            >{emailReportModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
                         </div>
                     </div>
                 </div>

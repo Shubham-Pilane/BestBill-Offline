@@ -358,5 +358,108 @@ router.post('/toggle-simple-kot', auth, (req, res) => {
   }
 });
 
+// Get Email Report Module Activation Status
+router.get('/email-report-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ emailReportModuleEnabled: !!config.emailReportModuleEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking email report module status' });
+  }
+});
+
+router.post('/toggle-email-report', auth, (req, res) => {
+  const { enabled, passcode } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+
+    if (passcode !== '721890') {
+      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
+    }
+    config.emailReportModuleEnabled = !!enabled;
+
+    configManager.saveConfig(config);
+    res.json({ success: true, emailReportModuleEnabled: config.emailReportModuleEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating email report module configuration' });
+  }
+});
+
+// Get Email Report Configuration
+router.get('/email-report-config', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({
+      emailReportEnabled: !!config.emailReportEnabled,
+      emailReportProvider: config.emailReportProvider || 'gmail',
+      emailReportSender: config.emailReportSender || '',
+      emailReportPassword: config.emailReportPassword || '',
+      emailReportRecipient: config.emailReportRecipient || '',
+      emailReportTime: config.emailReportTime || '23:00',
+      emailReportFrequency: config.emailReportFrequency || 'daily',
+      emailReportSmtpHost: config.emailReportSmtpHost || 'smtp.gmail.com',
+      emailReportSmtpPort: config.emailReportSmtpPort || 465,
+      emailReportSmtpSecure: config.emailReportSmtpSecure !== false
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error retrieving email report configurations' });
+  }
+});
+
+// Update Email Report Configuration
+router.post('/email-report-config', auth, (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  try {
+    const { 
+      emailReportEnabled, 
+      emailReportProvider, 
+      emailReportSender, 
+      emailReportPassword, 
+      emailReportRecipient, 
+      emailReportTime, 
+      emailReportFrequency, 
+      emailReportSmtpHost, 
+      emailReportSmtpPort, 
+      emailReportSmtpSecure 
+    } = req.body;
+    
+    const config = configManager.getConfig();
+    
+    if (emailReportEnabled !== undefined) config.emailReportEnabled = !!emailReportEnabled;
+    if (emailReportProvider !== undefined) config.emailReportProvider = emailReportProvider;
+    if (emailReportSender !== undefined) config.emailReportSender = emailReportSender;
+    if (emailReportPassword !== undefined) config.emailReportPassword = emailReportPassword;
+    if (emailReportRecipient !== undefined) config.emailReportRecipient = emailReportRecipient;
+    if (emailReportTime !== undefined) config.emailReportTime = emailReportTime;
+    if (emailReportFrequency !== undefined) config.emailReportFrequency = emailReportFrequency;
+    if (emailReportSmtpHost !== undefined) config.emailReportSmtpHost = emailReportSmtpHost;
+    if (emailReportSmtpPort !== undefined) config.emailReportSmtpPort = Number(emailReportSmtpPort);
+    if (emailReportSmtpSecure !== undefined) config.emailReportSmtpSecure = !!emailReportSmtpSecure;
+
+    configManager.saveConfig(config);
+    res.json({ 
+      success: true, 
+      message: 'Email configurations updated successfully'
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating email configurations' });
+  }
+});
+
+// Test Email Dispatch Connection
+router.post('/email-report/test', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  try {
+    const emailReportService = require('../services/emailReportService');
+    const result = await emailReportService.sendTestEmail(req.body);
+    res.json(result);
+  } catch (err) {
+    console.error('[EMAIL TEST ERROR]', err);
+    res.status(500).json({ message: 'Failed to send test email', error: err.message });
+  }
+});
+
 module.exports = router;
 

@@ -89,9 +89,9 @@ const runCleanupTask = async () => {
             "DELETE FROM orders WHERE id IN (SELECT order_id FROM bills) AND created_at < datetime('now', '-1 year')"
         );
 
-        // 4. Delete item sales details (order_items) that are older than today (local time)
+        // 4. Delete item sales details (order_items) that are older than 3 days (local time)
         const resOrderItems = await db.query(
-            "DELETE FROM order_items WHERE created_at < date('now', 'localtime')"
+            "DELETE FROM order_items WHERE created_at < date('now', '-3 days', 'localtime')"
         );
 
         console.log(`[CLEANUP] Success: Removed ${resUnbilledOrders.rowCount} unbilled orders, ${resBills.rowCount} bills, ${resBilledOrders.rowCount} billed orders, and ${resOrderItems.rowCount} order items.`);
@@ -122,6 +122,10 @@ syncSchema().then(() => {
         runCleanupTask();
         // Set up daily interval (24 hours)
         setInterval(runCleanupTask, 1000 * 60 * 60 * 24);
+
+        // Start email report background scheduler
+        const emailReportService = require('./services/emailReportService');
+        emailReportService.startScheduler();
     }).on('error', (err) => {
         console.error('Server Listen Error:', err.message);
     });

@@ -19,7 +19,19 @@ const defaultConfig = {
       printerName: "kitchen-printer",
       paperSize: "80mm"
     }
-  }
+  },
+  emailReportModuleEnabled: false,
+  emailReportEnabled: false,
+  emailReportProvider: "gmail",
+  emailReportSender: "",
+  emailReportPassword: "",
+  emailReportRecipient: "",
+  emailReportTime: "23:00",
+  emailReportFrequency: "daily",
+  emailReportSmtpHost: "smtp.gmail.com",
+  emailReportSmtpPort: 465,
+  emailReportSmtpSecure: true,
+  lastEmailReportDate: ""
 };
 
 /**

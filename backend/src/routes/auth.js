@@ -184,7 +184,8 @@ router.post('/login', async (req, res) => {
         whatsAppBillingEnabled: !!config.whatsAppBillingEnabled,
         inventoryEnabled: !!config.inventoryEnabled,
         tokenCounterEnabled: !!config.tokenCounterEnabled,
-        simpleKotEnabled: !!config.simpleKotEnabled
+        simpleKotEnabled: !!config.simpleKotEnabled,
+        emailReportModuleEnabled: !!config.emailReportModuleEnabled
       }
     });
   } catch (err) {
