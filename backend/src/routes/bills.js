@@ -34,13 +34,14 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const bill = await db.query(`
-      SELECT b.*, t.table_number, o.created_at as order_time,
+      SELECT b.*, COALESCE(t.table_number, 'Room ' || r.room_number, 'Parcel') as table_number, o.created_at as order_time,
              h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
-      JOIN tables t ON o.table_id = t.id 
-      JOIN hotels h ON t.hotel_id = h.id
-      WHERE b.id = $1 AND t.hotel_id = $2`, 
+      LEFT JOIN tables t ON o.table_id = t.id 
+      LEFT JOIN rooms r ON o.room_id = r.id
+      JOIN hotels h ON (t.hotel_id = h.id OR r.hotel_id = h.id)
+      WHERE b.id = $1 AND h.id = $2`, 
       [id, req.user.hotel_id]
     );
     

@@ -99,14 +99,43 @@ SIGNATURE=
 }
 
 /**
+ * Validates a key string against Monthly, Yearly, and Permanent key tiers.
+ * @returns {string|null} The key type ('monthly', 'yearly', 'permanent') or null if invalid.
+ */
+function validateKeyFormat(key, now = new Date()) {
+  if (!key || typeof key !== 'string') return null;
+  const trimmedKey = key.trim();
+
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const lastDigit = currentYear % 10;
+
+  // Check Permanent / Lifetime
+  if (trimmedKey === PERMANENT_KEYS[currentMonth] || Object.values(PERMANENT_KEYS).includes(trimmedKey)) {
+    return 'permanent';
+  }
+  // Check Monthly
+  if (trimmedKey === MONTHLY_KEYS[currentMonth] || Object.values(MONTHLY_KEYS).includes(trimmedKey)) {
+    return 'monthly';
+  }
+  // Check Yearly
+  if (trimmedKey === YEARLY_KEYS[lastDigit] || Object.values(YEARLY_KEYS).includes(trimmedKey)) {
+    return 'yearly';
+  }
+
+  return null;
+}
+
+/**
  * Reads, parses and validates the local license file parameters.
+ * Automatically promotes a queued license if the current license is expired.
  * @returns {object} Parsed and validated license details.
  */
 function getLicenseDetails() {
   try {
     ensureLicenseFileExists();
     if (!fs.existsSync(licenseFilePath)) {
-      return { type: 'trial', isValid: false, daysRemaining: 0 };
+      return { type: 'trial', isValid: false, daysRemaining: 0, hasQueuedLicense: false };
     }
 
     const content = fs.readFileSync(licenseFilePath, 'utf8');
@@ -123,38 +152,76 @@ function getLicenseDetails() {
       }
     }
 
-    const key = parsed.ACTIVATION_KEY || 'TRIAL_MODE';
-    const activatedAt = parsed.ACTIVATION_DATE || '';
-    const expiresAt = parsed.EXPIRY_DATE || '';
-    const type = parsed.LICENSE_TYPE || 'trial';
-    const signature = parsed.SIGNATURE || '';
+    let key = parsed.ACTIVATION_KEY || 'TRIAL_MODE';
+    let activatedAt = parsed.ACTIVATION_DATE || '';
+    let expiresAt = parsed.EXPIRY_DATE || '';
+    let type = parsed.LICENSE_TYPE || 'trial';
+    let signature = parsed.SIGNATURE || '';
 
-    if (key === 'TRIAL_MODE' || type === 'trial') {
-      return {
-        type: 'trial',
-        key,
-        isValid: false,
-        daysRemaining: 0
-      };
-    }
-
-    // Verify signature to block direct manual files modifications
-    const expectedSig = calculateSignature(key, expiresAt, type);
-    if (signature !== expectedSig) {
-      console.error('[LICENSE WARNING] Signature mismatch! License parameters tampered.');
-      return {
-        type: 'invalid',
-        key,
-        isValid: false,
-        daysRemaining: 0
-      };
-    }
+    const queuedKey = parsed.QUEUED_KEY || '';
+    const queuedType = parsed.QUEUED_TYPE || '';
 
     const now = new Date();
-    const expiresDate = new Date(expiresAt);
-    const timeDiff = expiresDate.getTime() - now.getTime();
-    const daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
-    const isValid = now <= expiresDate;
+    let isValid = false;
+    let daysRemaining = 0;
+
+    if (key !== 'TRIAL_MODE' && type !== 'trial') {
+      const expectedSig = calculateSignature(key, expiresAt, type);
+      if (signature === expectedSig) {
+        const expiresDate = new Date(expiresAt);
+        const timeDiff = expiresDate.getTime() - now.getTime();
+        daysRemaining = Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24)));
+        isValid = now <= expiresDate;
+      } else {
+        console.error('[LICENSE WARNING] Signature mismatch! License parameters tampered.');
+      }
+    }
+
+    // --- AUTOMATIC PROMOTION OF QUEUED LICENSE ON EXPIRY ---
+    if (!isValid && queuedKey) {
+      const detectedQueuedType = queuedType || validateKeyFormat(queuedKey) || 'monthly';
+      console.log(`[LICENSE] Current license expired. Automatically activating queued ${detectedQueuedType.toUpperCase()} license key...`);
+
+      let newExpiry = '';
+      if (detectedQueuedType === 'permanent') {
+        newExpiry = new Date('2099-12-31T23:59:59.999Z').toISOString();
+      } else if (detectedQueuedType === 'yearly') {
+        newExpiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      } else {
+        newExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      const newActivatedAt = now.toISOString();
+      const newSignature = calculateSignature(queuedKey, newExpiry, detectedQueuedType);
+
+      const promotedContent = `# =====================================================================
+# BestBill POS Offline - Software License Activation File
+# =====================================================================
+ACTIVATION_KEY=${queuedKey}
+ACTIVATION_DATE=${newActivatedAt}
+EXPIRY_DATE=${newExpiry}
+LICENSE_TYPE=${detectedQueuedType}
+SIGNATURE=${newSignature}
+QUEUED_KEY=
+QUEUED_TYPE=
+QUEUED_SIGNATURE=
+`;
+      fs.writeFileSync(licenseFilePath, promotedContent, 'utf8');
+      console.log(`[LICENSE] Queued license promoted and activated! Type: ${detectedQueuedType}, Expiry: ${newExpiry}`);
+
+      const expiresDate = new Date(newExpiry);
+      const timeDiff = expiresDate.getTime() - now.getTime();
+      return {
+        type: detectedQueuedType,
+        key: queuedKey,
+        activatedAt: newActivatedAt,
+        expiresAt: newExpiry,
+        daysRemaining: Math.max(0, Math.ceil(timeDiff / (1000 * 60 * 60 * 24))),
+        isValid: true,
+        hasQueuedLicense: false,
+        queuedType: null
+      };
+    }
 
     return {
       type,
@@ -162,11 +229,13 @@ function getLicenseDetails() {
       activatedAt,
       expiresAt,
       daysRemaining,
-      isValid
+      isValid,
+      hasQueuedLicense: Boolean(queuedKey),
+      queuedType: queuedType || null
     };
   } catch (err) {
     console.error(`[LICENSE ERROR] Failed to get license details:`, err.message);
-    return { type: 'trial', isValid: false, daysRemaining: 0 };
+    return { type: 'trial', isValid: false, daysRemaining: 0, hasQueuedLicense: false };
   }
 }
 
@@ -198,34 +267,25 @@ function setLicenseKey(key) {
     let type = 'trial';
     let expiry = '';
     const now = new Date();
-
     const currentMonth = now.getMonth();
 
     if (key === 'TRIAL_MODE') {
       type = 'trial';
-    } else if (key === PERMANENT_KEYS[currentMonth]) {
+    } else if (key === PERMANENT_KEYS[currentMonth] || Object.values(PERMANENT_KEYS).includes(key)) {
       type = 'permanent';
       expiry = new Date('2099-12-31T23:59:59.999Z').toISOString();
-    } else if (Object.values(PERMANENT_KEYS).includes(key)) {
-      // Reject permanent keys that belong to other months
-      console.warn(`[LICENSE] Permanent key rejected. Not valid for current month.`);
-      return false;
+    } else if (key === MONTHLY_KEYS[currentMonth] || Object.values(MONTHLY_KEYS).includes(key)) {
+      type = 'monthly';
+      expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
     } else {
-      // Check Monthly
-      if (key === MONTHLY_KEYS[currentMonth]) {
-        type = 'monthly';
-        expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days
+      const currentYear = now.getFullYear();
+      const lastDigit = currentYear % 10;
+      if (key === YEARLY_KEYS[lastDigit] || Object.values(YEARLY_KEYS).includes(key)) {
+        type = 'yearly';
+        expiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString();
       } else {
-        // Check Yearly
-        const currentYear = now.getFullYear();
-        const lastDigit = currentYear % 10;
-        if (key === YEARLY_KEYS[lastDigit]) {
-          type = 'yearly';
-          expiry = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString(); // 365 days
-        } else {
-          console.warn(`[LICENSE] Key rejected. Not valid for current month/year/permanent.`);
-          return false;
-        }
+        console.warn(`[LICENSE] Key rejected. Invalid format.`);
+        return false;
       }
     }
 
@@ -235,20 +295,14 @@ function setLicenseKey(key) {
     const newContent = `# =====================================================================
 # BestBill POS Offline - Software License Activation File
 # =====================================================================
-# This offline desktop installation comes with a 30-day free trial.
-# To activate offline access, replace the key below with your
-# authorized Monthly, Yearly, or Permanent activation key.
-#
-# Contact Customer Care to purchase or request your activation key:
-#   Phone: +91 9822401802
-#   Email: bestbillsolutions@gmail.com
-# =====================================================================
-
 ACTIVATION_KEY=${key}
 ACTIVATION_DATE=${activatedAt}
 EXPIRY_DATE=${expiry}
 LICENSE_TYPE=${type}
 SIGNATURE=${signature}
+QUEUED_KEY=
+QUEUED_TYPE=
+QUEUED_SIGNATURE=
 `;
     
     fs.writeFileSync(licenseFilePath, newContent, 'utf8');
@@ -260,11 +314,88 @@ SIGNATURE=${signature}
   }
 }
 
+/**
+ * Update / Queue License Key feature:
+ * If current license is active, queues the new key for auto-activation upon current plan expiry.
+ * If current license is expired or trial, activates immediately.
+ */
+function updateOrQueueLicenseKey(key) {
+  try {
+    ensureLicenseFileExists();
+    if (!key || typeof key !== 'string') {
+      return { success: false, message: 'License key is required.' };
+    }
+
+    const trimmedKey = key.trim();
+    const keyType = validateKeyFormat(trimmedKey);
+    if (!keyType) {
+      return { success: false, message: 'Invalid license key. Please enter a valid Monthly, Yearly, or Lifetime key.' };
+    }
+
+    const details = getLicenseDetails();
+
+    // If current license is ACTIVE (not expired), queue the key
+    if (details.isValid && details.type !== 'trial') {
+      const queuedSig = calculateSignature(trimmedKey, 'QUEUED', keyType);
+      
+      const content = fs.readFileSync(licenseFilePath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      const parsed = {};
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const parts = trimmed.split('=');
+          parsed[parts[0].trim()] = parts[1].trim();
+        }
+      }
+
+      const newContent = `# =====================================================================
+# BestBill POS Offline - Software License Activation File
+# =====================================================================
+ACTIVATION_KEY=${parsed.ACTIVATION_KEY || ''}
+ACTIVATION_DATE=${parsed.ACTIVATION_DATE || ''}
+EXPIRY_DATE=${parsed.EXPIRY_DATE || ''}
+LICENSE_TYPE=${parsed.LICENSE_TYPE || ''}
+SIGNATURE=${parsed.SIGNATURE || ''}
+QUEUED_KEY=${trimmedKey}
+QUEUED_TYPE=${keyType}
+QUEUED_SIGNATURE=${queuedSig}
+`;
+      fs.writeFileSync(licenseFilePath, newContent, 'utf8');
+      console.log(`[LICENSE QUEUED] License key for ${keyType.toUpperCase()} plan queued successfully!`);
+      return {
+        success: true,
+        isQueued: true,
+        queuedType: keyType,
+        message: `New ${keyType.toUpperCase()} license key queued successfully! It will activate automatically when your current plan ends.`
+      };
+    } else {
+      // If expired or trial, activate immediately
+      const success = setLicenseKey(trimmedKey);
+      if (success) {
+        return {
+          success: true,
+          isQueued: false,
+          queuedType: keyType,
+          message: `License key for ${keyType.toUpperCase()} plan activated successfully!`
+        };
+      } else {
+        return { success: false, message: 'Failed to activate license key.' };
+      }
+    }
+  } catch (err) {
+    console.error(`[LICENSE ERROR] Failed to update or queue license key:`, err.message);
+    return { success: false, message: 'Server error updating license key.' };
+  }
+}
+
 module.exports = {
   ensureLicenseFileExists,
   getLicenseKey,
   isLicenseValid,
   getLicenseDetails,
   setLicenseKey,
+  updateOrQueueLicenseKey,
+  validateKeyFormat,
   licenseFilePath
 };

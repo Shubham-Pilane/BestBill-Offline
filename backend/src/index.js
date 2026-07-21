@@ -38,6 +38,7 @@ app.use('/api/guest', require('./routes/guest'));
 app.use('/api/kitchen', require('./routes/kitchen'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/credit', require('./routes/credit'));
+app.use('/api/cloud-sync', require('./routes/cloudSync'));
 
 app.get('/api/ping', (req, res) => {
   res.json({ message: 'pong', timestamp: new Date().toISOString() });
@@ -126,6 +127,10 @@ syncSchema().then(() => {
         // Start email report background scheduler
         const emailReportService = require('./services/emailReportService');
         emailReportService.startScheduler();
+
+        // Start cloud sync background scheduler (15-min interval)
+        const cloudSyncService = require('./services/cloudSyncService');
+        cloudSyncService.startCloudSyncScheduler();
     }).on('error', (err) => {
         console.error('Server Listen Error:', err.message);
     });

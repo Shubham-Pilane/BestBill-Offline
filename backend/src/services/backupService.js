@@ -3,9 +3,17 @@ const path = require('path');
 const db = require('../db/db');
 const configManager = require('../config/configManager');
 
-// Resolve backup target directory
-const backupsDir = process.env.BESTBILL_BACKUPS_PATH || path.join(__dirname, '../../backups');
-const dbPath = process.env.BESTBILL_DB_PATH || path.join(__dirname, '../../bestbill.db');
+// Resolve backup target directory & database path
+const getDefaultDbPath = () => {
+  if (process.env.BESTBILL_DB_PATH) return process.env.BESTBILL_DB_PATH;
+  const appData = process.env.APPDATA || (process.platform === 'darwin' 
+    ? path.join(process.env.HOME, 'Library', 'Application Support') 
+    : path.join(process.env.HOME, '.config'));
+  return path.join(appData, 'bestbill-desktop', 'bestbill.db');
+};
+
+const backupsDir = process.env.BESTBILL_BACKUPS_PATH || path.join(path.dirname(getDefaultDbPath()), 'backups');
+const dbPath = getDefaultDbPath();
 
 // Ensure backups directory exists
 if (!fs.existsSync(backupsDir)) {

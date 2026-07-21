@@ -1,8 +1,16 @@
 const path = require('path');
 const fs = require('fs');
 
-// Resolve SQLite database path
-const dbPath = process.env.BESTBILL_DB_PATH || path.join(__dirname, '../../bestbill.db');
+// Resolve SQLite database path (Always defaults to the single production AppData database)
+const getDefaultDbPath = () => {
+  if (process.env.BESTBILL_DB_PATH) return process.env.BESTBILL_DB_PATH;
+  const appData = process.env.APPDATA || (process.platform === 'darwin' 
+    ? path.join(process.env.HOME, 'Library', 'Application Support') 
+    : path.join(process.env.HOME, '.config'));
+  return path.join(appData, 'bestbill-desktop', 'bestbill.db');
+};
+
+const dbPath = getDefaultDbPath();
 console.log(`[SQLITE] Resolving database path: ${dbPath}`);
 
 // Ensure database directory exists

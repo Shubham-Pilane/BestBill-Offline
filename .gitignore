@@ -23,6 +23,7 @@ win-unpacked/
 backend/bestbill.db
 
 # User uploads and backups
+backend/config.json
 backend/uploads/
 backend/backups/
 backend/tmp/

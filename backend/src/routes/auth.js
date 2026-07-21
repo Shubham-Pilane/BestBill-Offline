@@ -70,6 +70,18 @@ router.post('/register', upload.none(), async (req, res) => {
     // Link the user directly to the new hotel
     await db.query('UPDATE users SET hotel_id = $1 WHERE id = $2', [newHotelId, userId]);
 
+    // Save owner email/password for cloud sync if user chooses to enable it later, keeping Cloud Sync DISABLED by default
+    try {
+      const configManager = require('../config/configManager');
+      const currentConfig = configManager.getConfig();
+      currentConfig.cloudSyncOwnerEmail = email.trim();
+      currentConfig.cloudSyncOwnerPassword = password.trim();
+      currentConfig.cloudSyncEnabled = false; // Strictly OFF by default until user enables it in Profile
+      configManager.saveConfig(currentConfig);
+    } catch (cfgErr) {
+      console.warn('[CLOUD SYNC CONFIG NOTICE]', cfgErr.message);
+    }
+
     res.status(201).json({ message: 'User registered successfully' });
   } catch (err) {
     console.error(err);
@@ -204,6 +216,16 @@ router.post('/forgot-password', async (req, res) => {
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await db.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+
+    try {
+      const configManager = require('../config/configManager');
+      const currentConfig = configManager.getConfig();
+      if (currentConfig.cloudSyncOwnerEmail === email.trim()) {
+        currentConfig.cloudSyncOwnerPassword = newPassword.trim();
+        configManager.saveConfig(currentConfig);
+      }
+    } catch (e) {}
+
     res.json({ message: 'Password updated successfully' });
   } catch (err) {
     console.error(err);
@@ -211,25 +233,52 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// Activate License
+// Verify License Update Passcode (592244)
+router.post('/verify-license-passcode', auth, async (req, res) => {
+  const { passcode } = req.body;
+  if (passcode === '592244') {
+    return res.json({ success: true, message: 'Security passcode verified.' });
+  } else {
+    return res.status(403).json({ success: false, message: 'Incorrect security passcode. Access denied.' });
+  }
+});
+
+// Update / Queue License Key
+router.post('/update-license-key', auth, async (req, res) => {
+  const { passcode, licenseKey } = req.body;
+
+  if (passcode !== '592244') {
+    return res.status(403).json({ success: false, message: 'Incorrect security passcode. Access denied.' });
+  }
+
+  if (!licenseKey) {
+    return res.status(400).json({ success: false, message: 'License key is required.' });
+  }
+
+  const { updateOrQueueLicenseKey } = require('../services/licenseService');
+  const result = updateOrQueueLicenseKey(licenseKey);
+
+  if (result.success) {
+    return res.json(result);
+  } else {
+    return res.status(400).json(result);
+  }
+});
+
+// Activate License (Fallback / Legacy)
 router.post('/activate-license', async (req, res) => {
   const { licenseKey } = req.body;
   if (!licenseKey) {
     return res.status(400).json({ message: 'License key is required' });
   }
 
-  const { setLicenseKey, isLicenseValid } = require('../services/licenseService');
-  
-  // Set it
-  setLicenseKey(licenseKey);
+  const { updateOrQueueLicenseKey } = require('../services/licenseService');
+  const result = updateOrQueueLicenseKey(licenseKey);
 
-  // Validate it
-  if (isLicenseValid()) {
-    return res.json({ message: 'License activated successfully!' });
+  if (result.success) {
+    return res.json({ message: result.message, isQueued: result.isQueued });
   } else {
-    // Revert to trial mode if invalid to be safe
-    setLicenseKey('TRIAL_MODE');
-    return res.status(400).json({ message: 'Invalid license key. Please try again.' });
+    return res.status(400).json({ message: result.message });
   }
 });
 
@@ -251,7 +300,9 @@ router.get('/subscription-status', auth, async (req, res) => {
           activatedAt: hotelCreated.toISOString(),
           expiresAt: expires.toISOString(),
           daysRemaining,
-          isValid: new Date() <= expires
+          isValid: new Date() <= expires,
+          hasQueuedLicense: details.hasQueuedLicense || false,
+          queuedType: details.queuedType || null
         });
       }
     } catch (e) {
@@ -264,7 +315,9 @@ router.get('/subscription-status', auth, async (req, res) => {
     activatedAt: details.activatedAt,
     expiresAt: details.expiresAt,
     daysRemaining: details.daysRemaining,
-    isValid: details.isValid
+    isValid: details.isValid,
+    hasQueuedLicense: details.hasQueuedLicense || false,
+    queuedType: details.queuedType || null
   });
 });
 

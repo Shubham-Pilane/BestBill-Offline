@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode } from 'lucide-react';
+import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 const Profile = () => {
     const { user, updateUser } = useAuth();
@@ -103,10 +103,76 @@ const Profile = () => {
     const [testingEmailReport, setTestingEmailReport] = useState(false);
     const [showEmailReportSection, setShowEmailReportSection] = useState(false);
 
+    // Update License Key State
+    const [showUpdateLicensePasscodeModal, setShowUpdateLicensePasscodeModal] = useState(false);
+    const [licensePasscode, setLicensePasscode] = useState('');
+    const [showUpdateLicenseModal, setShowUpdateLicenseModal] = useState(false);
+    const [updateLicenseInputKey, setUpdateLicenseInputKey] = useState('');
+    const [licenseSubmitLoading, setLicenseSubmitLoading] = useState(false);
+    const [subscriptionInfo, setSubscriptionInfo] = useState(null);
+
+    const fetchSubscriptionInfo = async () => {
+        try {
+            const res = await api.get('/auth/subscription-status');
+            setSubscriptionInfo(res.data);
+        } catch (e) {
+            console.error('Failed to fetch subscription status:', e);
+        }
+    };
+
+    useEffect(() => {
+        if (isOwner || isAdmin) {
+            fetchSubscriptionInfo();
+        }
+    }, [isOwner, isAdmin]);
+
+    const handleUpdateLicenseSubmit = async (e) => {
+        e.preventDefault();
+        if (!updateLicenseInputKey.trim()) return toast.error('Please enter a license key');
+
+        setLicenseSubmitLoading(true);
+        try {
+            const res = await api.post('/auth/update-license-key', {
+                passcode: '592244',
+                licenseKey: updateLicenseInputKey.trim()
+            });
+
+            if (res.data.isQueued) {
+                toast.success(res.data.message || 'License key queued successfully! It will activate automatically when your current plan ends.', { duration: 6000 });
+            } else {
+                toast.success(res.data.message || 'License key activated successfully!', { duration: 5000 });
+            }
+
+            setUpdateLicenseInputKey('');
+            setShowUpdateLicenseModal(false);
+            fetchSubscriptionInfo();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to update license key. Please check key format.');
+        } finally {
+            setLicenseSubmitLoading(false);
+        }
+    };
+
     const [showStaffSection, setShowStaffSection] = useState(false);
     const [showNetworkConfig, setShowNetworkConfig] = useState(false);
     const [showSecurityCore, setShowSecurityCore] = useState(false);
     const [showHotelProfile, setShowHotelProfile] = useState(false);
+
+    // Cloud Analytics Sync State
+    const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+    const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
+    const [cloudSyncModalStep, setCloudSyncModalStep] = useState(1);
+    const [cloudSyncModalMode, setCloudSyncModalMode] = useState('enable');
+    const [cloudSyncPassword, setCloudSyncPassword] = useState('');
+    const [cloudSyncConfig, setCloudSyncConfig] = useState({
+        cloudSyncUrl: '',
+        cloudSyncAnonKey: '',
+        cloudSyncHotelCode: 'HOTEL_001',
+        cloudSyncOwnerEmail: '',
+        cloudSyncOwnerPassword: '',
+        cloudSyncIntervalMinutes: 15,
+        lastCloudSyncTime: ''
+    });
 
     useEffect(() => {
         if (isOwner) {
@@ -123,6 +189,7 @@ const Profile = () => {
             fetchSimpleKotStatus();
             fetchEmailReportStatus();
             fetchEmailReportConfig();
+            fetchCloudSyncConfig();
         }
     }, [isOwner]);
 
@@ -527,22 +594,102 @@ const Profile = () => {
         }
     };
 
-    const handleTestEmailConnection = async () => {
-        if (!emailReportConfig.emailReportSender || !emailReportConfig.emailReportPassword || !emailReportConfig.emailReportRecipient) {
-            toast.error('Please configure Sender, Password, and Recipient before testing.');
+    // Cloud Analytics Sync Handlers
+    const fetchCloudSyncConfig = async () => {
+        try {
+            const res = await api.get('/cloud-sync/config');
+            setCloudSyncEnabled(res.data.cloudSyncEnabled);
+            setCloudSyncConfig({
+                cloudSyncUrl: res.data.cloudSyncUrl || '',
+                cloudSyncAnonKey: res.data.cloudSyncAnonKey || '',
+                cloudSyncHotelCode: res.data.cloudSyncHotelCode || 'HOTEL_001',
+                cloudSyncOwnerEmail: res.data.cloudSyncOwnerEmail || '',
+                cloudSyncOwnerPassword: '',
+                cloudSyncOwnerPasswordConfigured: res.data.cloudSyncOwnerPasswordConfigured,
+                cloudSyncIntervalMinutes: res.data.cloudSyncIntervalMinutes || 15,
+                lastCloudSyncTime: res.data.lastCloudSyncTime || ''
+            });
+        } catch (err) {
+            console.error('Failed to fetch cloud sync config', err);
+        }
+    };
+
+    const handleToggleCloudSync = (shouldEnable) => {
+        setCloudSyncModalMode(shouldEnable ? 'enable' : 'disable');
+        setCloudSyncModalStep(1);
+        setCloudSyncPassword('');
+        setShowCloudSyncModal(true);
+    };
+
+    // Step 1: Verify Passcode
+    const handleVerifyPasscodeStep = async (e) => {
+        if (e) e.preventDefault();
+        if (!cloudSyncPassword) {
+            toast.error("Passcode cannot be blank");
             return;
         }
-        setTestingEmailReport(true);
-        const t = toast.loading('Establishing SMTP connection & sending verification mail...');
-        try {
-            const res = await api.post('/hotel/email-report/test', emailReportConfig);
-            if (res.data.success) {
-                toast.success(res.data.message || 'Test email dispatched!', { id: t });
+
+        if (cloudSyncModalMode === 'disable') {
+            const t = toast.loading('Deactivating Online Sync...');
+            try {
+                const res = await api.post('/cloud-sync/config', {
+                    passcode: cloudSyncPassword,
+                    cloudSyncEnabled: false
+                });
+                setCloudSyncEnabled(false);
+                setShowCloudSyncModal(false);
+                toast.success('Online Sync Deactivated Successfully!', { id: t });
+                fetchCloudSyncConfig();
+            } catch (err) {
+                toast.error(err.response?.data?.message || 'Invalid Passcode', { id: t });
             }
+            return;
+        }
+
+        // Mode is 'enable': verify passcode first before showing credentials step
+        const t = toast.loading('Verifying passcode...');
+        try {
+            await api.post('/cloud-sync/verify-passcode', { passcode: cloudSyncPassword });
+            toast.dismiss(t);
+            setCloudSyncModalStep(2);
         } catch (err) {
-            toast.error(err.response?.data?.error || err.response?.data?.message || 'SMTP Connection failed. Verify credentials.', { id: t });
-        } finally {
-            setTestingEmailReport(false);
+            toast.error(err.response?.data?.message || 'Invalid Passcode', { id: t });
+        }
+    };
+
+    // Step 2: Save Credentials & Activate Sync
+    const handleSaveCloudCredentialsStep = async (e) => {
+        if (e) e.preventDefault();
+        if (!cloudSyncConfig.cloudSyncOwnerEmail || !cloudSyncConfig.cloudSyncOwnerEmail.includes('@')) {
+            toast.error("Please enter a valid owner email address");
+            return;
+        }
+        if (!cloudSyncConfig.cloudSyncOwnerPassword && !cloudSyncConfig.cloudSyncOwnerPasswordConfigured) {
+            toast.error("Please enter an owner password for mobile admin access");
+            return;
+        }
+        if (cloudSyncConfig.cloudSyncOwnerPassword && cloudSyncConfig.cloudSyncOwnerPassword.length < 6) {
+            toast.error("Password must be at least 6 characters long");
+            return;
+        }
+
+        const t = toast.loading('Activating Cloud Sync...');
+        try {
+            const res = await api.post('/cloud-sync/config', {
+                passcode: cloudSyncPassword,
+                cloudSyncEnabled: true,
+                ...cloudSyncConfig
+            });
+            setCloudSyncEnabled(true);
+            setShowCloudSyncModal(false);
+            if (res.data.warning) {
+                toast.success(res.data.warning, { id: t, duration: 5000 });
+            } else {
+                toast.success(res.data.message || 'Online Sync Activated & Synced Successfully!', { id: t });
+            }
+            fetchCloudSyncConfig();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to activate cloud sync', { id: t });
         }
     };
 
@@ -1549,6 +1696,43 @@ const Profile = () => {
                     </div>
                     {showModules && (
                         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            {/* Online Sync Module */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                    <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Online Analytics Sync (Cloud Reporting)</h3>
+                                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                        Enable cloud syncing to view your real-time analytics on the BestBill Admin mobile application.
+                                        Requires an owner passcode to configure.
+                                    </p>
+                                </div>
+                                
+                                {/* Toggle / Radio Control */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                    <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                        <input 
+                                            type="radio" 
+                                            name="cloudSyncModule"
+                                            checked={!cloudSyncEnabled} 
+                                            onChange={() => {
+                                                if (cloudSyncEnabled) handleToggleCloudSync(false);
+                                            }}
+                                            style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                        />
+                                        Disabled
+                                    </label>
+                                    <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                        <input 
+                                            type="radio" 
+                                            name="cloudSyncModule"
+                                            checked={cloudSyncEnabled} 
+                                            onChange={() => handleToggleCloudSync(true)}
+                                            style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                        />
+                                        Enabled
+                                    </label>
+                                </div>
+                            </div>
+                            <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
                             {/* Lodging Module */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
@@ -1798,6 +1982,52 @@ const Profile = () => {
                                     Enabled
                                 </label>
                             </div>
+                        </div>
+
+                        {/* Update License Key Feature */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <KeyRound size={18} style={{ color: '#0ea5e9' }} />
+                                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Update License Key</h3>
+                                    {subscriptionInfo?.hasQueuedLicense && (
+                                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                            Next Plan Queued ({subscriptionInfo.queuedType?.toUpperCase()})
+                                        </span>
+                                    )}
+                                </div>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Pre-schedule or upgrade your subscription before your current plan expires. 
+                                    New plans are safely queued and will automatically activate when your existing plan ends. Requires vendor security passcode to access.
+                                </p>
+                            </div>
+                            
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setLicensePasscode('');
+                                    setShowUpdateLicensePasscodeModal(true);
+                                }}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    backgroundColor: '#0ea5e9',
+                                    color: '#ffffff',
+                                    padding: '10px 20px',
+                                    borderRadius: '10px',
+                                    fontWeight: 600,
+                                    fontSize: '14px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 14px rgba(14, 165, 233, 0.3)',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <KeyRound size={16} />
+                                Update License Key
+                            </button>
                         </div>
 
                     </div>
@@ -2113,6 +2343,260 @@ const Profile = () => {
                                 style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: emailReportModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: emailReportModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
                             >{emailReportModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Cloud Sync 2-Step Passcode & Credentials Modal */}
+            {showCloudSyncModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowCloudSyncModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <ShieldCheck size={28} style={{ color: cloudSyncModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
+                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                                {cloudSyncModalMode === 'disable' ? 'Disable Online Sync' : (cloudSyncModalStep === 1 ? 'Online Sync Passcode' : 'Mobile Admin Credentials')}
+                            </h3>
+                        </div>
+
+                        {/* STEP 1: Passcode Verification */}
+                        {cloudSyncModalStep === 1 && (
+                            <form onSubmit={handleVerifyPasscodeStep} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                                    {cloudSyncModalMode === 'enable'
+                                        ? 'Enter the owner security passcode to enable and configure Online Analytics Sync.'
+                                        : 'Enter the owner security passcode to disable Online Analytics Sync.'
+                                    }
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
+                                        SECURITY PASSCODE
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={cloudSyncPassword}
+                                        onChange={e => setCloudSyncPassword(e.target.value)}
+                                        placeholder="Enter owner passcode"
+                                        autoFocus
+                                        style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowCloudSyncModal(false)}
+                                        style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                                    >Cancel</button>
+                                    <button
+                                        type="submit"
+                                        style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: cloudSyncModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'white', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: cloudSyncModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
+                                    >
+                                        {cloudSyncModalMode === 'enable' ? 'Verify & Continue' : 'Confirm Disable'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* STEP 2: Configure Credentials (Only when enabling) */}
+                        {cloudSyncModalStep === 2 && cloudSyncModalMode === 'enable' && (
+                            <form onSubmit={handleSaveCloudCredentialsStep} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                                    Enter the owner account email and password you will use to log into the BestBill Admin mobile application.
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>OWNER EMAIL</label>
+                                    <input
+                                        type="email"
+                                        value={cloudSyncConfig.cloudSyncOwnerEmail}
+                                        onChange={e => setCloudSyncConfig({ ...cloudSyncConfig, cloudSyncOwnerEmail: e.target.value })}
+                                        placeholder="owner@bestbill.com"
+                                        autoFocus
+                                        style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '14px' }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>OWNER PASSWORD</label>
+                                    <input
+                                        type="password"
+                                        value={cloudSyncConfig.cloudSyncOwnerPassword}
+                                        onChange={e => setCloudSyncConfig({ ...cloudSyncConfig, cloudSyncOwnerPassword: e.target.value })}
+                                        placeholder={cloudSyncConfig.cloudSyncOwnerPasswordConfigured ? "Set new password or leave blank to keep existing" : "Password for mobile admin login"}
+                                        style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, fontSize: '14px' }}
+                                    />
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCloudSyncModalStep(1)}
+                                        style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                                    >Back</button>
+                                    <button
+                                        type="submit"
+                                        style={{ flex: 1.5, padding: '14px', borderRadius: '14px', backgroundColor: '#10b981', color: 'white', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: '0 8px 20px rgba(16,185,129,0.3)' }}
+                                    >
+                                        Activate & Sync
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* License Update Passcode Verification Modal (592244) */}
+            {showUpdateLicensePasscodeModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowUpdateLicensePasscodeModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(14, 165, 233, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9' }}>
+                                <Lock size={24} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>Passcode Required</h3>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>Enter security passcode to update license key</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            if (licensePasscode !== '592244') {
+                                toast.error('Incorrect security passcode. Access denied.');
+                                return;
+                            }
+                            setShowUpdateLicensePasscodeModal(false);
+                            setLicensePasscode('');
+                            setShowUpdateLicenseModal(true);
+                            fetchSubscriptionInfo();
+                        }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <input
+                                type="password"
+                                placeholder="Enter Security Passcode"
+                                value={licensePasscode}
+                                onChange={(e) => setLicensePasscode(e.target.value)}
+                                autoFocus
+                                style={{
+                                    width: '100%',
+                                    padding: '14px 16px',
+                                    borderRadius: '12px',
+                                    border: '1px solid var(--bg-border)',
+                                    backgroundColor: 'var(--bg-base)',
+                                    color: 'var(--text-primary)',
+                                    fontSize: '16px',
+                                    letterSpacing: '2px',
+                                    outline: 'none'
+                                }}
+                            />
+
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUpdateLicensePasscodeModal(false)}
+                                    style={{ padding: '12px 20px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#0ea5e9', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                                >
+                                    Verify & Access
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Update License Key Dialog */}
+            {showUpdateLicenseModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowUpdateLicenseModal(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '520px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: 'rgba(14, 165, 233, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9' }}>
+                                    <KeyRound size={24} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>Update License Key</h3>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>Pre-schedule or renew your hotel license</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Current Active License Info Card */}
+                        <div style={{ backgroundColor: 'var(--bg-base)', borderRadius: '16px', padding: '16px', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Current Plan Status</span>
+                                <span style={{ fontSize: '12px', fontWeight: 700, padding: '2px 10px', borderRadius: '12px', backgroundColor: subscriptionInfo?.isValid ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', color: subscriptionInfo?.isValid ? '#10b981' : '#ef4444' }}>
+                                    {subscriptionInfo?.isValid ? 'ACTIVE' : 'EXPIRED / TRIAL'}
+                                </span>
+                            </div>
+                            <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {subscriptionInfo?.type ? `${subscriptionInfo.type.toUpperCase()} PLAN` : 'Trial Mode'}
+                            </div>
+                            {subscriptionInfo?.expiresAt && (
+                                <div style={{ fontSize: '13px', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                                    <span>Expires: {new Date(subscriptionInfo.expiresAt).toLocaleDateString()}</span>
+                                    <span>{subscriptionInfo.daysRemaining} days remaining</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Queued Plan Banner if already queued */}
+                        {subscriptionInfo?.hasQueuedLicense && (
+                            <div style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '16px', padding: '16px', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                                <CheckCircle2 size={20} style={{ color: '#10b981', marginTop: '2px', flexShrink: 0 }} />
+                                <div>
+                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#10b981' }}>
+                                        Next Plan Queued: {subscriptionInfo.queuedType?.toUpperCase()} PLAN
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', lineHeight: '1.4' }}>
+                                        This new plan is stored safely in background and will automatically activate as soon as your current plan ends. Entering a new key below will update this queued plan.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleUpdateLicenseSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <label style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>New License Key</label>
+                                <input
+                                    type="text"
+                                    placeholder="Enter Monthly, Yearly, or Lifetime key"
+                                    value={updateLicenseInputKey}
+                                    onChange={(e) => setUpdateLicenseInputKey(e.target.value)}
+                                    required
+                                    style={{
+                                        width: '100%',
+                                        padding: '14px 16px',
+                                        borderRadius: '12px',
+                                        border: '1px solid var(--bg-border)',
+                                        backgroundColor: 'var(--bg-base)',
+                                        color: 'var(--text-primary)',
+                                        fontSize: '15px',
+                                        outline: 'none'
+                                    }}
+                                />
+                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                                    💡 <strong>Plan Queuing:</strong> If your current plan is still active, the new key will be queued and will automatically activate seamlessly after your current plan expires.
+                                </p>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUpdateLicenseModal(false)}
+                                    style={{ padding: '12px 20px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'transparent', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={licenseSubmitLoading || !updateLicenseInputKey.trim()}
+                                    style={{ padding: '12px 24px', borderRadius: '12px', border: 'none', backgroundColor: '#0ea5e9', color: '#fff', fontWeight: 700, cursor: 'pointer', opacity: licenseSubmitLoading ? 0.7 : 1 }}
+                                >
+                                    {licenseSubmitLoading ? 'Saving Key...' : 'Save & Queue License'}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
