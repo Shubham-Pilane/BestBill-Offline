@@ -594,6 +594,19 @@ const Profile = () => {
         }
     };
 
+    const handleTestEmailConnection = async () => {
+        setTestingEmailReport(true);
+        const t = toast.loading('Testing email connection...');
+        try {
+            await api.post('/hotel/email-report/test', emailReportConfig);
+            toast.success('Test email sent successfully! Please check your inbox.', { id: t });
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to send test email. Check your settings.', { id: t });
+        } finally {
+            setTestingEmailReport(false);
+        }
+    };
+
     // Cloud Analytics Sync Handlers
     const fetchCloudSyncConfig = async () => {
         try {
