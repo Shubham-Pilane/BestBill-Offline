@@ -34,8 +34,8 @@ async function getDailyAnalyticsData(targetDateStr) {
     // 3. Dine-in vs Parcel breakdown
     const salesTypeRes = await db.query(
       `SELECT 
-         COALESCE(SUM(CASE WHEN (o.table_id IS NOT NULL AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%parcel%') THEN b.final_amount ELSE 0 END), 0) as dine_in_sales,
-         COALESCE(SUM(CASE WHEN (o.table_id IS NULL AND o.room_id IS NULL) OR LOWER(COALESCE(t.table_number, '')) LIKE '%parcel%' THEN b.final_amount ELSE 0 END), 0) as parcel_sales
+         COALESCE(SUM(CASE WHEN (o.table_id IS NOT NULL AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%parcel%' AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%token%' AND LOWER(COALESCE(t.floor, '')) NOT LIKE '%counter%') THEN b.final_amount ELSE 0 END), 0) as dine_in_sales,
+         COALESCE(SUM(CASE WHEN (o.table_id IS NULL AND o.room_id IS NULL) OR LOWER(COALESCE(t.table_number, '')) LIKE '%parcel%' OR LOWER(COALESCE(t.table_number, '')) LIKE '%token%' OR LOWER(COALESCE(t.floor, '')) LIKE '%counter%' THEN b.final_amount ELSE 0 END), 0) as parcel_sales
        FROM bills b
        JOIN orders o ON b.order_id = o.id
        LEFT JOIN tables t ON o.table_id = t.id
@@ -263,60 +263,66 @@ async function performCloudSync() {
       }).catch(err => console.log('[CLOUD SYNC] Hotel table notice:', err.message));
     }
 
-    // 3. Upsert Analytics Snapshot in `analytics_snapshots` table
-    const snapshotPayload = {
-      hotel_code: effectiveHotelCode,
-      owner_id: ownerId,
-      snapshot_date: todayStr,
-      total_revenue: analytics.total_revenue,
-      total_orders: analytics.total_orders,
-      cash_collection: analytics.cash_collection,
-      online_collection: analytics.online_collection,
-      dine_in_sales: analytics.dine_in_sales,
-      parcel_sales: analytics.parcel_sales,
-      payment_summary: analytics.paymentSummary,
-      top_items: analytics.topItems,
-      synced_at: new Date().toISOString()
-    };
+    // 3. Upsert Analytics Snapshots in `analytics_snapshots` table for past 30 days
+    const datesRes = await db.query(
+      `SELECT DISTINCT date(created_at) as snapshot_date 
+       FROM bills 
+       WHERE date(created_at) >= date('now', '-30 days')
+       ORDER BY snapshot_date DESC`
+    ).catch(() => ({ rows: [] }));
 
-    // Check if snapshot already exists for today to update existing row rather than duplicating
-    const checkSnapRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?hotel_code=eq.${effectiveHotelCode}&snapshot_date=eq.${todayStr}&select=id`, {
-      headers: {
-        'apikey': supabaseKey,
-        'Authorization': `Bearer ${accessToken}`
-      }
-    });
-    const existingSnaps = await checkSnapRes.json().catch(() => []);
-
-    let snapshotRes;
-    if (Array.isArray(existingSnaps) && existingSnaps.length > 0) {
-      // Update existing snapshot for today
-      const existingId = existingSnaps[0].id;
-      snapshotRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${existingId}`, {
-        method: 'PATCH',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(snapshotPayload)
-      });
-    } else {
-      // Insert new snapshot for today
-      snapshotRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(snapshotPayload)
-      });
+    let datesToSync = (datesRes.rows || []).map(r => r.snapshot_date);
+    if (!datesToSync.includes(todayStr)) {
+      datesToSync.push(todayStr);
     }
 
-    if (!snapshotRes.ok) {
-      const errBody = await snapshotRes.json().catch(() => ({}));
-      throw new Error(errBody.message || `Snapshot HTTP ${snapshotRes.status}`);
+    for (const dateStr of datesToSync) {
+      const analytics = await getDailyAnalyticsData(dateStr);
+      const snapshotPayload = {
+        hotel_code: effectiveHotelCode,
+        owner_id: ownerId,
+        snapshot_date: dateStr,
+        total_revenue: analytics.total_revenue,
+        total_orders: analytics.total_orders,
+        cash_collection: analytics.cash_collection,
+        online_collection: analytics.online_collection,
+        dine_in_sales: analytics.dine_in_sales,
+        parcel_sales: analytics.parcel_sales,
+        payment_summary: analytics.paymentSummary,
+        top_items: analytics.topItems,
+        synced_at: new Date().toISOString()
+      };
+
+      const checkSnapRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?hotel_code=eq.${effectiveHotelCode}&snapshot_date=eq.${dateStr}&select=id`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      const existingSnaps = await checkSnapRes.json().catch(() => []);
+
+      if (Array.isArray(existingSnaps) && existingSnaps.length > 0) {
+        const existingId = existingSnaps[0].id;
+        await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${existingId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(snapshotPayload)
+        });
+      } else {
+        await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(snapshotPayload)
+        });
+      }
     }
 
     const syncTime = new Date().toISOString();

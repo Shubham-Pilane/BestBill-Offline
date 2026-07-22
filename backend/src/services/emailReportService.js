@@ -61,8 +61,8 @@ async function getReportData(startDate, endDate) {
   // 3. Dine-In vs Parcel sales
   const salesTypeRes = await db.query(
     `SELECT 
-       COALESCE(SUM(CASE WHEN (o.table_id IS NOT NULL AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%parcel%') THEN b.final_amount ELSE 0 END), 0) as dine_in_sales,
-       COALESCE(SUM(CASE WHEN (o.table_id IS NULL AND o.room_id IS NULL) OR LOWER(COALESCE(t.table_number, '')) LIKE '%parcel%' THEN b.final_amount ELSE 0 END), 0) as parcel_sales
+       COALESCE(SUM(CASE WHEN (o.table_id IS NOT NULL AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%parcel%' AND LOWER(COALESCE(t.table_number, '')) NOT LIKE '%token%' AND LOWER(COALESCE(t.floor, '')) NOT LIKE '%counter%') THEN b.final_amount ELSE 0 END), 0) as dine_in_sales,
+       COALESCE(SUM(CASE WHEN (o.table_id IS NULL AND o.room_id IS NULL) OR LOWER(COALESCE(t.table_number, '')) LIKE '%parcel%' OR LOWER(COALESCE(t.table_number, '')) LIKE '%token%' OR LOWER(COALESCE(t.floor, '')) LIKE '%counter%' THEN b.final_amount ELSE 0 END), 0) as parcel_sales
      FROM bills b
      JOIN orders o ON b.order_id = o.id
      LEFT JOIN tables t ON o.table_id = t.id
