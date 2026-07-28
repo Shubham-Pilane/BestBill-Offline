@@ -20,11 +20,27 @@ router.put('/', auth, async (req, res) => {
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Only owners can modify hotel settings' });
   try {
     const allowNeg = allow_negative_stock === true || allow_negative_stock === 'true' || allow_negative_stock === 1 || allow_negative_stock === '1';
-    const updated = await db.query(
-      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9, allow_negative_stock = $10 WHERE id = $11 RETURNING *',
-      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, allowNeg, req.user.hotel_id]
+    await db.query(
+      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9, allow_negative_stock = $10 WHERE id = $11 OR owner_id = $12',
+      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, allowNeg, req.user.hotel_id || 1, req.user.id]
     );
-    res.json(updated.rows[0]);
+
+    const updated = await db.query('SELECT * FROM hotels LIMIT 1');
+
+    // Sync updated owner/hotel profile details directly to Supabase desktop_licenses
+    try {
+      const { syncDesktopUserToSupabase } = require('../services/licenseService');
+      await syncDesktopUserToSupabase({
+        hotel_name: name,
+        address: address,
+        mobile_number: phone,
+        email: email
+      });
+    } catch (syncErr) {
+      console.warn('[HOTEL UPDATE SYNC WARNING]:', syncErr.message);
+    }
+
+    res.json(updated.rows[0] || {});
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error updating hotel' });

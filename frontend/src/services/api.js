@@ -22,13 +22,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle 401 Unauthorized errors
+// Handle 401 Unauthorized and 403 Forbidden/Revoked errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      const data = error.response?.data;
+      const type = data?.message || 'SERVICE_BLOCKED';
+      const reason = data?.reason || 'Hardware Access Revoked by Super Admin. Contact Support: 9822401802';
+      localStorage.setItem('revoked_type', type);
+      localStorage.setItem('revoked_reason', reason);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      
       if (window.location.protocol === 'file:' || window.location.href.includes('#')) {
         window.location.hash = '#/login';
       } else {

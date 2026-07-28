@@ -131,6 +131,39 @@ syncSchema().then(() => {
         // Start cloud sync background scheduler (15-min interval)
         const cloudSyncService = require('./services/cloudSyncService');
         cloudSyncService.startCloudSyncScheduler();
+
+        // Start automatic Supabase license & hardware sync (on start + daily at 11:00 PM + immediate reconnection recovery)
+        const { syncDesktopUserToSupabase, checkSupabaseDesktopLicenseStatus } = require('./services/licenseService');
+        
+        let lastSuccessfulPingMs = 0;
+        let isPendingNetworkRetry = false;
+
+        const performLicenseSyncAndCheck = async () => {
+          try {
+            const statusRes = await checkSupabaseDesktopLicenseStatus();
+            await syncDesktopUserToSupabase();
+            if (statusRes) {
+              lastSuccessfulPingMs = Date.now();
+              isPendingNetworkRetry = false;
+            }
+          } catch (e) {
+            isPendingNetworkRetry = true;
+          }
+        };
+
+        // 1. Initial startup ping
+        performLicenseSyncAndCheck();
+
+        // 2. Normal schedule: 11:00 PM ping + immediate retry if offline previously
+        setInterval(() => {
+          const now = new Date();
+          // Check if it's 11 PM (hour 23, minute 0)
+          const is11PM = now.getHours() === 23 && now.getMinutes() === 0;
+          
+          if (is11PM || isPendingNetworkRetry) {
+            performLicenseSyncAndCheck();
+          }
+        }, 1000 * 60 * 1); // Check every minute, but only execute if 11 PM or pending retry
     }).on('error', (err) => {
         console.error('Server Listen Error:', err.message);
     });

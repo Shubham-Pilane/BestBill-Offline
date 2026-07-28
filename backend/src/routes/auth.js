@@ -78,8 +78,18 @@ router.post('/register', upload.none(), async (req, res) => {
       currentConfig.cloudSyncOwnerPassword = password.trim();
       currentConfig.cloudSyncEnabled = false; // Strictly OFF by default until user enables it in Profile
       configManager.saveConfig(currentConfig);
+
+      // Sync desktop user onboarding details to Supabase desktop_licenses
+      const { syncDesktopUserToSupabase } = require('../services/licenseService');
+      syncDesktopUserToSupabase({
+        owner_name: name,
+        mobile_number: phone,
+        hotel_name: hotelName || `${name}'s Hotel`,
+        address: address,
+        email: email
+      }).catch(() => {});
     } catch (cfgErr) {
-      console.warn('[CLOUD SYNC CONFIG NOTICE]', cfgErr.message);
+      console.warn('[CONFIG ERROR] Failed to save initial cloud sync config:', cfgErr.message);
     }
 
     res.status(201).json({ message: 'User registered successfully' });
@@ -124,8 +134,27 @@ router.post('/login', async (req, res) => {
     }
 
     // --- Plan & Service Validation (skip for admin) ---
-    if (user.role !== 'admin') {
-      // Check if service is stopped by super admin
+    // --- Plan & Service Validation (skip for admin) ---
+    let details = null;
+    
+    // Removed admin bypass
+      // Check Supabase remote desktop hardware license revocation status
+      try {
+        const { checkSupabaseDesktopLicenseStatus } = require('../services/licenseService');
+        const remoteStatus = await checkSupabaseDesktopLicenseStatus();
+        if (remoteStatus && remoteStatus.is_active === false) {
+          return res.status(403).json({
+            message: 'SERVICE_BLOCKED',
+            reason: remoteStatus.reason || 'Your desktop hardware access has been deactivated by Super Admin. Contact Support: 9822401802.',
+            contact_phone: '9822401802',
+            contact_email: 'bestbillsolutions@gmail.com'
+          });
+        }
+      } catch (e) {
+        console.warn('[AUTH] Remote license check error:', e.message);
+      }
+
+      // Check if service is stopped by local super admin flag
       if (user.is_service_stopped) {
         return res.status(403).json({ 
           message: 'SERVICE_BLOCKED',
@@ -137,9 +166,18 @@ router.post('/login', async (req, res) => {
 
       // Check Trial Period or Subscription Validity
       const { getLicenseDetails } = require('../services/licenseService');
-      const details = getLicenseDetails();
+      details = getLicenseDetails();
 
       if (!details.isValid) {
+        if (details.type === 'suspended') {
+          return res.status(403).json({
+            message: 'OFFLINE_SUSPENDED',
+            reason: details.reason || 'Your application has not been connected to the internet for 30 days. Please connect to the internet to verify your license before continuing.',
+            contact_phone: '9822401802',
+            contact_email: 'bestbillsolutions@gmail.com',
+            offlineDays: details.offlineDays
+          });
+        }
         if (details.type === 'trial') {
           const hotelCreated = user.hotel_created_at ? new Date(user.hotel_created_at) : new Date(user.created_at);
           const trialDurationMs = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -165,7 +203,7 @@ router.post('/login', async (req, res) => {
           });
         }
       }
-    }
+    // End validation block
 
     const finalHotelId = user.resolved_hotel_id;
 
@@ -197,12 +235,14 @@ router.post('/login', async (req, res) => {
         inventoryEnabled: !!config.inventoryEnabled,
         tokenCounterEnabled: !!config.tokenCounterEnabled,
         simpleKotEnabled: !!config.simpleKotEnabled,
-        emailReportModuleEnabled: !!config.emailReportModuleEnabled
+        emailReportModuleEnabled: !!config.emailReportModuleEnabled,
+        licenseWarning: details ? details.warning : false,
+        offlineDays: details ? details.offlineDays : 0
       }
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: 'Server error during login' });
+    res.status(500).json({ message: 'Server error during login', error: err.message, stack: err.stack });
   }
 });
 
@@ -317,7 +357,9 @@ router.get('/subscription-status', auth, async (req, res) => {
     daysRemaining: details.daysRemaining,
     isValid: details.isValid,
     hasQueuedLicense: details.hasQueuedLicense || false,
-    queuedType: details.queuedType || null
+    queuedType: details.queuedType || null,
+    warning: details.warning,
+    offlineDays: details.offlineDays
   });
 });
 

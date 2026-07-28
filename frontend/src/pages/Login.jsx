@@ -27,6 +27,19 @@ const Login = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const storedReason = localStorage.getItem('revoked_reason');
+    const storedType = localStorage.getItem('revoked_type') || 'SERVICE_BLOCKED';
+    if (storedReason) {
+      setBlockedInfo({
+        type: storedType,
+        reason: storedReason,
+        phone: '9822401802',
+        email: 'bestbillsolutions@gmail.com'
+      });
+      localStorage.removeItem('revoked_reason');
+      localStorage.removeItem('revoked_type');
+    }
+
     const checkRegisterStatus = async () => {
       try {
         const res = await api.get('/auth/register-status');
@@ -73,7 +86,7 @@ const Login = () => {
       }
     } catch (err) {
       const data = err.response?.data;
-      if (err.response?.status === 403 && (data?.message === 'PLAN_EXPIRED' || data?.message === 'SERVICE_BLOCKED')) {
+      if (err.response?.status === 403 && (data?.message === 'PLAN_EXPIRED' || data?.message === 'SERVICE_BLOCKED' || data?.message === 'OFFLINE_SUSPENDED')) {
         toast.dismiss(loadingToast);
         setBlockedInfo({
           type: data.message,
@@ -197,7 +210,7 @@ const Login = () => {
             </p>
 
             <h1 style={{color: 'var(--text-primary)', fontSize: '26px', fontWeight: 900, margin: '0 0 8px 0' }}>
-              {blockedInfo.type === 'PLAN_EXPIRED' ? 'Plan Expired' : 'Service Suspended'}
+              {blockedInfo.type === 'PLAN_EXPIRED' ? 'Plan Expired' : blockedInfo.type === 'OFFLINE_SUSPENDED' ? 'Verification Required' : 'Service Suspended'}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px', fontWeight: 600, lineHeight: '1.6', margin: '0 0 32px 0' }}>
               {blockedInfo.reason}

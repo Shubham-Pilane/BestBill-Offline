@@ -1,7 +1,144 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execSync } = require('child_process');
 const db = require('../db/db');
+
+const SUPABASE_URL = 'https://vejvxpjswlmcsbfiqywp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlanZ4cGpzd2xtY3NiZmlxeXdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MzI3NTMsImV4cCI6MjEwMDEwODc1M30.oliBQIW9k8TL_d5q73bza7tt-CSK34yY-prJrYTfcBI';
+
+let supabase = null;
+try {
+  const { createClient } = require('@supabase/supabase-js');
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+  console.warn('[SUPABASE NOTICE] @supabase/supabase-js package not bundled, utilizing native REST API fallback.');
+}
+
+async function supabaseRestCall(endpoint, method = 'GET', body = null, extraHeaders = {}) {
+  try {
+    const headers = {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      ...extraHeaders
+    };
+    const options = { method, headers };
+    if (body) options.body = JSON.stringify(body);
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${endpoint}`, options);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errText}`);
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  } catch (err) {
+    console.warn(`[SUPABASE REST ERROR] ${method} ${endpoint}:`, err.message);
+    throw err;
+  }
+}
+
+let cachedHwId = null;
+
+function getDesktopMachineId() {
+  if (cachedHwId) return cachedHwId;
+
+  try {
+    ensureLicenseFileExists();
+    if (fs.existsSync(licenseFilePath)) {
+      const content = fs.readFileSync(licenseFilePath, 'utf8');
+      const match = content.match(/^HARDWARE_MACHINE_ID=(.+)$/m);
+      if (match && match[1] && match[1].trim()) {
+        cachedHwId = match[1].trim();
+        return cachedHwId;
+      }
+    }
+  } catch (e) {}
+
+  let generatedId = null;
+
+  try {
+    // Layer 1: Processor ID
+    const rawCpu = execSync('wmic cpu get processorid', { encoding: 'utf8', timeout: 5000 });
+    const lines = rawCpu.split('\n').map(s => s.trim()).filter(Boolean);
+    if (lines.length > 1 && lines[1]) {
+      generatedId = `CPU-${lines[1]}`;
+    }
+  } catch (e) {}
+
+  if (!generatedId) {
+    try {
+      // Layer 2: Native Windows WMI / CIM ComputerSystemProduct UUID
+      const rawUuid = execSync('powershell -ExecutionPolicy Bypass -Command "(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID"', { encoding: 'utf8', timeout: 5000 });
+      const cleaned = (rawUuid || '').trim();
+      if (cleaned && cleaned.length > 8 && cleaned !== '00000000-0000-0000-0000-000000000000') {
+        generatedId = cleaned;
+      }
+    } catch (e) {}
+  }
+
+  if (!generatedId) {
+    generatedId = 'DESKTOP_HW_DEFAULT';
+  }
+
+  cachedHwId = generatedId;
+
+  try {
+    if (fs.existsSync(licenseFilePath)) {
+      fs.appendFileSync(licenseFilePath, `\nHARDWARE_MACHINE_ID=${generatedId}\n`, 'utf8');
+    }
+  } catch (e) {}
+
+  return cachedHwId;
+}
+
+let isRevokedBySuperAdmin = false;
+
+async function checkSupabaseDesktopLicenseStatus() {
+  try {
+    const hwId = getDesktopMachineId();
+
+    // Trigger auto-sync to ensure hardware record is present in Supabase desktop_licenses
+    await syncDesktopUserToSupabase().catch(() => {});
+
+    let data = null;
+    if (supabase) {
+      const res = await supabase
+        .from('desktop_licenses')
+        .select('is_active, id')
+        .eq('device_uuid', hwId)
+        .maybeSingle();
+      data = res.data;
+    } else {
+      const list = await supabaseRestCall(`desktop_licenses?device_uuid=eq.${encodeURIComponent(hwId)}&select=is_active,id`);
+      data = (list && list.length > 0) ? list[0] : null;
+    }
+
+    if (data && data.is_active === false) {
+      isRevokedBySuperAdmin = true;
+      return { is_active: false, reason: 'ACCESS TERMINATED: Desktop hardware access revoked by Super Admin.' };
+    } else if (data && data.is_active === true) {
+      isRevokedBySuperAdmin = false;
+    }
+
+    try {
+      if (fs.existsSync(licenseFilePath)) {
+        let content = fs.readFileSync(licenseFilePath, 'utf8');
+        const nowIso = new Date().toISOString();
+        if (content.includes('LAST_INTERNET_VERIFICATION_DATE=')) {
+          content = content.replace(/LAST_INTERNET_VERIFICATION_DATE=.*(\r?\n|$)/, `LAST_INTERNET_VERIFICATION_DATE=${nowIso}\n`);
+        } else {
+          content += `LAST_INTERNET_VERIFICATION_DATE=${nowIso}\n`;
+        }
+        fs.writeFileSync(licenseFilePath, content, 'utf8');
+      }
+    } catch (err) {}
+
+    return { is_active: !isRevokedBySuperAdmin };
+  } catch (e) {
+    return { is_active: !isRevokedBySuperAdmin };
+  }
+}
 
 // Resolve license file next to database file (AppData/Roaming/BestBill/license.txt in production)
 const dbDir = path.dirname(db.dbPath);
@@ -133,6 +270,17 @@ function validateKeyFormat(key, now = new Date()) {
  */
 function getLicenseDetails() {
   try {
+    if (isRevokedBySuperAdmin) {
+      return {
+        type: 'revoked',
+        key: 'REVOKED',
+        activatedAt: '',
+        expiresAt: '',
+        daysRemaining: 0,
+        isValid: false,
+        reason: 'ACCESS TERMINATED: Desktop hardware access revoked by Super Admin.'
+      };
+    }
     ensureLicenseFileExists();
     if (!fs.existsSync(licenseFilePath)) {
       return { type: 'trial', isValid: false, daysRemaining: 0, hasQueuedLicense: false };
@@ -157,6 +305,7 @@ function getLicenseDetails() {
     let expiresAt = parsed.EXPIRY_DATE || '';
     let type = parsed.LICENSE_TYPE || 'trial';
     let signature = parsed.SIGNATURE || '';
+    let lastInternetDate = parsed.LAST_INTERNET_VERIFICATION_DATE || '';
 
     const queuedKey = parsed.QUEUED_KEY || '';
     const queuedType = parsed.QUEUED_TYPE || '';
@@ -223,6 +372,52 @@ QUEUED_SIGNATURE=
       };
     }
 
+    let warning = false;
+    let offlineDays = 0;
+
+    let verificationAnchorDate = lastInternetDate || activatedAt;
+    if (!verificationAnchorDate && isValid) {
+      verificationAnchorDate = now.toISOString();
+      try {
+        if (fs.existsSync(licenseFilePath)) {
+          let content = fs.readFileSync(licenseFilePath, 'utf8');
+          if (content.includes('LAST_INTERNET_VERIFICATION_DATE=')) {
+            content = content.replace(/LAST_INTERNET_VERIFICATION_DATE=.*(\r?\n|$)/, `LAST_INTERNET_VERIFICATION_DATE=${verificationAnchorDate}\n`);
+          } else {
+            content += `LAST_INTERNET_VERIFICATION_DATE=${verificationAnchorDate}\n`;
+          }
+          fs.writeFileSync(licenseFilePath, content, 'utf8');
+        }
+      } catch (e) {}
+    }
+
+    if (verificationAnchorDate) {
+      const lastPing = new Date(verificationAnchorDate);
+      if (!isNaN(lastPing.getTime())) {
+        const timeDiff = now.getTime() - lastPing.getTime();
+        
+        // Calculate normal offline days
+        const msPerDay = 1000 * 60 * 60 * 24;
+        offlineDays = Math.floor(timeDiff / msPerDay);
+        
+        if (offlineDays >= 30) {
+          return {
+            type: 'suspended',
+            key,
+            activatedAt,
+            expiresAt,
+            daysRemaining: 0,
+            isValid: false,
+            reason: 'OFFLINE_SUSPENDED: Your application has not been connected to the internet for the last 30 days. Please connect to the internet to verify your license.',
+            offlineDays,
+            hasQueuedLicense: false
+          };
+        } else if (offlineDays >= 25) {
+          warning = true;
+        }
+      }
+    }
+
     return {
       type,
       key,
@@ -231,7 +426,9 @@ QUEUED_SIGNATURE=
       daysRemaining,
       isValid,
       hasQueuedLicense: Boolean(queuedKey),
-      queuedType: queuedType || null
+      queuedType: queuedType || null,
+      warning,
+      offlineDays
     };
   } catch (err) {
     console.error(`[LICENSE ERROR] Failed to get license details:`, err.message);
@@ -307,6 +504,12 @@ QUEUED_SIGNATURE=
     
     fs.writeFileSync(licenseFilePath, newContent, 'utf8');
     console.log(`[LICENSE] Key successfully set and serialized. Type: ${type}, Expiry: ${expiry}`);
+    
+    // Auto-sync updated license plan to Supabase desktop_licenses immediately
+    try {
+      syncDesktopUserToSupabase().catch(() => {});
+    } catch (sErr) {}
+
     return true;
   } catch (err) {
     console.error(`[LICENSE ERROR] Failed to set license key:`, err.message);
@@ -389,6 +592,87 @@ QUEUED_SIGNATURE=${queuedSig}
   }
 }
 
+async function syncDesktopUserToSupabase({ owner_name, mobile_number, hotel_name, address, email } = {}) {
+  try {
+    const hwId = getDesktopMachineId();
+    const nowIso = new Date().toISOString();
+
+    // Fetch active license plan details (e.g. 'yearly', 'monthly', 'permanent', 'trial')
+    const activeLicense = getLicenseDetails();
+    const activePlanType = activeLicense.type || 'trial';
+
+    // Fetch latest details from local database
+    let finalOwner = owner_name;
+    let finalMobile = mobile_number;
+    let finalHotel = hotel_name;
+    let finalAddress = address;
+    let finalEmail = email;
+
+    try {
+      const userRes = await db.query("SELECT name, email FROM users WHERE role = 'owner' ORDER BY id ASC LIMIT 1");
+      if (userRes.rows.length > 0) {
+        finalOwner = finalOwner || userRes.rows[0].name;
+        finalEmail = finalEmail || userRes.rows[0].email;
+      }
+      const hotelRes = await db.query("SELECT name, phone, location, email FROM hotels LIMIT 1");
+      if (hotelRes.rows.length > 0) {
+        finalHotel = finalHotel || hotelRes.rows[0].name;
+        finalMobile = finalMobile || hotelRes.rows[0].phone;
+        finalAddress = finalAddress || hotelRes.rows[0].location;
+        if (hotelRes.rows[0].email) {
+          finalEmail = hotelRes.rows[0].email;
+        }
+      }
+    } catch (dbErr) {
+      console.warn('[SUPABASE DESKTOP SYNC] Local DB query error:', dbErr.message);
+    }
+
+    // Check if record already exists for this desktop hardware UUID
+    let existing = null;
+    if (supabase) {
+      const { data } = await supabase
+        .from('desktop_licenses')
+        .select('id, is_active')
+        .eq('device_uuid', hwId)
+        .maybeSingle();
+      existing = data;
+    } else {
+      const list = await supabaseRestCall(`desktop_licenses?device_uuid=eq.${encodeURIComponent(hwId)}&select=id,is_active`);
+      existing = (list && list.length > 0) ? list[0] : null;
+    }
+
+    const payload = {
+      owner_name: finalOwner || 'Shubham Pilane',
+      mobile_number: finalMobile || '',
+      hotel_name: finalHotel || 'Desktop Hotel',
+      address: finalAddress || '',
+      email: finalEmail || '',
+      device_uuid: hwId,
+      plan: activePlanType,
+      last_ping_at: nowIso,
+      updated_at: nowIso
+    };
+
+    if (!existing) {
+      if (supabase) {
+        await supabase.from('desktop_licenses').insert({ ...payload, is_active: true, registration_date: nowIso });
+      } else {
+        await supabaseRestCall('desktop_licenses', 'POST', { ...payload, is_active: true, registration_date: nowIso });
+      }
+      console.log(`[SUPABASE DESKTOP SYNC] Inserted desktop record (${hwId}) with plan: ${activePlanType}`);
+    } else {
+      if (supabase) {
+        await supabase.from('desktop_licenses').update(payload).eq('id', existing.id);
+      } else {
+        await supabaseRestCall(`desktop_licenses?id=eq.${existing.id}`, 'PATCH', payload);
+      }
+      console.log(`[SUPABASE DESKTOP SYNC] Updated desktop record (${hwId}) with plan: ${activePlanType}`);
+    }
+  } catch (e) {
+    console.warn('[SUPABASE DESKTOP SYNC] Error:', e.message);
+  }
+}
+
 module.exports = {
   ensureLicenseFileExists,
   getLicenseKey,
@@ -397,5 +681,8 @@ module.exports = {
   setLicenseKey,
   updateOrQueueLicenseKey,
   validateKeyFormat,
+  getDesktopMachineId,
+  syncDesktopUserToSupabase,
+  checkSupabaseDesktopLicenseStatus,
   licenseFilePath
 };

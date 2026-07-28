@@ -82,3 +82,51 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Note: To execute automatically every day in Supabase, run:
 -- SELECT cron.schedule('purge-15mo-analytics', '0 2 * * *', 'SELECT purge_old_analytics_snapshots();');
+
+-- 4. HARDWARE LICENSES TABLES FOR SUPER ADMIN PORTAL
+
+-- Mobile App Licenses Table
+CREATE TABLE IF NOT EXISTS public.mobile_licenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_uuid TEXT UNIQUE NOT NULL,
+  hotel_name TEXT,
+  owner_name TEXT,
+  email TEXT,
+  mobile_number TEXT,
+  address TEXT,
+  plan TEXT DEFAULT 'trial',
+  is_active BOOLEAN DEFAULT true,
+  registration_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_ping_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Desktop App Licenses Table
+CREATE TABLE IF NOT EXISTS public.desktop_licenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_uuid TEXT UNIQUE NOT NULL,
+  hotel_name TEXT,
+  owner_name TEXT,
+  email TEXT,
+  mobile_number TEXT,
+  address TEXT,
+  plan TEXT DEFAULT 'trial',
+  is_active BOOLEAN DEFAULT true,
+  registration_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_ping_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS on mobile_licenses & desktop_licenses
+ALTER TABLE public.mobile_licenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.desktop_licenses ENABLE ROW LEVEL SECURITY;
+
+-- Allow public/anon select, insert, update for device verification and registration
+CREATE POLICY "Allow public select mobile_licenses" ON public.mobile_licenses FOR SELECT USING (true);
+CREATE POLICY "Allow public insert mobile_licenses" ON public.mobile_licenses FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update mobile_licenses" ON public.mobile_licenses FOR UPDATE USING (true);
+
+CREATE POLICY "Allow public select desktop_licenses" ON public.desktop_licenses FOR SELECT USING (true);
+CREATE POLICY "Allow public insert desktop_licenses" ON public.desktop_licenses FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update desktop_licenses" ON public.desktop_licenses FOR UPDATE USING (true);
+

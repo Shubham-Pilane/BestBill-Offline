@@ -9,7 +9,38 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      setUser(parsed);
+      // Fetch latest profile & hotel details from backend DB to overwrite stale localStorage cache
+      api.get('/profile').then(res => {
+        if (res.data && res.data.user) {
+          api.get('/auth/subscription-status').then(subRes => {
+            const freshUser = {
+              ...parsed,
+              name: res.data.user.name || parsed.name,
+              email: res.data.user.email || parsed.email,
+              hotel_name: res.data.user.hotel_name || parsed.hotel_name,
+              upi_id: res.data.user.upi_id || parsed.upi_id,
+              licenseWarning: subRes.data.warning,
+              offlineDays: subRes.data.offlineDays
+            };
+            localStorage.setItem('user', JSON.stringify(freshUser));
+            setUser(freshUser);
+          }).catch(() => {
+            const freshUser = {
+              ...parsed,
+              name: res.data.user.name || parsed.name,
+              email: res.data.user.email || parsed.email,
+              hotel_name: res.data.user.hotel_name || parsed.hotel_name,
+              upi_id: res.data.user.upi_id || parsed.upi_id
+            };
+            localStorage.setItem('user', JSON.stringify(freshUser));
+            setUser(freshUser);
+          });
+        }
+      }).catch(() => {});
+    }
     setLoading(false);
   }, []);
 
