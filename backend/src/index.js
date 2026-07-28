@@ -163,7 +163,7 @@ syncSchema().then(() => {
           if (is11PM || isPendingNetworkRetry) {
             performLicenseSyncAndCheck();
           }
-        }, 1000 * 60 * 1); // Check every minute, but only execute if 11 PM or pending retry
+        }, 1000 * 60 * 15); // Check every 15 minutes, but only execute if 11 PM or pending retry
     }).on('error', (err) => {
         console.error('Server Listen Error:', err.message);
     });
