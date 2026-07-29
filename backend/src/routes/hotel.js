@@ -245,9 +245,6 @@ router.post('/toggle-kot', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '517382') {
-      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
-    }
     config.kotEnabled = !!enabled;
 
     configManager.saveConfig(config);
@@ -274,9 +271,6 @@ router.post('/toggle-whatsapp-billing', auth, (req, res) => { // wait, let's kee
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '928614') {
-      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
-    }
     config.whatsAppBillingEnabled = !!enabled;
 
     configManager.saveConfig(config);
@@ -304,9 +298,6 @@ router.post('/toggle-inventory', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '346875') {
-      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
-    }
     config.inventoryEnabled = !!enabled;
 
     configManager.saveConfig(config);
@@ -333,9 +324,6 @@ router.post('/toggle-token-counter', auth, (req, res) => {
   try {
     const config = configManager.getConfig();
 
-    if (passcode !== '791523') {
-      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
-    }
     config.tokenCounterEnabled = !!enabled;
 
     configManager.saveConfig(config);
@@ -345,34 +333,7 @@ router.post('/toggle-token-counter', auth, (req, res) => {
   }
 });
 
-// Get Simple KOT Activation Status
-router.get('/simple-kot-status', auth, (req, res) => {
-  try {
-    const config = configManager.getConfig();
-    res.json({ simpleKotEnabled: !!config.simpleKotEnabled });
-  } catch (err) {
-    res.status(500).json({ message: 'Error checking simple KOT status' });
-  }
-});
 
-router.post('/toggle-simple-kot', auth, (req, res) => {
-  const { enabled, passcode } = req.body;
-  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
-
-  try {
-    const config = configManager.getConfig();
-
-    if (passcode !== '185746') {
-      return res.status(400).json({ message: `Incorrect ${enabled ? 'activation' : 'deactivation'} password` });
-    }
-    config.simpleKotEnabled = !!enabled;
-
-    configManager.saveConfig(config);
-    res.json({ success: true, simpleKotEnabled: config.simpleKotEnabled });
-  } catch (err) {
-    res.status(500).json({ message: 'Error updating simple KOT configuration' });
-  }
-});
 
 // Get Email Report Module Activation Status
 router.get('/email-report-status', auth, (req, res) => {

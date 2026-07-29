@@ -55,33 +55,15 @@ const Profile = () => {
     
     // KOT State
     const [kotEnabled, setKotEnabled] = useState(false);
-    const [showKotModal, setShowKotModal] = useState(false);
-    const [kotPassword, setKotPassword] = useState('');
-    const [kotModalMode, setKotModalMode] = useState('enable');
     
     // WhatsApp Billing State
     const [whatsAppBillingEnabled, setWhatsAppBillingEnabled] = useState(false);
-    const [showWhatsAppBillingModal, setShowWhatsAppBillingModal] = useState(false);
-    const [whatsAppBillingPassword, setWhatsAppBillingPassword] = useState('');
-    const [whatsAppBillingModalMode, setWhatsAppBillingModalMode] = useState('enable');
 
     // Inventory Management State
     const [inventoryEnabled, setInventoryEnabled] = useState(false);
-    const [showInventoryModal, setShowInventoryModal] = useState(false);
-    const [inventoryPassword, setInventoryPassword] = useState('');
-    const [inventoryModalMode, setInventoryModalMode] = useState('enable');
 
     // Token Counter State
     const [tokenCounterEnabled, setTokenCounterEnabled] = useState(false);
-    const [showTokenCounterModal, setShowTokenCounterModal] = useState(false);
-    const [tokenCounterPassword, setTokenCounterPassword] = useState('');
-    const [tokenCounterModalMode, setTokenCounterModalMode] = useState('enable');
-
-    // Simple KOT State
-    const [simpleKotEnabled, setSimpleKotEnabled] = useState(false);
-    const [showSimpleKotModal, setShowSimpleKotModal] = useState(false);
-    const [simpleKotPassword, setSimpleKotPassword] = useState('');
-    const [simpleKotModalMode, setSimpleKotModalMode] = useState('enable');
 
     // Email Report State
     const [emailReportModuleEnabled, setEmailReportModuleEnabled] = useState(false);
@@ -186,7 +168,6 @@ const Profile = () => {
             fetchWhatsAppBillingStatus();
             fetchInventoryStatus();
             fetchTokenCounterStatus();
-            fetchSimpleKotStatus();
             fetchEmailReportStatus();
             fetchEmailReportConfig();
             fetchCloudSyncConfig();
@@ -257,49 +238,19 @@ const Profile = () => {
         }
     };
 
-    const handleToggleKot = (shouldEnable) => {
-        if (shouldEnable) {
-            setKotModalMode('enable');
-            setKotPassword('');
-            setShowKotModal(true);
-        } else {
-            setKotModalMode('disable');
-            setKotPassword('');
-            setShowKotModal(true);
+    const handleToggleKot = async (shouldEnable) => {
+        try {
+            const res = await api.post('/hotel/toggle-kot', { enabled: shouldEnable });
+            if (res.data.success) {
+                setKotEnabled(shouldEnable);
+                updateUser({ kotEnabled: shouldEnable });
+                toast.success(`KOT Module ${shouldEnable ? 'activated' : 'deactivated'}!`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} KOT Module`);
         }
     };
 
-    const handleKotModalSubmit = async () => {
-        if (!kotPassword) {
-            toast.error("Password cannot be blank");
-            return;
-        }
-        if (kotModalMode === 'enable') {
-            try {
-                const res = await api.post('/hotel/toggle-kot', { enabled: true, passcode: kotPassword });
-                if (res.data.success) {
-                    setKotEnabled(true);
-                    updateUser({ kotEnabled: true });
-                    toast.success("KOT Module activated!");
-                    setShowKotModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect activation password");
-            }
-        } else {
-            try {
-                const res = await api.post('/hotel/toggle-kot', { enabled: false, passcode: kotPassword });
-                if (res.data.success) {
-                    setKotEnabled(false);
-                    updateUser({ kotEnabled: false });
-                    toast.success("KOT module deactivated.");
-                    setShowKotModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect deactivation password");
-            }
-        }
-    };
 
     const fetchWhatsAppBillingStatus = async () => {
         try {
@@ -311,49 +262,19 @@ const Profile = () => {
         }
     };
 
-    const handleToggleWhatsAppBilling = (shouldEnable) => {
-        if (shouldEnable) {
-            setWhatsAppBillingModalMode('enable');
-            setWhatsAppBillingPassword('');
-            setShowWhatsAppBillingModal(true);
-        } else {
-            setWhatsAppBillingModalMode('disable');
-            setWhatsAppBillingPassword('');
-            setShowWhatsAppBillingModal(true);
+    const handleToggleWhatsAppBilling = async (shouldEnable) => {
+        try {
+            const res = await api.post('/hotel/toggle-whatsapp-billing', { enabled: shouldEnable });
+            if (res.data.success) {
+                setWhatsAppBillingEnabled(shouldEnable);
+                updateUser({ whatsAppBillingEnabled: shouldEnable });
+                toast.success(`WhatsApp Billing ${shouldEnable ? 'activated' : 'deactivated'}!`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} WhatsApp Billing`);
         }
     };
 
-    const handleWhatsAppBillingModalSubmit = async () => {
-        if (!whatsAppBillingPassword) {
-            toast.error("Password cannot be blank");
-            return;
-        }
-        if (whatsAppBillingModalMode === 'enable') {
-            try {
-                const res = await api.post('/hotel/toggle-whatsapp-billing', { enabled: true, passcode: whatsAppBillingPassword });
-                if (res.data.success) {
-                    setWhatsAppBillingEnabled(true);
-                    updateUser({ whatsAppBillingEnabled: true });
-                    toast.success("WhatsApp Billing activated!");
-                    setShowWhatsAppBillingModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect activation password");
-            }
-        } else {
-            try {
-                const res = await api.post('/hotel/toggle-whatsapp-billing', { enabled: false, passcode: whatsAppBillingPassword });
-                if (res.data.success) {
-                    setWhatsAppBillingEnabled(false);
-                    updateUser({ whatsAppBillingEnabled: false });
-                    toast.success("WhatsApp Billing deactivated.");
-                    setShowWhatsAppBillingModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect deactivation password");
-            }
-        }
-    };
 
     const fetchInventoryStatus = async () => {
         try {
@@ -365,49 +286,19 @@ const Profile = () => {
         }
     };
 
-    const handleToggleInventory = (shouldEnable) => {
-        if (shouldEnable) {
-            setInventoryModalMode('enable');
-            setInventoryPassword('');
-            setShowInventoryModal(true);
-        } else {
-            setInventoryModalMode('disable');
-            setInventoryPassword('');
-            setShowInventoryModal(true);
+    const handleToggleInventory = async (shouldEnable) => {
+        try {
+            const res = await api.post('/hotel/toggle-inventory', { enabled: shouldEnable });
+            if (res.data.success) {
+                setInventoryEnabled(shouldEnable);
+                updateUser({ inventoryEnabled: shouldEnable });
+                toast.success(`Inventory Management ${shouldEnable ? 'activated' : 'deactivated'}!`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Inventory Management`);
         }
     };
 
-    const handleInventoryModalSubmit = async () => {
-        if (!inventoryPassword) {
-            toast.error("Password cannot be blank");
-            return;
-        }
-        if (inventoryModalMode === 'enable') {
-            try {
-                const res = await api.post('/hotel/toggle-inventory', { enabled: true, passcode: inventoryPassword });
-                if (res.data.success) {
-                    setInventoryEnabled(true);
-                    updateUser({ inventoryEnabled: true });
-                    toast.success("Inventory Management Module activated!");
-                    setShowInventoryModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect activation password");
-            }
-        } else {
-            try {
-                const res = await api.post('/hotel/toggle-inventory', { enabled: false, passcode: inventoryPassword });
-                if (res.data.success) {
-                    setInventoryEnabled(false);
-                    updateUser({ inventoryEnabled: false });
-                    toast.success("Inventory Management Module deactivated.");
-                    setShowInventoryModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect deactivation password");
-            }
-        }
-    };
 
     const fetchTokenCounterStatus = async () => {
         try {
@@ -419,103 +310,19 @@ const Profile = () => {
         }
     };
 
-    const fetchSimpleKotStatus = async () => {
+    const handleToggleTokenCounter = async (shouldEnable) => {
         try {
-            const res = await api.get('/hotel/simple-kot-status');
-            setSimpleKotEnabled(res.data.simpleKotEnabled);
-            updateUser({ simpleKotEnabled: res.data.simpleKotEnabled });
+            const res = await api.post('/hotel/toggle-token-counter', { enabled: shouldEnable });
+            if (res.data.success) {
+                setTokenCounterEnabled(shouldEnable);
+                updateUser({ tokenCounterEnabled: shouldEnable });
+                toast.success(`Token Counter ${shouldEnable ? 'activated' : 'deactivated'}!`);
+            }
         } catch (err) {
-            console.error('Failed to fetch simple KOT status', err);
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Token Counter`);
         }
     };
 
-    const handleToggleTokenCounter = (shouldEnable) => {
-        if (shouldEnable) {
-            setTokenCounterModalMode('enable');
-            setTokenCounterPassword('');
-            setShowTokenCounterModal(true);
-        } else {
-            setTokenCounterModalMode('disable');
-            setTokenCounterPassword('');
-            setShowTokenCounterModal(true);
-        }
-    };
-
-    const handleTokenCounterModalSubmit = async () => {
-        if (!tokenCounterPassword) {
-            toast.error("Password cannot be blank");
-            return;
-        }
-        if (tokenCounterModalMode === 'enable') {
-            try {
-                const res = await api.post('/hotel/toggle-token-counter', { enabled: true, passcode: tokenCounterPassword });
-                if (res.data.success) {
-                    setTokenCounterEnabled(true);
-                    updateUser({ tokenCounterEnabled: true });
-                    toast.success("Token Counter module activated!");
-                    setShowTokenCounterModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect activation password");
-            }
-        } else {
-            try {
-                const res = await api.post('/hotel/toggle-token-counter', { enabled: false, passcode: tokenCounterPassword });
-                if (res.data.success) {
-                    setTokenCounterEnabled(false);
-                    updateUser({ tokenCounterEnabled: false });
-                    toast.success("Token Counter module deactivated.");
-                    setShowTokenCounterModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect deactivation password");
-            }
-        }
-    };
-
-    const handleToggleSimpleKot = (shouldEnable) => {
-        if (shouldEnable) {
-            setSimpleKotModalMode('enable');
-            setSimpleKotPassword('');
-            setShowSimpleKotModal(true);
-        } else {
-            setSimpleKotModalMode('disable');
-            setSimpleKotPassword('');
-            setShowSimpleKotModal(true);
-        }
-    };
-
-    const handleSimpleKotModalSubmit = async () => {
-        if (!simpleKotPassword) {
-            toast.error("Password cannot be blank");
-            return;
-        }
-        if (simpleKotModalMode === 'enable') {
-            try {
-                const res = await api.post('/hotel/toggle-simple-kot', { enabled: true, passcode: simpleKotPassword });
-                if (res.data.success) {
-                    setSimpleKotEnabled(true);
-                    updateUser({ simpleKotEnabled: true });
-                    toast.success("Simple KOT module activated!");
-                    setShowSimpleKotModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect activation password");
-            }
-        } else {
-            try {
-                const res = await api.post('/hotel/toggle-simple-kot', { enabled: false, passcode: simpleKotPassword });
-                if (res.data.success) {
-                    setSimpleKotEnabled(false);
-                    updateUser({ simpleKotEnabled: false });
-                    toast.success("Simple KOT module deactivated.");
-                    setShowSimpleKotModal(false);
-                }
-            } catch (err) {
-                toast.error(err.response?.data?.message || "Incorrect deactivation password");
-            }
-        }
-    };
 
     const fetchEmailReportStatus = async () => {
         try {
@@ -1925,41 +1732,6 @@ const Profile = () => {
                             </div>
                         </div>
 
-                        {/* Simple KOT Module */}
-                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
-                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Simple KOT (Send to Kitchen)</h3>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
-                                    When enabled, allows owners to send orders to the kitchen printer directly from regular tables, just like waiters.
-                                    This module requires a passcode to unlock.
-                                </p>
-                            </div>
-                            
-                            {/* Toggle / Radio Control */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
-                                    <input 
-                                        type="radio" 
-                                        name="simpleKotModule"
-                                        checked={!simpleKotEnabled} 
-                                        onChange={() => handleToggleSimpleKot(false)}
-                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
-                                    />
-                                    Disabled
-                                </label>
-                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
-                                    <input 
-                                        type="radio" 
-                                        name="simpleKotModule"
-                                        checked={simpleKotEnabled} 
-                                        onChange={() => handleToggleSimpleKot(true)}
-                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
-                                    />
-                                    Enabled
-                                </label>
-                            </div>
-                        </div>
 
                         {/* Automated Email Reports Module */}
                         <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
@@ -2097,224 +1869,14 @@ const Profile = () => {
             )}
 
             {/* KOT Activation Modal */}
-            {showKotModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowKotModal(false)}>
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ShieldCheck size={28} style={{ color: kotModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
-                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                                {kotModalMode === 'enable' ? 'Activate KOT Module' : 'Deactivate KOT Module'}
-                            </h3>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
-                            {kotModalMode === 'enable'
-                                ? 'Enter the Premium Activation License Password to unlock Kitchen Order Tickets and Waitstaff routing.'
-                                : 'Are you sure you want to deactivate the KOT Module? Please enter the license password to confirm deactivation. Kitchen printing and waitstaff functions will be disabled.'
-                            }
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
-                                {kotModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
-                            </label>
-                            <input
-                                type="password"
-                                value={kotPassword}
-                                onChange={e => setKotPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleKotModalSubmit()}
-                                placeholder={kotModalMode === 'enable' ? "Enter activation password" : "Enter deactivation password"}
-                                autoFocus
-                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                            <button
-                                onClick={() => setShowKotModal(false)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
-                            >Cancel</button>
-                            <button
-                                onClick={handleKotModalSubmit}
-                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: kotModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: kotModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
-                            >{kotModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* WhatsApp Billing Activation Modal */}
-            {showWhatsAppBillingModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowWhatsAppBillingModal(false)}>
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ShieldCheck size={28} style={{ color: whatsAppBillingModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
-                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                                {whatsAppBillingModalMode === 'enable' ? 'Activate WhatsApp Billing' : 'Deactivate WhatsApp Billing'}
-                            </h3>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
-                            {whatsAppBillingModalMode === 'enable'
-                                ? 'Enter the license passcode to unlock and enable WhatsApp Billing.'
-                                : 'Are you sure you want to deactivate WhatsApp Billing? Please enter the passcode to confirm deactivation.'
-                            }
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
-                                {whatsAppBillingModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
-                            </label>
-                            <input
-                                type="password"
-                                value={whatsAppBillingPassword}
-                                onChange={e => setWhatsAppBillingPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleWhatsAppBillingModalSubmit()}
-                                placeholder={whatsAppBillingModalMode === 'enable' ? "Enter passcode" : "Enter passcode"}
-                                autoFocus
-                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                            <button
-                                onClick={() => setShowWhatsAppBillingModal(false)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
-                            >Cancel</button>
-                            <button
-                                onClick={handleWhatsAppBillingModalSubmit}
-                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: whatsAppBillingModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: whatsAppBillingModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
-                            >{whatsAppBillingModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Inventory Activation Modal */}
-            {showInventoryModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowInventoryModal(false)}>
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ShieldCheck size={28} style={{ color: inventoryModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
-                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                                {inventoryModalMode === 'enable' ? 'Activate Inventory Module' : 'Deactivate Inventory Module'}
-                            </h3>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
-                            {inventoryModalMode === 'enable'
-                                ? 'Enter the license passcode to unlock and enable Inventory Management.'
-                                : 'Are you sure you want to deactivate Inventory Management? Please enter the passcode to confirm deactivation.'
-                            }
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
-                                {inventoryModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
-                            </label>
-                            <input
-                                type="password"
-                                value={inventoryPassword}
-                                onChange={e => setInventoryPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleInventoryModalSubmit()}
-                                placeholder={inventoryModalMode === 'enable' ? "Enter passcode" : "Enter passcode"}
-                                autoFocus
-                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                            <button
-                                onClick={() => setShowInventoryModal(false)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
-                            >Cancel</button>
-                            <button
-                                onClick={handleInventoryModalSubmit}
-                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: inventoryModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: inventoryModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
-                            >{inventoryModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Token Counter Activation Modal */}
-            {showTokenCounterModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowTokenCounterModal(false)}>
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ShieldCheck size={28} style={{ color: tokenCounterModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
-                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                                {tokenCounterModalMode === 'enable' ? 'Activate Token Counter Module' : 'Deactivate Token Counter Module'}
-                            </h3>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
-                            {tokenCounterModalMode === 'enable'
-                                ? 'Enter the license passcode to unlock and enable Token Counter.'
-                                : 'Are you sure you want to deactivate Token Counter? Please enter the passcode to confirm deactivation.'
-                            }
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
-                                {tokenCounterModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
-                            </label>
-                            <input
-                                type="password"
-                                value={tokenCounterPassword}
-                                onChange={e => setTokenCounterPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleTokenCounterModalSubmit()}
-                                placeholder={tokenCounterModalMode === 'enable' ? "Enter passcode" : "Enter passcode"}
-                                autoFocus
-                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                            <button
-                                onClick={() => setShowTokenCounterModal(false)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
-                            >Cancel</button>
-                            <button
-                                onClick={handleTokenCounterModalSubmit}
-                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: tokenCounterModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: tokenCounterModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
-                            >{tokenCounterModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Simple KOT Activation Modal */}
-            {showSimpleKotModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowSimpleKotModal(false)}>
-                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <ShieldCheck size={28} style={{ color: simpleKotModalMode === 'enable' ? '#10b981' : '#f43f5e' }} />
-                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                                {simpleKotModalMode === 'enable' ? 'Activate Simple KOT Module' : 'Deactivate Simple KOT Module'}
-                            </h3>
-                        </div>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
-                            {simpleKotModalMode === 'enable'
-                                ? 'Enter the license passcode to unlock and enable Simple KOT (Send to Kitchen).'
-                                : 'Are you sure you want to deactivate Simple KOT? Please enter the passcode to confirm deactivation.'
-                            }
-                        </p>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 900 }}>
-                                {simpleKotModalMode === 'enable' ? 'ACTIVATION PASSWORD' : 'DEACTIVATION PASSWORD'}
-                            </label>
-                            <input
-                                type="password"
-                                value={simpleKotPassword}
-                                onChange={e => setSimpleKotPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleSimpleKotModalSubmit()}
-                                placeholder="Enter passcode"
-                                autoFocus
-                                style={{padding: '14px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '15px' }}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-                            <button
-                                onClick={() => setShowSimpleKotModal(false)}
-                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
-                            >Cancel</button>
-                            <button
-                                onClick={handleSimpleKotModalSubmit}
-                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: simpleKotModalMode === 'enable' ? '#10b981' : '#f43f5e', color: 'var(--text-primary)', fontWeight: 900, border: 'none', cursor: 'pointer', fontSize: '14px', boxShadow: simpleKotModalMode === 'enable' ? '0 8px 20px rgba(16,185,129,0.3)' : '0 8px 20px rgba(244,63,94,0.3)' }}
-                            >{simpleKotModalMode === 'enable' ? 'Unlock & Activate' : 'Confirm Deactivate'}</button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Email Report Activation Modal */}
             {showEmailReportModal && (
