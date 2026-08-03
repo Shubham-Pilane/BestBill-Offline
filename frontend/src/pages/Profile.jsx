@@ -65,6 +65,9 @@ const Profile = () => {
     // Token Counter State
     const [tokenCounterEnabled, setTokenCounterEnabled] = useState(false);
 
+    // Cancel Orders State
+    const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
+
     // Email Report State
     const [emailReportModuleEnabled, setEmailReportModuleEnabled] = useState(false);
     const [showEmailReportModal, setShowEmailReportModal] = useState(false);
@@ -168,6 +171,7 @@ const Profile = () => {
             fetchWhatsAppBillingStatus();
             fetchInventoryStatus();
             fetchTokenCounterStatus();
+            fetchCancelOrdersStatus();
             fetchEmailReportStatus();
             fetchEmailReportConfig();
             fetchCloudSyncConfig();
@@ -320,6 +324,29 @@ const Profile = () => {
             }
         } catch (err) {
             toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Token Counter`);
+        }
+    };
+
+    const fetchCancelOrdersStatus = async () => {
+        try {
+            const res = await api.get('/hotel/cancel-orders-status');
+            setCancelOrdersEnabled(res.data.cancelOrdersEnabled);
+            updateUser({ cancelOrdersEnabled: res.data.cancelOrdersEnabled });
+        } catch (err) {
+            console.error('Failed to fetch cancel orders status', err);
+        }
+    };
+
+    const handleToggleCancelOrders = async (shouldEnable) => {
+        try {
+            const res = await api.post('/hotel/toggle-cancel-orders', { enabled: shouldEnable });
+            if (res.data.success) {
+                setCancelOrdersEnabled(shouldEnable);
+                updateUser({ cancelOrdersEnabled: shouldEnable });
+                toast.success(`Cancel Order Management ${shouldEnable ? 'activated' : 'deactivated'}!`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Cancel Order Management`);
         }
     };
 
@@ -1725,6 +1752,41 @@ const Profile = () => {
                                         name="tokenCounterModule"
                                         checked={tokenCounterEnabled} 
                                         onChange={() => handleToggleTokenCounter(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Cancel Order Management Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Cancel Order Management</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable tracking, auditing, and printing slips for cancelled table orders and unbilled kitchen tickets.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="cancelOrdersModule"
+                                        checked={!cancelOrdersEnabled} 
+                                        onChange={() => handleToggleCancelOrders(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="cancelOrdersModule"
+                                        checked={cancelOrdersEnabled} 
+                                        onChange={() => handleToggleCancelOrders(true)}
                                         style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
                                     />
                                     Enabled

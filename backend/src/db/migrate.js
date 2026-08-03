@@ -202,6 +202,35 @@ const syncSchema = async () => {
                 settlement_payment_method VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS expenses (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                amount DECIMAL(10,2) NOT NULL,
+                expense_date TIMESTAMP NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                payment_method VARCHAR(50) NOT NULL,
+                created_by VARCHAR(255),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS cancelled_orders (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                order_number VARCHAR(100) NOT NULL,
+                table_id INTEGER,
+                table_number VARCHAR(100),
+                floor VARCHAR(100),
+                cancel_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                cancelled_by VARCHAR(255),
+                items_json TEXT NOT NULL,
+                total_quantity INTEGER DEFAULT 0,
+                total_amount DECIMAL(10,2) DEFAULT 0,
+                cancellation_reason TEXT,
+                kot_status VARCHAR(50) DEFAULT 'Not Printed',
+                billing_status VARCHAR(50) DEFAULT 'Not Settled',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
@@ -230,6 +259,10 @@ const syncSchema = async () => {
             'CREATE INDEX IF NOT EXISTS idx_credits_hotel_id ON credits(hotel_id)',
             'CREATE INDEX IF NOT EXISTS idx_credits_bill_id ON credits(bill_id)',
             'CREATE INDEX IF NOT EXISTS idx_credits_vendor_id ON credits(vendor_id)',
+            'CREATE INDEX IF NOT EXISTS idx_expenses_hotel_id ON expenses(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date)',
+            'CREATE INDEX IF NOT EXISTS idx_cancelled_orders_hotel_id ON cancelled_orders(hotel_id)',
+            'CREATE INDEX IF NOT EXISTS idx_cancelled_orders_date ON cancelled_orders(cancel_date)',
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_recipes ON recipes(hotel_id, product_id)',
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_recipe_items ON recipe_items(recipe_id, inventory_item_id)'
         ];
@@ -245,6 +278,8 @@ const syncSchema = async () => {
         // 3. Schema Evolution (Column Checks)
         const migrations = [
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS printed_quantity INTEGER DEFAULT 0",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS max_quantity INTEGER DEFAULT 0",
+            "UPDATE order_items SET max_quantity = quantity WHERE max_quantity IS NULL OR max_quantity = 0",
             "WITH duplicates AS (SELECT id, ROW_NUMBER() OVER (PARTITION BY order_id, menu_item_id ORDER BY created_at) as rn FROM order_items) DELETE FROM order_items WHERE id IN (SELECT id FROM duplicates WHERE rn > 1)",
             "ALTER TABLE order_items ADD CONSTRAINT unique_order_item UNIQUE (order_id, menu_item_id)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'owner'",

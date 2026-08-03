@@ -58,6 +58,7 @@ const InventoryManagement = () => {
     const [showItemModal, setShowItemModal] = useState(false);
     const [showAdjustModal, setShowAdjustModal] = useState(false);
     const [showRecipeModal, setShowRecipeModal] = useState(false);
+    const [deleteConfirmItem, setDeleteConfirmItem] = useState(null);
 
     // Add/Edit Item Form State
     const [editingItem, setEditingItem] = useState(null);
@@ -732,7 +733,7 @@ const InventoryManagement = () => {
                                                             Add Stock
                                                         </button>
                                                         <button 
-                                                            onClick={() => handleDeleteItem(item.id)}
+                                                            onClick={() => setDeleteConfirmItem(item)}
                                                             style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', cursor: 'pointer', fontWeight: 700 }}
                                                         >
                                                             Delete
@@ -1412,6 +1413,52 @@ const InventoryManagement = () => {
                                 style={{ padding: '10px 20px', borderRadius: '12px', border: 'none', cursor: 'pointer', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800 }}
                             >
                                 Close Breakdown
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE INGREDIENT CONFIRMATION MODAL */}
+            {deleteConfirmItem && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+                    <div style={{ width: '100%', maxWidth: '460px', backgroundColor: 'var(--bg-card)', borderRadius: '24px', border: '1px solid var(--bg-border)', padding: '28px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{ padding: '12px', borderRadius: '14px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <AlertCircle size={26} />
+                            </div>
+                            <div>
+                                <h3 style={{ fontSize: '19px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Delete Raw Ingredient</h3>
+                                <span style={{ fontSize: '14px', color: '#0ea5e9', fontWeight: 800 }}>{deleteConfirmItem.name}</span>
+                            </div>
+                        </div>
+                        
+                        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)', lineHeight: '1.6', fontWeight: 500 }}>
+                            Are you sure you want to delete this ingredient? This will clear any associated recipes.
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                            <button
+                                onClick={() => setDeleteConfirmItem(null)}
+                                style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 800, cursor: 'pointer', fontSize: '14px' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    const id = deleteConfirmItem.id;
+                                    setDeleteConfirmItem(null);
+                                    try {
+                                        await api.delete(`/inventory/items/${id}`);
+                                        toast.success('Ingredient deleted');
+                                        fetchData();
+                                    } catch (err) {
+                                        toast.error('Delete failed');
+                                    }
+                                }}
+                                style={{ flex: 1, padding: '12px 16px', borderRadius: '12px', border: 'none', backgroundColor: '#ef4444', color: 'white', fontWeight: 900, cursor: 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}
+                            >
+                                Delete
                             </button>
                         </div>
                     </div>

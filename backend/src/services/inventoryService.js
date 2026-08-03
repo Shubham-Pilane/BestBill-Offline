@@ -43,7 +43,7 @@ class InventoryService {
       `SELECT oi.quantity, oi.menu_item_id, mi.name as product_name
        FROM order_items oi
        JOIN menu_items mi ON oi.menu_item_id = mi.id
-       WHERE oi.order_id = $1`,
+       WHERE oi.order_id = $1 AND oi.quantity > 0`,
       [orderId]
     );
 

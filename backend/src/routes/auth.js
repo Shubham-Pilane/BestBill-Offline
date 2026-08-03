@@ -234,6 +234,7 @@ router.post('/login', async (req, res) => {
         whatsAppBillingEnabled: !!config.whatsAppBillingEnabled,
         inventoryEnabled: !!config.inventoryEnabled,
         tokenCounterEnabled: !!config.tokenCounterEnabled,
+        cancelOrdersEnabled: !!config.cancelOrdersEnabled,
 
         emailReportModuleEnabled: !!config.emailReportModuleEnabled,
         licenseWarning: details ? details.warning : false,

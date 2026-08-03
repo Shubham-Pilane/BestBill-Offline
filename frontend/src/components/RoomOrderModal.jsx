@@ -774,22 +774,24 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                    <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
                  )}
               </div>
-              <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
-                 <div style={{textAlign: 'center', backgroundColor: 'var(--text-primary)', padding: '24px', borderRadius: '32px' }}>
-                    <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />
+              <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+                 <div style={{ textAlign: 'center', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '32px', border: '1px solid var(--bg-border)' }}>
+                    <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '20px', display: 'inline-block', marginBottom: '16px' }}>
+                      <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />
+                    </div>
                     {!billData?.is_paid && (
-                       <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+                       <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
                          <button 
                            type="button"
                            onClick={() => setSelectedPaymentMethod('cash')} 
                            style={{ 
                              flex: 1, 
-                             padding: '16px', 
-                             backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : 'transparent', 
-                             color: selectedPaymentMethod === 'cash' ? 'white' : 'var(--text-muted)', 
-                             border: selectedPaymentMethod === 'cash' ? 'none' : '2px solid var(--bg-border)', 
+                             padding: '14px 8px', 
+                             backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : 'var(--bg-base)', 
+                             color: selectedPaymentMethod === 'cash' ? 'white' : 'var(--text-primary)', 
+                             border: selectedPaymentMethod === 'cash' ? 'none' : '1px solid var(--bg-border)', 
                              borderRadius: '16px', 
-                             fontWeight: 1000, 
+                             fontWeight: 900, 
                              cursor: 'pointer', 
                              fontSize: '12px', 
                              textTransform: 'uppercase', 
@@ -805,12 +807,12 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                            onClick={() => setSelectedPaymentMethod('upi')} 
                            style={{ 
                              flex: 1, 
-                             padding: '16px', 
-                             backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : 'transparent', 
-                             color: selectedPaymentMethod === 'upi' ? 'white' : 'var(--text-muted)', 
-                             border: selectedPaymentMethod === 'upi' ? 'none' : '2px solid var(--bg-border)', 
+                             padding: '14px 8px', 
+                             backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : 'var(--bg-base)', 
+                             color: selectedPaymentMethod === 'upi' ? 'white' : 'var(--text-primary)', 
+                             border: selectedPaymentMethod === 'upi' ? 'none' : '1px solid var(--bg-border)', 
                              borderRadius: '16px', 
-                             fontWeight: 1000, 
+                             fontWeight: 900, 
                              cursor: 'pointer', 
                              fontSize: '12px', 
                              textTransform: 'uppercase', 
@@ -822,24 +824,29 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                            Online Payment
                          </button>
                        </div>
-                     )}
-                  </div>
-                  {user?.whatsAppBillingEnabled && (
-                    <div style={{backgroundColor: 'var(--text-primary)', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--text-primary)' }}>
-                       <Phone size={18} color="var(--text-secondary)" />
-                       <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={{ border: 'none', outline: 'none', fontWeight: 800, fontSize: '15px', width: '100%', background: 'white', color: 'var(--bg-border)' }} placeholder="Guest Phone" />
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)' }}>
-                        <Printer size={18} /> {!billData?.is_paid ? 'Print' : 'Re-Print'}
-                     </button>
-                     {user?.whatsAppBillingEnabled && (
-                       <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
-                          <MessageCircle size={18} /> WhatsApp
-                       </button>
-                     )}
-                  </div>
+                    )}
+                 </div>
+                 {user?.whatsAppBillingEnabled && (
+                   <div style={{ backgroundColor: 'var(--bg-card)', padding: '16px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--bg-border)' }}>
+                      <Phone size={18} style={{ color: 'var(--text-muted)' }} />
+                      <input 
+                        value={customerPhone} 
+                        onChange={e => setCustomerPhone(e.target.value)} 
+                        style={{ border: 'none', outline: 'none', fontWeight: 800, fontSize: '15px', width: '100%', background: 'transparent', color: 'var(--text-primary)' }} 
+                        placeholder="Guest Phone Number" 
+                      />
+                   </div>
+                 )}
+                 <div style={{ display: 'flex', gap: '12px' }}>
+                    <button onClick={printBill} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)' }}>
+                       <Printer size={18} /> {!billData?.is_paid ? 'Print' : 'Re-Print'}
+                    </button>
+                    {user?.whatsAppBillingEnabled && (
+                      <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
+                         <MessageCircle size={18} /> WhatsApp
+                      </button>
+                    )}
+                 </div>
               </div>
            </div>
         </div>

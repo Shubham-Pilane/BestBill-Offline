@@ -227,7 +227,7 @@ const Dashboard = () => {
       toast.success('Parcel Counter activated!');
       fetchTables();
     } catch (err) {
-      toast.error('Failed to create Parcel Counter');
+      toast.error(err.response?.data?.message || 'Parcel Counter already exists');
     }
   };
 
@@ -239,7 +239,7 @@ const Dashboard = () => {
       toast.success('Token Counter activated!');
       fetchTables();
     } catch (err) {
-      toast.error('Failed to create Token Counter');
+      toast.error(err.response?.data?.message || 'Token Counter already exists');
     }
   };
 
@@ -297,9 +297,9 @@ const Dashboard = () => {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '64px', width: '100%', maxWidth: '1440px', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', maxWidth: '1440px', overflow: 'hidden' }}>
       {/* Hotel & Subscription Branding Area */}
-      <div className="hotel-title-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '32px' }}>
+      <div className="hotel-title-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
           <div style={{ 
             width: '64px', 

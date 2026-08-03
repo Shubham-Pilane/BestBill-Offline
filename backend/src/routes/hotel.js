@@ -307,6 +307,31 @@ router.post('/toggle-inventory', auth, (req, res) => {
   }
 });
 
+// Get Cancel Order Management Status
+router.get('/cancel-orders-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ cancelOrdersEnabled: !!config.cancelOrdersEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking cancel order management status' });
+  }
+});
+
+// Toggle Cancel Order Management Module
+router.post('/toggle-cancel-orders', auth, (req, res) => {
+  const { enabled } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+    config.cancelOrdersEnabled = !!enabled;
+    configManager.saveConfig(config);
+    res.json({ success: true, cancelOrdersEnabled: config.cancelOrdersEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating cancel order management configuration' });
+  }
+});
+
 // Get Token Counter Activation Status
 router.get('/token-counter-status', auth, (req, res) => {
   try {

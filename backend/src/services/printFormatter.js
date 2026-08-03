@@ -190,6 +190,28 @@ const toTitleCase = (str) => {
   return str.split(' ').map(word => word ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : '').join(' ');
 };
 
+const wrapTextByWords = (text, maxLen) => {
+  if (!text || typeof text !== 'string') return [];
+  const words = text.trim().split(/\s+/);
+  const lines = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (!currentLine) {
+      currentLine = word;
+    } else if ((currentLine + ' ' + word).length <= maxLen) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  return lines;
+};
+
 function getQRCodeBuffer(dataStr, is58mm = true) {
   try {
     const qrcode = require('qrcode');
@@ -328,12 +350,19 @@ function formatBill(data) {
     return builder.build();
   }
   
-  // Header
+  // Header - Wrap hotel name at word boundaries for clean thermal printing
+  const headerMaxLen = Math.max(10, Math.floor(LINE_WIDTH / 2));
+  const wrappedHotelName = wrapTextByWords(hName.toUpperCase(), headerMaxLen);
+  
   builder.alignCenter()
     .bold(true)
-    .setFontDouble()
-    .text(hName.toUpperCase())
-    .setFontNormal();
+    .setFontDouble();
+
+  wrappedHotelName.forEach(line => {
+    builder.text(line);
+  });
+
+  builder.setFontNormal();
     
   if (hLocation) {
     builder.text(hLocation);
@@ -472,7 +501,68 @@ function formatBill(data) {
   return builder.build();
 }
 
+/**
+ * Formats a Cancelled Order Ticket / Slip into an ESC/POS Buffer.
+ */
+function formatCancelOrder(data) {
+  const is58mm = (data.printerSize === '58mm');
+  const builder = new EscposBuilder(is58mm);
+  const LINE_WIDTH = data.charLimit || (is58mm ? 31 : 42);
+
+  let sidePad = 0;
+  if (!is58mm && LINE_WIDTH >= 42) {
+    sidePad = Math.floor((LINE_WIDTH - 42) / 2);
+  }
+  const mg = ' '.repeat(sidePad);
+
+  builder.alignCenter().setFontDouble().bold(true).text('*** CANCELLED ORDER ***').bold(false).setFontNormal();
+  builder.line('=', LINE_WIDTH);
+
+  const orderNumStr = String(data.orderNumber || data.id || 'N/A');
+  builder.alignLeft().bold(true).text(mg + `Order No : ${orderNumStr}`).bold(false);
+  builder.text(mg + `Table    : ${data.table || 'N/A'} ${data.floor ? '(' + data.floor + ')' : ''}`);
+  builder.text(mg + `By       : ${data.cancelledBy || 'Staff'}`);
+  
+  const cDate = data.cancelDate ? new Date(data.cancelDate) : new Date();
+  builder.text(mg + `Date/Time: ${cDate.toLocaleDateString()} ${cDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+  builder.text(mg + `KOT      : ${data.kotStatus || 'Not Printed'}`);
+  builder.text(mg + `Billing  : ${data.billingStatus || 'Not Settled'}`);
+
+  if (data.cancellationReason) {
+    builder.text(mg + `Reason   : ${data.cancellationReason}`);
+  }
+
+  builder.line('-', LINE_WIDTH);
+  builder.bold(true).text(mg + padText('Item Name', LINE_WIDTH - 12) + padText('Qty', 4, 'right') + padText('Amount', 8, 'right')).bold(false);
+  builder.line('-', LINE_WIDTH);
+
+  (data.items || []).forEach(i => {
+    const qty = i.quantity || i.qty || 1;
+    const price = parseFloat(i.price || 0);
+    const amt = price * qty;
+    const nameStr = toTitleCase(String(i.name || 'Item'));
+    const itemMaxLen = LINE_WIDTH - 13;
+    const firstChunk = nameStr.substring(0, itemMaxLen);
+    
+    builder.text(
+      mg + padText(firstChunk, itemMaxLen) + ' ' +
+      padText(qty, 4, 'right') + ' ' +
+      padText(Math.round(amt), 7, 'right')
+    );
+  });
+
+  builder.line('-', LINE_WIDTH);
+  const totalVal = parseFloat(data.totalAmount || 0);
+  builder.bold(true).text(mg + padText(`CANCELLED TOTAL: Rs ${Math.round(totalVal)}`, LINE_WIDTH, 'right')).bold(false);
+  builder.line('=', LINE_WIDTH);
+
+  builder.feed(3).cut();
+  return builder.build();
+}
+
 module.exports = {
   formatKOT,
-  formatBill
+  formatBill,
+  formatCancelOrder
 };
+

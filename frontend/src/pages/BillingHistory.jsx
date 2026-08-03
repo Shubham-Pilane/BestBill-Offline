@@ -29,6 +29,44 @@ const BillingHistory = () => {
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
     const [itemSortConfig, setItemSortConfig] = useState({ key: 'quantity', direction: 'desc' });
     const [itemSearchTerm, setItemSearchTerm] = useState('');
+    const [totalExpenses, setTotalExpenses] = useState(0);
+
+    const fetchExpensesForAnalytics = async () => {
+        try {
+            let expFilter = analyticsFilter;
+            let sDate = startDate;
+            let eDate = endDate;
+
+            if (analyticsFilter === 'Month') {
+                expFilter = 'Custom';
+                const y = parseInt(selectedYear);
+                const m = parseInt(selectedMonth);
+                const firstDay = new Date(y, m, 1);
+                const lastDay = new Date(y, m + 1, 0);
+                sDate = firstDay.toISOString().split('T')[0];
+                eDate = lastDay.toISOString().split('T')[0];
+            } else if (analyticsFilter === 'Year') {
+                expFilter = 'Custom';
+                sDate = `${selectedYear}-01-01`;
+                eDate = `${selectedYear}-12-31`;
+            }
+
+            const res = await api.get('/expenses/summary', {
+                params: {
+                    filter: expFilter,
+                    startDate: sDate,
+                    endDate: eDate
+                }
+            });
+            setTotalExpenses(parseFloat(res.data.total_expenses || 0));
+        } catch (err) {
+            console.error('Failed to fetch expenses for analytics', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchExpensesForAnalytics();
+    }, [analyticsFilter, selectedMonth, selectedYear, startDate, endDate]);
 
     const fetchHistory = async () => {
         try {
@@ -266,7 +304,9 @@ const BillingHistory = () => {
                         ['Parcel Revenue', totalParcelRevenue.toFixed(2)],
                         ['Cash Collection', totalCashRevenue.toFixed(2)],
                         ['Online Collection', totalOnlineRevenue.toFixed(2)],
-                        [{text: 'Total Revenue', bold: true}, {text: grandTotalRevenue.toFixed(2), bold: true}]
+                        [{text: 'Total Revenue', bold: true}, {text: grandTotalRevenue.toFixed(2), bold: true}],
+                        ['Total Expenses', totalExpenses.toFixed(2)],
+                        [{text: 'Net Revenue (Total Rev - Expenses)', bold: true}, {text: (grandTotalRevenue - totalExpenses).toFixed(2), bold: true}]
                     ]
                 },
                 margin: [0, 0, 0, 20]
@@ -572,6 +612,29 @@ const BillingHistory = () => {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, color: '#0ea5e9', fontSize: '18px', paddingTop: '12px', borderTop: '1px dashed var(--bg-border)' }}>
                                     <span>Total Orders Served</span>
                                     <span>{analyticsBills.length}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Expenses & Net Revenue Summary */}
+                        <div style={{ backgroundColor: 'var(--bg-base)', padding: '24px', borderRadius: '12px', border: '1px solid var(--bg-border)' }}>
+                            <h4 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Expenses & Net Revenue</h4>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    <span>Total Revenue</span>
+                                    <span>₹{grandTotalRevenue.toFixed(2)}</span>
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: '#f43f5e' }}>
+                                    <span>Total Expenses</span>
+                                    <span>₹{totalExpenses.toFixed(2)}</span>
+                                </div>
+                                <div style={{ height: '1px', borderTop: '1px dashed var(--bg-border)', margin: '4px 0' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, color: (grandTotalRevenue - totalExpenses) >= 0 ? '#10b981' : '#ef4444', fontSize: '18px', paddingTop: '4px' }}>
+                                    <span>Net Revenue</span>
+                                    <span>₹{(grandTotalRevenue - totalExpenses).toFixed(2)}</span>
+                                </div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, fontStyle: 'italic', marginTop: '4px' }}>
+                                    Net Revenue = Total Revenue − Total Expenses
                                 </div>
                             </div>
                         </div>

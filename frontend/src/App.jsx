@@ -13,6 +13,8 @@ import GuestOrders from './pages/GuestOrders';
 import KitchenKOT from './pages/KitchenKOT';
 import CreditManagement from './pages/CreditManagement';
 import InventoryManagement from './pages/InventoryManagement';
+import ExpenseManagement from './pages/ExpenseManagement';
+import CancelOrders from './pages/CancelOrders';
 import Layout from './components/Layout';
 import './index.css';
 
@@ -91,6 +93,24 @@ function App() {
                 <OwnerRoute>
                   <Layout>
                     <CreditManagement />
+                  </Layout>
+                </OwnerRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/expenses" element={
+              <ProtectedRoute>
+                <OwnerRoute>
+                  <Layout>
+                    <ExpenseManagement />
+                  </Layout>
+                </OwnerRoute>
+              </ProtectedRoute>
+            } />
+            <Route path="/cancel-orders" element={
+              <ProtectedRoute>
+                <OwnerRoute>
+                  <Layout>
+                    <CancelOrders />
                   </Layout>
                 </OwnerRoute>
               </ProtectedRoute>

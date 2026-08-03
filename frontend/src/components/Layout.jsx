@@ -21,7 +21,9 @@ import {
   Phone,
   Mail,
   Boxes,
-  AlertTriangle
+  AlertTriangle,
+  Receipt,
+  Ban
 } from 'lucide-react';
 
 const playInternalChime = () => {
@@ -91,6 +93,7 @@ const Layout = ({ children }) => {
 
   const lodgingEnabled = user?.lodgingEnabled || false;
   const inventoryEnabled = user?.inventoryEnabled || false;
+  const cancelOrdersEnabled = user?.cancelOrdersEnabled || false;
 
   const baseNavItems = isWaiter 
       ? [
@@ -103,6 +106,8 @@ const Layout = ({ children }) => {
           { name: 'Kitchen(KOT)', path: '/kitchen-kot', icon: <ChefHat size={20} /> },
           { name: 'Billing History', path: '/history', icon: <History size={20} /> },
           { name: 'Credit Management', path: '/credit', icon: <Wallet size={20} /> },
+          { name: 'Expense Management', path: '/expenses', icon: <Receipt size={20} /> },
+          { name: 'Cancel Orders', path: '/cancel-orders', icon: <Ban size={20} /> },
           { name: 'Inventory Management', path: '/inventory', icon: <Boxes size={20} /> },
           { name: 'Lodging (Rooms)', path: '/lodging', icon: <Bed size={20} /> },
           { name: 'Guest Orders', path: '/orders', icon: <Bell size={20} /> },
@@ -113,6 +118,7 @@ const Layout = ({ children }) => {
 
   const navItems = baseNavItems.filter(item => {
     if (item.path === '/kitchen-kot' && !kotEnabled) return false;
+    if (item.path === '/cancel-orders' && !cancelOrdersEnabled) return false;
     if (item.path === '/inventory' && !inventoryEnabled) return false;
     if (item.path === '/lodging' && !lodgingEnabled) return false;
     if (item.path === '/orders' && !lodgingEnabled) return false;

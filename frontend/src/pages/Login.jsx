@@ -22,9 +22,15 @@ const Login = () => {
   const [licenseKey, setLicenseKey] = useState('');
   const [isRegistrationAllowed, setIsRegistrationAllowed] = useState(true);
   
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const { theme, toggleTheme, setTheme, isLight } = useTheme();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     const storedReason = localStorage.getItem('revoked_reason');

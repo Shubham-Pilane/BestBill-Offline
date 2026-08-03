@@ -38,6 +38,13 @@ router.post('/batch', auth, async (req, res) => {
     res.status(201).json({ message: 'Tables created securely' });
   } catch (err) {
     console.error(err);
+    if (err.code === '23505' || (err.message && (err.message.includes('UNIQUE') || err.message.includes('unique')))) {
+       const num = tableNumbers && tableNumbers[0];
+       if (num && (num.includes('Parcel') || num.includes('Token'))) {
+          return res.status(400).json({ message: `${num} already exists` });
+       }
+       return res.status(400).json({ message: 'Table already exists on this floor' });
+    }
     res.status(500).json({ message: 'Error establishing table infrastructure' });
   }
 });
@@ -79,7 +86,7 @@ router.get('/:tableId/order', auth, async (req, res) => {
       SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, mi.name, mi.price
       FROM order_items oi
       JOIN menu_items mi ON oi.menu_item_id = mi.id
-      WHERE oi.order_id = $1
+      WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
     const itemsResult = await db.query(itemsQuery, [order.id]);
@@ -105,7 +112,7 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
-        WHERE o.table_id = $1 AND o.status = 'active'
+        WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
       `, [tableId])
     ]);
 
@@ -191,19 +198,22 @@ router.post('/:tableId/order', auth, async (req, res) => {
 
     // Insert or update order item manually to avoid ON CONFLICT constraint requirements
     const existingItem = await db.query(
-      `SELECT id, quantity FROM order_items WHERE order_id = $1 AND menu_item_id = $2`,
+      `SELECT id, quantity, max_quantity FROM order_items WHERE order_id = $1 AND menu_item_id = $2`,
       [orderId, menuItemId]
     );
 
     if (existingItem.rows.length > 0) {
+      const newQty = existingItem.rows[0].quantity + quantity;
+      const currentMax = existingItem.rows[0].max_quantity || 0;
+      const newMax = Math.max(currentMax, newQty);
       await db.query(
-        `UPDATE order_items SET quantity = quantity + $1 WHERE id = $2`,
-        [quantity, existingItem.rows[0].id]
+        `UPDATE order_items SET quantity = $1, max_quantity = $2 WHERE id = $3`,
+        [newQty, newMax, existingItem.rows[0].id]
       );
     } else {
       await db.query(
-        `INSERT INTO order_items (order_id, menu_item_id, quantity) VALUES ($1, $2, $3)`,
-        [orderId, menuItemId, quantity]
+        `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity) VALUES ($1, $2, $3, $3)`,
+        [orderId, menuItemId, quantity, quantity]
       );
     }
 
@@ -211,7 +221,7 @@ router.post('/:tableId/order', auth, async (req, res) => {
       SELECT oi.*, mi.name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1
+      WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
@@ -228,18 +238,21 @@ router.put('/:tableId/order/items/:itemId', auth, async (req, res) => {
   const { quantity } = req.body;
   const { itemId } = req.params;
   try {
-    const query1 = `UPDATE order_items SET quantity = $1 WHERE id = $2 RETURNING order_id`;
-    const res1 = await db.query(query1, [quantity, itemId]);
+    const itemQuery = await db.query(`SELECT order_id, quantity, max_quantity FROM order_items WHERE id = $1`, [itemId]);
+    if (itemQuery.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
     
-    if (res1.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
-    const orderId = res1.rows[0].order_id;
+    const orderId = itemQuery.rows[0].order_id;
+    const currentMax = itemQuery.rows[0].max_quantity || 0;
+    const newMax = Math.max(currentMax, quantity);
+
+    await db.query(`UPDATE order_items SET quantity = $1, max_quantity = $2 WHERE id = $3`, [quantity, newMax, itemId]);
     notifyUpdate(req.user.hotel_id, 'table-update');
 
     const query2 = `
       SELECT oi.*, mi.name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1
+      WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
@@ -255,11 +268,9 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
   const { itemId, tableId } = req.params;
   
   try {
-    // 1. Delete the item or reset quantity if it was printed
-    const itemCheck = await db.query('SELECT order_id, printed_quantity FROM order_items WHERE id = $1', [itemId]);
+    const itemCheck = await db.query('SELECT order_id, printed_quantity, quantity, max_quantity FROM order_items WHERE id = $1', [itemId]);
     
     if (itemCheck.rows.length === 0) {
-      // Already deleted, check if order still exists
       const orderCheck = await db.query('SELECT id FROM orders WHERE table_id = $1 AND status = $2', [tableId, 'active']);
       if (orderCheck.rows.length === 0) return res.json({ items: [], order_deleted: true });
       
@@ -272,27 +283,74 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
     }
 
     const orderId = itemCheck.rows[0].order_id;
-    const printedQty = parseInt(itemCheck.rows[0].printed_quantity || 0);
-    
-    if (printedQty > 0) {
-      await db.query('UPDATE order_items SET quantity = 0 WHERE id = $1', [itemId]);
-    } else {
-      await db.query('DELETE FROM order_items WHERE id = $1', [itemId]);
-    }
 
-    // 2. Atomic check and cleanup of the order if empty (or all items have quantity = 0)
+    // Set quantity = 0 for this item, preserving max_quantity so full history is recorded if order gets cleared!
+    await db.query('UPDATE order_items SET quantity = 0 WHERE id = $1', [itemId]);
+
+    // Check remaining total active quantity on this order
     const remainingRes = await db.query('SELECT COALESCE(SUM(quantity), 0) as total_qty FROM order_items WHERE order_id = $1', [orderId]);
-    const totalQty = parseInt(remainingRes.rows[0].total_qty || 0);
+    const totalActiveQty = parseInt(remainingRes.rows[0].total_qty || 0);
 
     let isOrderCleared = false;
-    if (totalQty === 0) {
+    if (totalActiveQty === 0) {
+      // All items removed! Fetch ALL items that were part of this order using COALESCE(NULLIF(max_quantity, 0), quantity, 1)
+      const allItemsRes = await db.query(`
+        SELECT oi.id, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty, mi.name, mi.price
+        FROM order_items oi
+        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        WHERE oi.order_id = $1 AND (oi.max_quantity > 0 OR oi.quantity > 0)
+      `, [orderId]);
+
+      if (allItemsRes.rows.length > 0) {
+        const orderInfoRes = await db.query('SELECT kot_sent_at FROM orders WHERE id = $1', [orderId]);
+        const tableInfoRes = await db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]);
+
+        const kotSentAt = orderInfoRes.rows[0]?.kot_sent_at;
+        const hasPrintedItem = allItemsRes.rows.some(i => (i.printed_quantity || 0) > 0);
+        const kotStatus = (kotSentAt || hasPrintedItem) ? 'Printed' : 'Not Printed';
+        const billingStatus = 'Not Settled';
+
+        const items = allItemsRes.rows.map(i => ({
+          name: i.name,
+          price: parseFloat(i.price || 0),
+          quantity: parseInt(i.item_qty || 1)
+        }));
+
+        const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+        const totalAmount = items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+        const tableNumber = tableInfoRes.rows[0]?.table_number || `Table ${tableId}`;
+        const floor = tableInfoRes.rows[0]?.floor || 'Floor 1';
+        const cancelledBy = req.user.name || (req.user.role === 'owner' ? 'Owner' : 'Staff');
+        const orderNumber = `ORD-${orderId}`;
+
+        await db.query(
+          `INSERT INTO cancelled_orders 
+           (hotel_id, order_number, table_id, table_number, floor, cancelled_by, items_json, total_quantity, total_amount, cancellation_reason, kot_status, billing_status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            req.user.hotel_id,
+            orderNumber,
+            tableId,
+            tableNumber,
+            floor,
+            cancelledBy,
+            JSON.stringify(items),
+            totalQty,
+            totalAmount,
+            'All items removed',
+            kotStatus,
+            billingStatus
+          ]
+        );
+      }
+
       const updateOrderRes = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 RETURNING id", [orderId]);
       if (updateOrderRes.rows.length > 0) {
         isOrderCleared = true;
       }
     }
     
-    if (isOrderCleared || totalQty === 0) {
+    if (isOrderCleared || totalActiveQty === 0) {
       notifyUpdate(req.user.hotel_id, 'table-update');
       return res.json({ items: [], order_deleted: true });
     }
@@ -309,6 +367,80 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
   } catch (err) {
     console.error('Delete error:', err);
     res.status(500).json({ message: 'Removal failed' });
+  }
+});
+
+// Explicit Clear Table / Cancel Order endpoint
+router.post('/:tableId/clear-order', auth, async (req, res) => {
+  const { tableId } = req.params;
+  const { reason } = req.body;
+
+  try {
+    const orderRes = await db.query(`SELECT id FROM orders WHERE table_id = $1 AND status = 'active'`, [tableId]);
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ message: 'No active order to clear' });
+    }
+    const orderId = orderRes.rows[0].id;
+
+    // Fetch details & Record cancelled order
+    const [tableRes, itemsRes] = await Promise.all([
+      db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
+      db.query(`
+        SELECT oi.quantity, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty, mi.name, mi.price
+        FROM order_items oi
+        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        WHERE oi.order_id = $1 AND (oi.quantity > 0 OR oi.max_quantity > 0)
+      `, [orderId])
+    ]);
+
+    if (itemsRes.rows.length > 0) {
+      const kotSentAtRes = await db.query('SELECT kot_sent_at FROM orders WHERE id = $1', [orderId]);
+      const kotSentAt = kotSentAtRes.rows[0]?.kot_sent_at;
+      const hasPrintedItem = itemsRes.rows.some(i => (i.printed_quantity || 0) > 0);
+      const kotStatus = (kotSentAt || hasPrintedItem) ? 'Printed' : 'Not Printed';
+      const billingStatus = 'Not Settled';
+
+      const items = itemsRes.rows.map(i => ({
+        name: i.name,
+        price: parseFloat(i.price || 0),
+        quantity: parseInt(i.item_qty || i.quantity || 1)
+      }));
+
+      const totalQty = items.reduce((sum, i) => sum + i.quantity, 0);
+      const totalAmount = items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+      const tableNumber = tableRes.rows[0]?.table_number || `Table ${tableId}`;
+      const floor = tableRes.rows[0]?.floor || 'Floor 1';
+      const cancelledBy = req.user.name || (req.user.role === 'owner' ? 'Owner' : 'Staff');
+      const orderNumber = `ORD-${orderId}`;
+
+      await db.query(
+        `INSERT INTO cancelled_orders 
+         (hotel_id, order_number, table_id, table_number, floor, cancelled_by, items_json, total_quantity, total_amount, cancellation_reason, kot_status, billing_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          req.user.hotel_id,
+          orderNumber,
+          tableId,
+          tableNumber,
+          floor,
+          cancelledBy,
+          JSON.stringify(items),
+          totalQty,
+          totalAmount,
+          reason || 'Table Cleared by user',
+          kotStatus,
+          billingStatus
+        ]
+      );
+    }
+
+    await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1", [orderId]);
+    notifyUpdate(req.user.hotel_id, 'table-update');
+
+    res.json({ success: true, message: 'Table cleared and cancelled order recorded successfully' });
+  } catch (err) {
+    console.error('[CLEAR ORDER ROUTE ERROR]', err);
+    res.status(500).json({ message: 'Failed to clear order', error: err.message });
   }
 });
 
@@ -329,7 +461,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
-        WHERE o.table_id = $1 AND o.status = 'active'
+        WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
       `, [tableId])
     ]);
 

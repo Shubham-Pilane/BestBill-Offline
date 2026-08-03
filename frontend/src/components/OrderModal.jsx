@@ -33,6 +33,33 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
   const [customerName, setCustomerName] = useState('');
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [vendors, setVendors] = useState([]);
+  const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+
+  const isCancelEnabled = Boolean(user?.cancelOrdersEnabled || cancelOrdersEnabled);
+
+  useEffect(() => {
+    const fetchCancelStatus = async () => {
+      try {
+        const res = await api.get('/hotel/cancel-orders-status');
+        setCancelOrdersEnabled(!!res.data?.cancelOrdersEnabled);
+      } catch (err) {
+        setCancelOrdersEnabled(false);
+      }
+    };
+    fetchCancelStatus();
+  }, []);
+
+  const handleConfirmClearTable = async () => {
+    try {
+      await api.post(`/tables/${table.id}/clear-order`, { reason: 'Order Cancelled' });
+      toast.success('Order cancelled successfully!');
+      setShowCancelConfirmModal(false);
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to cancel order');
+    }
+  };
 
   useEffect(() => {
     if (selectedPaymentMethod === 'credit') {
@@ -670,20 +697,33 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                 />
               </div>
               {user?.role === 'waiter' ? (
-                <button 
-                  disabled={orderItems.length === 0} 
-                  onClick={sendToKitchen} 
-                  style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}
-                >
-                  SEND TO KITCHEN
-                </button>
+                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                  <button 
+                    disabled={orderItems.length === 0} 
+                    onClick={sendToKitchen} 
+                    style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}
+                  >
+                    SEND TO KITCHEN
+                  </button>
+                  {isCancelEnabled && (
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                  )}
+                </div>
               ) : (table.table_number === 'Parcel Counter' || user?.kotEnabled) ? (
                 <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
                   <button disabled={orderItems.length === 0} onClick={sendToKitchen} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SEND TO KITCHEN</button>
                   <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                  {isCancelEnabled && (
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                  )}
                 </div>
               ) : (
-                <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                  {isCancelEnabled && (
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -963,13 +1003,13 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                   </div>
  
                   {user?.whatsAppBillingEnabled && selectedPaymentMethod !== 'credit' && (
-                     <div style={{backgroundColor: 'white', padding: '20px', borderRadius: '24px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid #cbd5e1' }}>
-                        <Phone size={18} color="#64748b" />
+                     <div style={{ backgroundColor: 'var(--bg-card)', padding: '16px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--bg-border)' }}>
+                        <Phone size={18} style={{ color: 'var(--text-muted)' }} />
                         <input 
                            placeholder="Enter Mobile No" 
                            value={customerPhone} 
                            onChange={(e) => setCustomerPhone(e.target.value)}
-                           style={{ border: 'none', width: '100%', outline: 'none', fontWeight: 800, fontSize: '15px', background: 'white', color: '#0f172a' }}
+                           style={{ border: 'none', width: '100%', outline: 'none', fontWeight: 800, fontSize: '15px', background: 'transparent', color: 'var(--text-primary)' }}
                         />
                      </div>
                    )}
@@ -985,6 +1025,35 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
                      )}
                  </div>
              </div>
+          </div>
+        </div>
+      )}
+      {showCancelConfirmModal && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+          <div style={{ width: '100%', maxWidth: '420px', backgroundColor: 'var(--bg-card)', borderRadius: '24px', border: '1px solid var(--bg-border)', padding: '28px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 12px' }}>
+              Cancel Order & Clear Table
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 20px', lineHeight: '1.5' }}>
+              Are you sure you want to cancel this order and clear Table {table.table_numberByFloor || table.table_number}? A record will be logged in Cancel Orders.
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                type="button" 
+                onClick={() => setShowCancelConfirmModal(false)}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--bg-border)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 800, cursor: 'pointer' }}
+              >
+                Keep Order
+              </button>
+              <button 
+                type="button" 
+                onClick={handleConfirmClearTable}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#16a34a', color: 'white', fontWeight: 900, cursor: 'pointer' }}
+              >
+                Confirm Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

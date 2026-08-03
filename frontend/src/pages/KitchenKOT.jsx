@@ -76,12 +76,13 @@ const KitchenKOT = () => {
     }, []);
 
     const formatDateTime = (timestamp) => {
+        if (!timestamp) return 'N/A';
         const date = new Date(timestamp);
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
-        const hours = String(date.getHours()).padStart(2, '0');
         const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
         let ampm = 'AM';
         let displayHours = date.getHours();
         if (displayHours >= 12) {
@@ -90,7 +91,7 @@ const KitchenKOT = () => {
         }
         if (displayHours === 0) displayHours = 12;
         const displayHoursStr = String(displayHours).padStart(2, '0');
-        return `${day}/${month}/${year} ${displayHoursStr}:${minutes} ${ampm}`;
+        return `${day}/${month}/${year} ${displayHoursStr}:${minutes}:${seconds} ${ampm}`;
     };
 
     const themeColor = '#f59e0b'; // Warm orange flame/kitchen aesthetic

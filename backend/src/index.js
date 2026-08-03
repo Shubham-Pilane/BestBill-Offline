@@ -38,6 +38,8 @@ app.use('/api/guest', require('./routes/guest'));
 app.use('/api/kitchen', require('./routes/kitchen'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/credit', require('./routes/credit'));
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/cancel-orders', require('./routes/cancelOrders'));
 app.use('/api/cloud-sync', require('./routes/cloudSync'));
 
 app.get('/api/ping', (req, res) => {

@@ -66,6 +66,11 @@ class PrintService {
         const charLimit = this._resolveCharLimit('billing', payload, paperSize);
         const binaryBuffer = printFormatter.formatBill({ ...payload, printerSize: paperSize, charLimit });
         printerManager.queueJob({ type: 'FINAL_BILL', payload: binaryBuffer });
+      } else if (payload.type === 'CANCEL_ORDER') {
+        const paperSize = this._resolvePaperSize('billing', payload);
+        const charLimit = this._resolveCharLimit('billing', payload, paperSize);
+        const binaryBuffer = printFormatter.formatCancelOrder({ ...payload, printerSize: paperSize, charLimit });
+        printerManager.queueJob({ type: 'CANCEL_ORDER', payload: binaryBuffer });
       }
 
       return true;
@@ -124,6 +129,33 @@ class PrintService {
       booking_days: Number(booking_days || 1),
       printerSize: printerSize || '80mm',
       gst_percentage: Number(gst_percentage || 0)
+    };
+
+    return this.emitPrintJob(hotelId, payload);
+  }
+
+  /**
+   * Generates and spools a CANCEL_ORDER payload.
+   */
+  sendCancelOrder({ hotelId, orderNumber, table, floor, cancelledBy, items, totalAmount, kotStatus, billingStatus, cancellationReason, cancelDate }) {
+    const payload = {
+      type: 'CANCEL_ORDER',
+      printer: 'billing',
+      hotelId: Number(hotelId),
+      orderNumber: String(orderNumber || ''),
+      table: String(table || ''),
+      floor: String(floor || ''),
+      cancelledBy: String(cancelledBy || 'Staff'),
+      items: (items || []).map(i => ({
+        name: i.name,
+        price: Number(i.price || 0),
+        qty: Number(i.quantity || i.qty || 1)
+      })),
+      totalAmount: Number(totalAmount || 0),
+      kotStatus: kotStatus || 'Not Printed',
+      billingStatus: billingStatus || 'Not Settled',
+      cancellationReason: cancellationReason || '',
+      cancelDate: cancelDate || new Date().toISOString()
     };
 
     return this.emitPrintJob(hotelId, payload);

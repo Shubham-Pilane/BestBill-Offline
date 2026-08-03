@@ -79,13 +79,30 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
+// Single Instance Lock handling
+const gotTheLock = app.requestSingleInstanceLock();
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheLock) {
+  console.log(`[ELECTRON] Second instance detected. Quitting new process.`);
+  app.quit();
+} else {
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    console.log(`[ELECTRON] Second instance attempted. Focusing primary window.`);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
-});
+
+  app.whenReady().then(() => {
+    createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
