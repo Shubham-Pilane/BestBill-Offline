@@ -362,16 +362,16 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Menu */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-rgba-05)', overflow: 'hidden', minWidth: 0 }}>
-             <div style={{ padding: '16px 48px', display: 'flex', gap: '20px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)' }}>
-                <div className="category-bar-container" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, paddingBottom: '4px' }}>
+             <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)', flexWrap: 'wrap' }}>
+                <div className="category-bar-container" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, paddingBottom: '4px', minWidth: 0 }}>
                    <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>ALL MENU</button>
                    {categories.map(cat => (
                       <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: parseInt(selectedCategory) === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
                    ))}
                 </div>
-                <div style={{ position: 'relative', width: '300px' }}>
+                <div className="search-bar-container" style={{ position: 'relative', width: '300px' }}>
                     <Search style={{ position: 'absolute', top: '50%', left: '16px', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={18} />
-                    <input type="text" placeholder="Filter items..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} style={{width: '100%', padding: '14px 48px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none' }} />
+                    <input type="text" placeholder="Filter items..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} style={{width: '100%', padding: '14px 48px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 700, outline: 'none', fontSize: '16px' }} />
                 </div>
              </div>
              

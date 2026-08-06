@@ -111,12 +111,26 @@ const Dashboard = () => {
     }
   };
 
+  const getSocketUrl = () => {
+    if (import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.startsWith('/')) {
+      return import.meta.env.VITE_API_URL.replace('/api', '');
+    }
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port ? `:${window.location.port}` : ':5000';
+    return `${protocol}//${hostname}${port}`;
+  };
+
   useEffect(() => {
     fetchTables();
     fetchSubscriptionStatus();
 
-    const serverUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:8080';
-    const socket = io(serverUrl, { transports: ['websocket'] });
+    const socketUrl = getSocketUrl();
+    const socket = io(socketUrl, { 
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000
+    });
 
     if (user?.hotel_id) {
       socket.emit('register-hotel', { hotelId: user.hotel_id });
@@ -126,8 +140,14 @@ const Dashboard = () => {
       fetchTables();
     });
 
+    // 3-second auto-refresh interval as a bulletproof safety net across mobile devices
+    const pollInterval = setInterval(() => {
+      fetchTables();
+    }, 3000);
+
     return () => {
       socket.disconnect();
+      clearInterval(pollInterval);
     };
   }, [user]);
 
@@ -668,11 +688,7 @@ const Dashboard = () => {
           
           {/* Fallback for only parcel counters or token counters, no floors */}
           {floors.length === 0 && (parcelTables.length > 0 || tokenTables.length > 0) && (
-             <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: '24px'
-             }}>
+             <div className="dashboard-tables-grid">
                 {[...parcelTables, ...tokenTables].map((table) => (
                     <TableCard 
                       key={table.id} 
@@ -702,11 +718,7 @@ const Dashboard = () => {
                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{tableCount} TABLES</span>
                   </div>
                   
-                  <div style={{
-                     display: 'grid',
-                     gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                     gap: '24px'
-                  }}>
+                  <div className="dashboard-tables-grid">
                      {floorTables.map((table) => (
                          <TableCard 
                            key={table.id} 
@@ -916,6 +928,7 @@ const Dashboard = () => {
 const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap }) => {
   return (
     <div
+      className="table-card"
       onClick={() => onOpen(table)}
       style={{
         backgroundColor: 'var(--bg-card)',
@@ -977,7 +990,7 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3 style={{
+        <h3 className="table-card-title" style={{
           fontSize: (String(table.table_number || '').toLowerCase().includes('parcel') || String(table.table_number || '').toLowerCase().includes('token')) 
             ? '30px' 
             : '48px', 

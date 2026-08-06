@@ -261,7 +261,7 @@ const Layout = ({ children }) => {
       </aside>
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+      <div className="main-content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
         {user?.licenseWarning && (
           <div style={{ backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', zIndex: 101 }}>
             <AlertTriangle size={20} color="#ef4444" />
@@ -293,7 +293,16 @@ const Layout = ({ children }) => {
         @media (min-width: 1025px) {
           .sidebar-responsive {
             transform: none !important;
-            position: sticky !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            bottom: 0 !important;
+            height: 100vh !important;
+            width: 280px !important;
+            z-index: 200 !important;
+          }
+          .main-content-wrapper {
+            margin-left: 280px !important;
           }
           .responsive-header {
             display: none !important;
@@ -303,6 +312,9 @@ const Layout = ({ children }) => {
           }
         }
         @media (max-width: 1024px) {
+          .main-content-wrapper {
+            margin-left: 0 !important;
+          }
           .responsive-header {
             display: flex !important;
           }
