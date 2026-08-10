@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2, RefreshCw } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 const Profile = () => {
     const { user, updateUser } = useAuth();
@@ -42,6 +42,7 @@ const Profile = () => {
     const [installedPrinters, setInstalledPrinters] = useState([]);
     const [availableIps, setAvailableIps] = useState([]);
     const [selectedGuestIp, setSelectedGuestIp] = useState('');
+    const [isRefreshingIp, setIsRefreshingIp] = useState(false);
     const [billingCustomActive, setBillingCustomActive] = useState(false);
     const [kitchenCustomActive, setKitchenCustomActive] = useState(false);
     const [lodgingEnabled, setLodgingEnabled] = useState(false);
@@ -559,6 +560,20 @@ const Profile = () => {
             }
         } else {
             setAvailableIps(['127.0.0.1', '192.168.1.100']);
+        }
+    };
+
+    const handleRefreshNetwork = async () => {
+        setIsRefreshingIp(true);
+        const t = toast.loading('Refreshing local network IPs & Staff QR...');
+        try {
+            await fetchAvailableIps();
+            await fetchPrinterConfig();
+            toast.success('Staff QR & LAN Network IPs refreshed!', { id: t });
+        } catch (err) {
+            toast.error('Failed to refresh LAN IPs', { id: t });
+        } finally {
+            setIsRefreshingIp(false);
         }
     };
 
@@ -1211,10 +1226,21 @@ const Profile = () => {
                                                     Target URL: <strong style={{ color: '#0ea5e9' }}>http://{selectedGuestIp}:5000/#/guest/order/{user?.hotel_id || '1'}</strong>
                                                 </span>
                                             )}
-                                            <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content', marginTop: '8px' }}>
-                                                <Save size={18} />
-                                                Save Configurations
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                                                <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0ea5e9', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none' }}>
+                                                    <Save size={18} />
+                                                    Save Configurations
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleRefreshNetwork}
+                                                    disabled={isRefreshingIp}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', padding: '12px 18px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: '1px solid var(--bg-border)' }}
+                                                >
+                                                    <RefreshCw size={18} style={{ animation: isRefreshingIp ? 'spin 1s linear infinite' : 'none' }} />
+                                                    {isRefreshingIp ? 'Refreshing...' : 'Refresh Network'}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1231,24 +1257,35 @@ const Profile = () => {
                                         </div>
                                         <div>
                                             <h4 style={{fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>Staff Login QR</h4>
-                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 500, margin: 0 }}>Scan to login from waiter phone/tablet</p>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 500, margin: '0 0 4px 0' }}>Scan to login from waiter phone/tablet</p>
+                                            <span style={{ fontSize: '10px', color: '#0ea5e9', fontWeight: 700 }}>http://{selectedGuestIp || '127.0.0.1'}:5000</span>
                                         </div>
-                                        <button 
-                                            type="button"
-                                            onClick={() => {
-                                                const canvas = document.getElementById('staff-login-qr');
-                                                if (!canvas) return;
-                                                const url = canvas.toDataURL('image/png');
-                                                const link = document.createElement('a');
-                                                link.download = `Staff_Login_QR.png`;
-                                                link.href = url;
-                                                link.click();
-                                                toast.success('Staff Login QR Downloaded');
-                                            }}
-                                            style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
-                                        >
-                                            <Download size={16} /> Download Staff QR
-                                        </button>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                                            <button 
+                                                type="button"
+                                                onClick={handleRefreshNetwork}
+                                                disabled={isRefreshingIp}
+                                                style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'rgba(14, 165, 233, 0.1)', border: '1px solid rgba(14, 165, 233, 0.3)', color: '#0ea5e9', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                <RefreshCw size={14} style={{ animation: isRefreshingIp ? 'spin 1s linear infinite' : 'none' }} /> Refresh Staff QR
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    const canvas = document.getElementById('staff-login-qr');
+                                                    if (!canvas) return;
+                                                    const url = canvas.toDataURL('image/png');
+                                                    const link = document.createElement('a');
+                                                    link.download = `Staff_Login_QR.png`;
+                                                    link.href = url;
+                                                    link.click();
+                                                    toast.success('Staff Login QR Downloaded');
+                                                }}
+                                                style={{width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                                            >
+                                                <Download size={16} /> Download Staff QR
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </form>

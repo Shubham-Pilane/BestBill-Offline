@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { UtensilsCrossed, LogIn, Mail, Lock, UserPlus, Store, ChevronRight, AlertTriangle, Phone, AtSign, MapPin, Upload, Image as ImageIcon, Sun, Moon } from 'lucide-react';
 import api from '../services/api';
+import ServerConnectionStatus from '../components/ServerConnectionStatus';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -418,9 +419,15 @@ const Login = () => {
             <h1 style={{color: 'var(--text-primary)', fontSize: '32px', fontWeight: 900, letterSpacing: '-0.05em', margin: '0 0 4px 0', textTransform: 'uppercase' }}>
               Best<span style={{ color: '#38bdf8' }}>Bill</span>
             </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', margin: 0 }}>
-              {isForgotPassword ? 'Reset Password' : isRegister ? 'New Business Registration' : 'Hotel Owner Login'}
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 16px 0' }}>
+              {isForgotPassword ? 'Reset Password' : isRegister ? 'New Business Registration' : 'Staff & Owner Login'}
             </p>
+
+            {!window.bestbillDesktop && (
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                <ServerConnectionStatus />
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

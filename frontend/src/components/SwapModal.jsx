@@ -1,18 +1,45 @@
 import { X } from 'lucide-react';
 
-const SwapModal = ({ isOpen, onClose, tables, onSwap, currentTable }) => {
+const SwapModal = ({ isOpen, onClose, tables, floors: passedFloors, onSwap, currentTable }) => {
    if (!isOpen) return null;
    
    const availableTables = (tables || []).filter(t => {
       const name = String(t.table_number || '').toLowerCase();
       return !t.active_order_id && t.id !== currentTable?.id && !name.includes('parcel') && !name.includes('token');
    });
+
    const grouped = availableTables.reduce((acc, t) => {
       const f = t.floor || 'Floor 1';
       if (!acc[f]) acc[f] = [];
       acc[f].push(t);
       return acc;
    }, {});
+
+   // Determine exact floor order matching Table Dashboard sequence
+   const floorSequence = [];
+   
+   if (Array.isArray(passedFloors) && passedFloors.length > 0) {
+      passedFloors.forEach(f => {
+         if (grouped[f] && !floorSequence.includes(f)) {
+            floorSequence.push(f);
+         }
+      });
+   }
+
+   // Preserve first-appearance floor order from tables for any unlisted floor
+   (tables || []).forEach(t => {
+      const f = t.floor || 'Floor 1';
+      if (grouped[f] && !floorSequence.includes(f)) {
+         floorSequence.push(f);
+      }
+   });
+
+   // Fallback for any floor key in grouped not yet included
+   Object.keys(grouped).forEach(f => {
+      if (!floorSequence.includes(f)) {
+         floorSequence.push(f);
+      }
+   });
 
    return (
       <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.9)', backdropFilter: 'blur(16px)', zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
@@ -23,7 +50,7 @@ const SwapModal = ({ isOpen, onClose, tables, onSwap, currentTable }) => {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-               {Object.keys(grouped).sort().map(floor => (
+               {floorSequence.map(floor => (
                   <div key={floor}>
                      <div style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', letterSpacing: '0.1em', marginBottom: '16px', textTransform: 'uppercase' }}>{floor}</div>
                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '12px' }}>

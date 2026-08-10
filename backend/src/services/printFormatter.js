@@ -167,6 +167,14 @@ function formatKOT(data) {
       .line('-', LINE_WIDTH);
   }
 
+  // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
+  const brandBuffer = getBrandingRasterBuffer(is58mm);
+  if (brandBuffer && brandBuffer.length > 0) {
+    builder.alignCenter();
+    builder.bufferList.push(brandBuffer);
+    builder.bufferList.push(Buffer.from([0x0A]));
+  }
+
   builder.feed(3)
     .cut();
 
@@ -265,6 +273,103 @@ function getQRCodeBuffer(dataStr, is58mm = true) {
 }
 
 /**
+ * Generates high-resolution monochrome ESC/POS raster graphic buffer for "⚡ Powered by BestBill™"
+ * @param {boolean} is58mm - true for 58mm (384 dots), false for 80mm (576 dots)
+ * @returns {Buffer} Raw GS v 0 0 ESC/POS raster graphic buffer
+ */
+function getBrandingRasterBuffer(is58mm = true) {
+  try {
+    const printerWidthDots = is58mm ? 384 : 576;
+    const widthBytes = Math.ceil(printerWidthDots / 8);
+    const height = 36;
+    const buffer = Buffer.alloc(widthBytes * height, 0);
+
+    const setPixel = (x, y) => {
+      if (x >= 0 && x < printerWidthDots && y >= 0 && y < height) {
+        const byteIdx = y * widthBytes + Math.floor(x / 8);
+        const bitIdx = 7 - (x % 8);
+        buffer[byteIdx] |= (1 << bitIdx);
+      }
+    };
+
+    // 5x7 Font Glyphs for Crisp Bitmap Rendering
+    const fontData = {
+      'P': [0x7F, 0x09, 0x09, 0x09, 0x06],
+      'O': [0x3E, 0x41, 0x41, 0x41, 0x3E],
+      'W': [0x7F, 0x20, 0x18, 0x20, 0x7F],
+      'E': [0x7F, 0x49, 0x49, 0x49, 0x41],
+      'R': [0x7F, 0x09, 0x19, 0x29, 0x46],
+      'D': [0x7F, 0x41, 0x41, 0x22, 0x1C],
+      ' ': [0x00, 0x00, 0x00, 0x00, 0x00],
+      'B': [0x7F, 0x49, 0x49, 0x49, 0x36],
+      'Y': [0x07, 0x08, 0x70, 0x08, 0x07],
+      'S': [0x26, 0x49, 0x49, 0x49, 0x32],
+      'T': [0x01, 0x01, 0x7F, 0x01, 0x01],
+      'I': [0x41, 0x41, 0x7F, 0x41, 0x41],
+      'L': [0x7F, 0x40, 0x40, 0x40, 0x40]
+    };
+
+    const textStr = "POWERED BY BESTBILL";
+    const charWidth = 6;
+    const charHeight = 7;
+    const scale = 2; 
+
+    // Draw Vector Lightning Bolt Icon
+    const boltSize = 20;
+    const textWidth = (textStr.length * charWidth * scale);
+    const totalWidth = boltSize + 10 + textWidth;
+    const startX = Math.floor((printerWidthDots - totalWidth) / 2);
+    const startY = 8;
+
+    // Filled Vector Lightning Bolt
+    for (let py = 0; py < boltSize; py++) {
+      for (let px = 0; px < boltSize; px++) {
+        const nx = px / boltSize;
+        const ny = py / boltSize;
+        let inBolt = false;
+        if (ny <= 0.55 && nx >= (0.45 - ny * 0.6) && nx <= (0.85 - ny * 0.5)) inBolt = true;
+        if (ny >= 0.45 && nx >= (0.15 + (1 - ny) * 0.4) && nx <= (0.55 + (1 - ny) * 0.5)) inBolt = true;
+        if (inBolt) {
+          setPixel(startX + px, startY + py);
+        }
+      }
+    }
+
+    // Render Text Glyphs
+    let currentX = startX + boltSize + 10;
+    for (let c = 0; c < textStr.length; c++) {
+      const char = textStr[c];
+      const glyph = fontData[char] || fontData[' '];
+      for (let col = 0; col < glyph.length; col++) {
+        const colVal = glyph[col];
+        for (let row = 0; row < charHeight; row++) {
+          if (colVal & (1 << row)) {
+            for (let sy = 0; sy < scale; sy++) {
+              for (let sx = 0; sx < scale; sx++) {
+                setPixel(currentX + (col * scale) + sx, startY + (row * scale) + sy);
+              }
+            }
+          }
+        }
+      }
+      currentX += charWidth * scale;
+    }
+
+    // GS v 0 0 Header
+    const xL = widthBytes % 256;
+    const xH = Math.floor(widthBytes / 256);
+    const yL = height % 256;
+    const yH = Math.floor(height / 256);
+
+    const header = Buffer.from([0x1D, 0x76, 0x30, 0x00, xL, xH, yL, yH]);
+    return Buffer.concat([header, buffer]);
+  } catch (err) {
+    console.error('Branding raster generation error:', err);
+    return Buffer.from([]);
+  }
+}
+
+/**
  * Format Final Bill ESC/POS payload
  * @param {Object} data - { hotelName, hotelPhone, hotelLocation, billId, table, items: [{ name, quantity, price }], subtotal, gst, total, discount, printerSize }
  * @returns {Buffer} raw binary ESC/POS payload
@@ -346,6 +451,15 @@ function formatBill(data) {
     const totalText = 'TOTAL: Rs ' + Math.round(finalAmount);
     builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
     builder.line('-', LINE_WIDTH);
+
+    // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
+    const brandBuffer = getBrandingRasterBuffer(is58mm);
+    if (brandBuffer && brandBuffer.length > 0) {
+      builder.alignCenter();
+      builder.bufferList.push(brandBuffer);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    }
+
     builder.feed(3).cut();
     return builder.build();
   }
@@ -487,6 +601,14 @@ function formatBill(data) {
   builder.text(mg + padText('Thank You! Visit Again!', LINE_WIDTH, 'center'));
   builder.bold(false);
   
+  // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
+  const brandBuffer = getBrandingRasterBuffer(is58mm);
+  if (brandBuffer && brandBuffer.length > 0) {
+    builder.alignCenter();
+    builder.bufferList.push(brandBuffer);
+    builder.bufferList.push(Buffer.from([0x0A]));
+  }
+  
   if (!data.isPaid && data.upiId) {
     builder.text(mg + padText('[Scan to Pay via UPI]', LINE_WIDTH, 'center'));
     builder.alignCenter();
@@ -555,6 +677,14 @@ function formatCancelOrder(data) {
   const totalVal = parseFloat(data.totalAmount || 0);
   builder.bold(true).text(mg + padText(`CANCELLED TOTAL: Rs ${Math.round(totalVal)}`, LINE_WIDTH, 'right')).bold(false);
   builder.line('=', LINE_WIDTH);
+
+  // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
+  const brandBuffer = getBrandingRasterBuffer(is58mm);
+  if (brandBuffer && brandBuffer.length > 0) {
+    builder.alignCenter();
+    builder.bufferList.push(brandBuffer);
+    builder.bufferList.push(Buffer.from([0x0A]));
+  }
 
   builder.feed(3).cut();
   return builder.build();

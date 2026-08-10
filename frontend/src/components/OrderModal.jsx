@@ -5,7 +5,7 @@ import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, 
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import SwapModal from './SwapModal';
-const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) => {
+const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floors: passedFloors }) => {
   const { user } = useAuth();
   const [categories, setCategories] = useState(initialMenu?.categories || []);
   const [allItems, setAllItems] = useState([]);
@@ -1057,7 +1057,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) =>
           </div>
         </div>
       )}
-      <SwapModal isOpen={isSwapModalOpen} onClose={() => setSwapModalOpen(false)} tables={allTables} onSwap={handleSwapTable} currentTable={table} />
+      <SwapModal isOpen={isSwapModalOpen} onClose={() => setSwapModalOpen(false)} tables={allTables} floors={passedFloors} onSwap={handleSwapTable} currentTable={table} />
     </div>
   );
 };

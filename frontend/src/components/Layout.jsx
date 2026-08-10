@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
+import ServerConnectionStatus from './ServerConnectionStatus';
 import { 
   LayoutDashboard, 
   UtensilsCrossed, 
@@ -277,13 +278,16 @@ const Layout = ({ children }) => {
             </button>
             <h1 style={{ fontSize: '20px', fontWeight: 900, margin: 0 }}>Best<span style={{ color: '#38bdf8' }}>Bill</span></h1>
           </div>
-          {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-               <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #334155' }}>
-                  <UserCircle size={20} color="var(--text-secondary)" />
-               </div>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {isWaiter && !window.bestbillDesktop && <ServerConnectionStatus compact={true} />}
+            {user && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #334155' }}>
+                    <UserCircle size={20} color="var(--text-secondary)" />
+                 </div>
+              </div>
+            )}
+          </div>
         </header>
 
         <main style={{ flex: 1, padding: '40px' }} className="main-responsive">{children}</main>

@@ -88,7 +88,7 @@ const Dashboard = () => {
     return () => clearInterval(interval);
   }, [subStatus]);
 
-  const fetchTables = async () => {
+  const fetchTables = async (isSilent = false) => {
     try {
       // Parallel fetch for everything the dashboard needs
       const [tablesRes, catRes, itemsRes] = await Promise.all([
@@ -104,7 +104,9 @@ const Dashboard = () => {
       });
     } catch (err) {
       console.error('Fetch error:', err);
-      toast.error('Failed to load dashboard data');
+      if (!isSilent) {
+        toast.error('Failed to load dashboard data');
+      }
       setTables([]); 
     } finally {
       setLoading(false);
@@ -137,12 +139,12 @@ const Dashboard = () => {
     }
 
     socket.on('table-update', () => {
-      fetchTables();
+      fetchTables(true);
     });
 
     // 3-second auto-refresh interval as a bulletproof safety net across mobile devices
     const pollInterval = setInterval(() => {
-      fetchTables();
+      fetchTables(true);
     }, 3000);
 
     return () => {
@@ -903,6 +905,7 @@ const Dashboard = () => {
           table={tables.find(t => t.id === selectedTable.id) || selectedTable}
           initialMenu={menuData}
           allTables={tables}
+          floors={floors}
           onClose={() => {
             setOrderModalOpen(false);
             setClickShield(true);
@@ -916,6 +919,7 @@ const Dashboard = () => {
          isOpen={isSwapModalOpen} 
          onClose={() => setSwapModalOpen(false)} 
          tables={tables} 
+         floors={floors}
          onSwap={handleSwapTable} 
          currentTable={selectedTable}
       />
