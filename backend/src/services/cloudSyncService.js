@@ -9,6 +9,54 @@ function getLocalDateString(d = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function generate5CharHotelCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, currentCode) {
+  const codeStr = (currentCode || '').trim();
+  if (codeStr && codeStr.length === 5 && /^[a-zA-Z0-9]{5}$/.test(codeStr)) {
+    return codeStr;
+  }
+
+  let isUnique = false;
+  let newCode = '';
+  let attempts = 0;
+
+  while (!isUnique && attempts < 20) {
+    attempts++;
+    newCode = generate5CharHotelCode();
+    try {
+      const checkRes = await fetch(`${supabaseUrl}/rest/v1/hotels?hotel_code=eq.${newCode}&select=id`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      const data = await checkRes.json().catch(() => []);
+      if (Array.isArray(data) && data.length === 0) {
+        isUnique = true;
+      }
+    } catch (e) {
+      isUnique = true;
+    }
+  }
+
+  if (newCode) {
+    const cfg = configManager.getConfig();
+    cfg.cloudSyncHotelCode = newCode;
+    configManager.saveConfig(cfg);
+    return newCode;
+  }
+
+  return codeStr || generate5CharHotelCode();
+}
+
 /**
  * Collect analytics metrics from local SQLite database for given date
  */
@@ -225,10 +273,8 @@ async function performCloudSync() {
     const todayStr = getLocalDateString();
     const analytics = await getDailyAnalyticsData(todayStr);
 
-    // Ensure unique hotel_code per owner to prevent 409 conflict on duplicate key "hotels_hotel_code_key"
-    const effectiveHotelCode = (hotelCode && hotelCode !== 'HOTEL_001') 
-      ? hotelCode 
-      : `HOTEL_${ownerId.slice(0, 8).toUpperCase()}`;
+    // Get or generate unique 5-character Hotel Code (e.g. A7kP2)
+    const effectiveHotelCode = await getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, hotelCode);
 
     const hotelPayload = {
       owner_id: ownerId,
@@ -238,7 +284,7 @@ async function performCloudSync() {
       phone: analytics.hotel.phone || ''
     };
 
-    const hotelRes = await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=owner_id`, {
+    const hotelRes = await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=hotel_code`, {
       method: 'POST',
       headers: {
         'apikey': supabaseKey,
@@ -250,8 +296,7 @@ async function performCloudSync() {
     });
 
     if (!hotelRes.ok) {
-      // Fallback try with on_conflict=hotel_code
-      await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=hotel_code`, {
+      await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=owner_id`, {
         method: 'POST',
         headers: {
           'apikey': supabaseKey,
