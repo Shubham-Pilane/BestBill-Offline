@@ -19,15 +19,20 @@ function generate5CharHotelCode() {
 }
 
 // Check uniqueness in Supabase DB and generate unique 5-char code for THIS store
-async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, ownerId) {
+async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, currentCode) {
   const cfg = configManager.getConfig();
-  let existingCode = (cfg.cloudSyncHotelCode || '').trim();
+  let existingCode = (currentCode || cfg.cloudSyncHotelCode || '').trim();
 
-  // If already a valid 5-character alphanumeric code for THIS store, keep it
+  // 1. If already a valid 5-character alphanumeric code for THIS store/device, ALWAYS keep it permanently!
   if (existingCode && existingCode.length === 5 && /^[a-zA-Z0-9]{5}$/.test(existingCode)) {
+    if (cfg.cloudSyncHotelCode !== existingCode) {
+      cfg.cloudSyncHotelCode = existingCode;
+      configManager.saveConfig(cfg);
+    }
     return existingCode;
   }
 
+  // 2. Generate a brand new globally unique 5-character code for THIS store outlet
   let isUnique = false;
   let newCode = '';
   let attempts = 0;
@@ -51,14 +56,10 @@ async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken,
     }
   }
 
-  if (newCode) {
-    const cfg = configManager.getConfig();
-    cfg.cloudSyncHotelCode = newCode;
-    configManager.saveConfig(cfg);
-    return newCode;
-  }
-
-  return codeStr || generate5CharHotelCode();
+  const finalCode = newCode || existingCode || generate5CharHotelCode();
+  cfg.cloudSyncHotelCode = finalCode;
+  configManager.saveConfig(cfg);
+  return finalCode;
 }
 
 /**
@@ -278,7 +279,7 @@ async function performCloudSync() {
     const analytics = await getDailyAnalyticsData(todayStr);
 
     // Get or generate unique 5-character Hotel Code (e.g. A7kP2)
-    const effectiveHotelCode = await getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, hotelCode, ownerId);
+    const effectiveHotelCode = await getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, hotelCode);
 
     const hotelPayload = {
       owner_id: ownerId,
