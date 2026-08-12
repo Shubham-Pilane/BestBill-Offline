@@ -41,7 +41,7 @@ const defaultConfig = {
   cloudSyncEnabled: false,
   cloudSyncUrl: "https://vejvxpjswlmcsbfiqywp.supabase.co",
   cloudSyncAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZlanZ4cGpzd2xtY3NiZmlxeXdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ1MzI3NTMsImV4cCI6MjEwMDEwODc1M30.oliBQIW9k8TL_d5q73bza7tt-CSK34yY-prJrYTfcBI",
-  cloudSyncHotelCode: "HOTEL_001",
+  cloudSyncHotelCode: "",
   cloudSyncOwnerEmail: "",
   cloudSyncOwnerPassword: "",
   cloudSyncIntervalMinutes: 15,
@@ -64,6 +64,12 @@ function getConfig() {
     if (!parsed.cloudSyncUrl || parsed.cloudSyncUrl.includes('vcjexpj')) {
       parsed.cloudSyncUrl = defaultConfig.cloudSyncUrl;
       parsed.cloudSyncAnonKey = defaultConfig.cloudSyncAnonKey;
+      saveConfig(parsed);
+    }
+
+    // Auto-heal legacy 'HOTEL_001' or invalid hotel codes stored on disk
+    if (parsed.cloudSyncHotelCode === 'HOTEL_001' || (parsed.cloudSyncHotelCode && !/^[a-zA-Z0-9]{5}$/.test(parsed.cloudSyncHotelCode))) {
+      parsed.cloudSyncHotelCode = '';
       saveConfig(parsed);
     }
 

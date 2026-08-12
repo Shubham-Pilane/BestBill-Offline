@@ -34,7 +34,7 @@ router.get('/config', auth, (req, res) => {
     cloudSyncEnabled: config.cloudSyncEnabled || false,
     cloudSyncUrl: config.cloudSyncUrl || defaultUrl,
     cloudSyncAnonKey: config.cloudSyncAnonKey || defaultKey,
-    cloudSyncHotelCode: config.cloudSyncHotelCode || 'HOTEL_001',
+    cloudSyncHotelCode: config.cloudSyncHotelCode || '',
     cloudSyncOwnerEmail: config.cloudSyncOwnerEmail || '',
     cloudSyncOwnerPasswordConfigured: Boolean(config.cloudSyncOwnerPassword),
     cloudSyncIntervalMinutes: config.cloudSyncIntervalMinutes || 15,
@@ -69,7 +69,9 @@ router.post('/config', auth, async (req, res) => {
     currentConfig.cloudSyncEnabled = Boolean(cloudSyncEnabled);
     if (cloudSyncUrl !== undefined) currentConfig.cloudSyncUrl = String(cloudSyncUrl).trim();
     if (cloudSyncAnonKey !== undefined) currentConfig.cloudSyncAnonKey = String(cloudSyncAnonKey).trim();
-    if (cloudSyncHotelCode !== undefined) currentConfig.cloudSyncHotelCode = String(cloudSyncHotelCode).trim();
+    if (cloudSyncHotelCode !== undefined && String(cloudSyncHotelCode).trim().length === 5 && /^[a-zA-Z0-9]{5}$/.test(String(cloudSyncHotelCode).trim())) {
+      currentConfig.cloudSyncHotelCode = String(cloudSyncHotelCode).trim();
+    }
     if (cloudSyncOwnerEmail !== undefined) currentConfig.cloudSyncOwnerEmail = String(cloudSyncOwnerEmail).trim();
     
     // Only update password if provided

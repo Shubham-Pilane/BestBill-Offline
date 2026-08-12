@@ -21,18 +21,22 @@ function generate5CharHotelCode() {
 // Check uniqueness in Supabase DB and generate unique 5-char code for THIS store
 async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, currentCode) {
   const cfg = configManager.getConfig();
-  let existingCode = (currentCode || cfg.cloudSyncHotelCode || '').trim();
+  let savedCode = (cfg.cloudSyncHotelCode || '').trim();
+  let incomingCode = (currentCode || '').trim();
 
-  // 1. If already a valid 5-character alphanumeric code for THIS store/device, ALWAYS keep it permanently!
-  if (existingCode && existingCode.length === 5 && /^[a-zA-Z0-9]{5}$/.test(existingCode)) {
-    if (cfg.cloudSyncHotelCode !== existingCode) {
-      cfg.cloudSyncHotelCode = existingCode;
-      configManager.saveConfig(cfg);
-    }
-    return existingCode;
+  // 1. If cfg already has a valid 5-character alphanumeric code, ALWAYS use it permanently!
+  if (savedCode && savedCode.length === 5 && /^[a-zA-Z0-9]{5}$/.test(savedCode)) {
+    return savedCode;
   }
 
-  // 2. Generate a brand new globally unique 5-character code for THIS store outlet
+  // 2. If incomingCode is a valid 5-character alphanumeric code, lock it permanently!
+  if (incomingCode && incomingCode.length === 5 && /^[a-zA-Z0-9]{5}$/.test(incomingCode)) {
+    cfg.cloudSyncHotelCode = incomingCode;
+    configManager.saveConfig(cfg);
+    return incomingCode;
+  }
+
+  // 3. Generate a brand new globally unique 5-character code for THIS store outlet
   let isUnique = false;
   let newCode = '';
   let attempts = 0;
@@ -56,7 +60,7 @@ async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken,
     }
   }
 
-  const finalCode = newCode || existingCode || generate5CharHotelCode();
+  const finalCode = newCode || generate5CharHotelCode();
   cfg.cloudSyncHotelCode = finalCode;
   configManager.saveConfig(cfg);
   return finalCode;
@@ -181,7 +185,7 @@ async function performCloudSync() {
 
   const ownerEmail = (config.cloudSyncOwnerEmail || '').trim();
   const ownerPassword = (config.cloudSyncOwnerPassword || '').trim();
-  const hotelCode = (config.cloudSyncHotelCode || 'HOTEL_001').trim();
+  const hotelCode = (config.cloudSyncHotelCode || '').trim();
 
   if (!supabaseUrl || !supabaseKey || !ownerEmail || !ownerPassword) {
     console.warn('[CLOUD SYNC] Skipping sync: Supabase URL, Key, or Owner credentials missing.');
@@ -331,50 +335,65 @@ async function performCloudSync() {
         synced_at: new Date().toISOString()
       };
 
-      // Query existing snapshots strictly for THIS hotel_code on THIS date
-      const checkSnapRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?hotel_code=eq.${effectiveHotelCode}&snapshot_date=eq.${dateStr}&select=id`, {
+      // Attempt native REST UPSERT on (hotel_code, snapshot_date)
+      const upsertRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?on_conflict=hotel_code,snapshot_date`, {
+        method: 'POST',
         headers: {
           'apikey': supabaseKey,
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-      const existingSnaps = await checkSnapRes.json().catch(() => []);
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(snapshotPayload)
+      }).catch(() => null);
 
-      if (Array.isArray(existingSnaps) && existingSnaps.length > 0) {
-        const primaryId = existingSnaps[0].id;
-        await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${primaryId}`, {
-          method: 'PATCH',
+      // If native UPSERT was rejected (e.g. missing constraint), use robust query-and-patch fallback
+      if (!upsertRes || !upsertRes.ok) {
+        const checkSnapRes = await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?hotel_code=eq.${effectiveHotelCode}&snapshot_date=eq.${dateStr}&select=id`, {
           headers: {
             'apikey': supabaseKey,
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(snapshotPayload)
-        });
-
-        // Automatically purge any duplicate snapshot records for the same date!
-        if (existingSnaps.length > 1) {
-          const duplicateIds = existingSnaps.slice(1).map(s => s.id);
-          for (const dupId of duplicateIds) {
-            await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${dupId}`, {
-              method: 'DELETE',
-              headers: {
-                'apikey': supabaseKey,
-                'Authorization': `Bearer ${accessToken}`
-              }
-            }).catch(() => {});
+            'Authorization': `Bearer ${accessToken}`
           }
+        }).catch(() => null);
+        
+        const rawData = checkSnapRes ? await checkSnapRes.json().catch(() => []) : [];
+        const existingSnaps = Array.isArray(rawData) ? rawData : [];
+
+        if (existingSnaps.length > 0) {
+          const primaryId = existingSnaps[0].id;
+          await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${primaryId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(snapshotPayload)
+          });
+
+          // Automatically purge any duplicate snapshot records for the same date!
+          if (existingSnaps.length > 1) {
+            for (const dup of existingSnaps.slice(1)) {
+              await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots?id=eq.${dup.id}`, {
+                method: 'DELETE',
+                headers: {
+                  'apikey': supabaseKey,
+                  'Authorization': `Bearer ${accessToken}`
+                }
+              }).catch(() => {});
+            }
+          }
+        } else {
+          await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(snapshotPayload)
+          });
         }
-      } else {
-        await fetch(`${supabaseUrl}/rest/v1/analytics_snapshots`, {
-          method: 'POST',
-          headers: {
-            'apikey': supabaseKey,
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(snapshotPayload)
-        });
       }
     }
 

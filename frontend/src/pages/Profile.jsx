@@ -153,7 +153,7 @@ const Profile = () => {
     const [cloudSyncConfig, setCloudSyncConfig] = useState({
         cloudSyncUrl: '',
         cloudSyncAnonKey: '',
-        cloudSyncHotelCode: 'HOTEL_001',
+        cloudSyncHotelCode: '',
         cloudSyncOwnerEmail: '',
         cloudSyncOwnerPassword: '',
         cloudSyncIntervalMinutes: 15,
@@ -450,7 +450,7 @@ const Profile = () => {
             setCloudSyncConfig({
                 cloudSyncUrl: res.data.cloudSyncUrl || '',
                 cloudSyncAnonKey: res.data.cloudSyncAnonKey || '',
-                cloudSyncHotelCode: res.data.cloudSyncHotelCode || 'HOTEL_001',
+                cloudSyncHotelCode: res.data.cloudSyncHotelCode || '',
                 cloudSyncOwnerEmail: res.data.cloudSyncOwnerEmail || '',
                 cloudSyncOwnerPassword: '',
                 cloudSyncOwnerPasswordConfigured: res.data.cloudSyncOwnerPasswordConfigured,
