@@ -189,7 +189,7 @@ const Lodging = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <h1 style={{fontSize: '36px', fontWeight: 950, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>{user?.hotel_name || 'BestBill Hotel'}</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 700 }}>
-              <span>Proprietor: {user?.name || 'A'}</span>
+              <span>Owner: {user?.name || 'A'}</span>
               <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--bg-border)' }}></div>
               <span style={{ color: '#10b981' }}>Active Session</span>
             </div>

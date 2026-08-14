@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import SwapModal from './SwapModal';
@@ -20,6 +20,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [billData, setBillData] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
+  const [selectedDeliveryPartner, setSelectedDeliveryPartner] = useState('');
   const [discount, setDiscount] = useState(0);
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [allTables, setAllTables] = useState(passedTables || []);
@@ -35,7 +36,42 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [vendors, setVendors] = useState([]);
   const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const [customDeliveryPartners, setCustomDeliveryPartners] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cfg_custom_delivery_partners');
+      return saved ? JSON.parse(saved) : ['Zomato', 'Swiggy'];
+    } catch (e) {
+      return ['Zomato', 'Swiggy'];
+    }
+  });
+  const [showAddPartnerInput, setShowAddPartnerInput] = useState(false);
+  const [partnerToDelete, setPartnerToDelete] = useState(null);
+  const [partnerToRename, setPartnerToRename] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
 
+  const handleAddDeliveryPartner = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const name = newPartnerName.trim();
+    if (!name) return;
+    const updated = Array.from(new Set([...customDeliveryPartners, name]));
+    setCustomDeliveryPartners(updated);
+    localStorage.setItem('cfg_custom_delivery_partners', JSON.stringify(updated));
+    setSelectedDeliveryPartner(name);
+    setNewPartnerName('');
+    setShowAddPartnerInput(false);
+    toast.success(`Added ${name}`);
+  };
+
+  const handleRenamePartner = (oldName) => {
+    setPartnerToRename(oldName);
+    setRenameValue(oldName);
+  };
+
+  const handleDeletePartner = (partnerName) => {
+    setPartnerToDelete(partnerName);
+  };
+
+  const isOnlineCounter = String(table?.table_number || table?.id || '').toLowerCase().includes('online');
   const isCancelEnabled = Boolean(user?.cancelOrdersEnabled || cancelOrdersEnabled);
 
   useEffect(() => {
@@ -436,21 +472,25 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
         {/* Header */}
         <div className="order-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border-rgba-05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-            <div style={{width: '64px', height: '64px', backgroundColor: table.active_order_id ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '28px' }}>
+            <div style={{ minWidth: '64px', padding: '0 12px', height: '64px', backgroundColor: table.active_order_id ? '#f43f5e' : '#10b981', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ffffff', fontWeight: 900, fontSize: String(table.table_number || '').length > 6 ? '16px' : '28px', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {String(table.table_number || '').toLowerCase().includes('parcel') 
                 ? 'PC' 
                 : String(table.table_number || '').toLowerCase().includes('token') 
                   ? 'TC' 
-                  : table.table_number
+                  : String(table.table_number || '').toLowerCase().includes('online')
+                    ? 'ONLINE'
+                    : table.table_number
               }
             </div>
             <div>
-              <h2 style={{fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
                 {String(table.table_number || '').toLowerCase().includes('parcel') 
                   ? 'Parcel Counter Summary' 
                   : String(table.table_number || '').toLowerCase().includes('token') 
                     ? 'Token Counter Summary' 
-                    : `Table ${table.table_number} Summary`
+                    : String(table.table_number || '').toLowerCase().includes('online')
+                      ? (selectedDeliveryPartner ? `${selectedDeliveryPartner.toUpperCase()} Order` : 'Online Order Summary')
+                      : `Table ${table.table_number} Summary`
                 }
               </h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -789,75 +829,166 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                 </div>
               </div>
               <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                      {!billData.is_paid && (
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                         <div style={{ display: 'flex', gap: '8px' }}>
-                           <button 
-                             type="button"
-                             onClick={() => setSelectedPaymentMethod('cash')} 
-                             style={{ 
-                               flex: 1, 
-                               padding: '14px 8px', 
-                               backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : '#ffffff', 
-                               color: selectedPaymentMethod === 'cash' ? 'white' : '#475569', 
-                               border: selectedPaymentMethod === 'cash' ? 'none' : '1px solid #cbd5e1', 
-                               borderRadius: '12px', 
-                               fontWeight: 1000, 
-                               cursor: 'pointer', 
-                               fontSize: '13px', 
-                               textTransform: 'uppercase', 
-                               letterSpacing: '0.05em', 
-                               boxShadow: selectedPaymentMethod === 'cash' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
-                               transition: 'all 0.2s'
-                             }}
-                           >
-                             Cash
-                           </button>
-                           <button 
-                             type="button"
-                             onClick={() => setSelectedPaymentMethod('upi')} 
-                             style={{ 
-                               flex: 1, 
-                               padding: '14px 8px', 
-                               backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : '#ffffff', 
-                               color: selectedPaymentMethod === 'upi' ? 'white' : '#475569', 
-                               border: selectedPaymentMethod === 'upi' ? 'none' : '1px solid #cbd5e1', 
-                               borderRadius: '12px', 
-                               fontWeight: 1000, 
-                               cursor: 'pointer', 
-                               fontSize: '13px', 
-                               textTransform: 'uppercase', 
-                               letterSpacing: '0.05em', 
-                               boxShadow: selectedPaymentMethod === 'upi' ? '0 4px 12px rgba(14, 165, 233, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
-                               transition: 'all 0.2s'
-                             }}
-                           >
-                             Online
-                           </button>
-                           <button 
-                             type="button"
-                             onClick={() => setSelectedPaymentMethod('credit')} 
-                             style={{ 
-                               flex: 1, 
-                               padding: '14px 8px', 
-                               backgroundColor: selectedPaymentMethod === 'credit' ? '#f59e0b' : '#ffffff', 
-                               color: selectedPaymentMethod === 'credit' ? 'white' : '#475569', 
-                               border: selectedPaymentMethod === 'credit' ? 'none' : '1px solid #cbd5e1', 
-                               borderRadius: '12px', 
-                               fontWeight: 1000, 
-                               cursor: 'pointer', 
-                               fontSize: '13px', 
-                               textTransform: 'uppercase', 
-                               letterSpacing: '0.05em', 
-                               boxShadow: selectedPaymentMethod === 'credit' ? '0 4px 12px rgba(245, 158, 11, 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
-                               transition: 'all 0.2s'
-                             }}
-                           >
-                             Credit
-                           </button>
-                         </div>
- 
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          
+                          {/* Payment Method Section */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              PAYMENT METHOD
+                            </label>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button 
+                                type="button"
+                                onClick={() => setSelectedPaymentMethod('cash')} 
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '12px 6px', 
+                                  backgroundColor: selectedPaymentMethod === 'cash' ? '#10b981' : '#ffffff', 
+                                  color: selectedPaymentMethod === 'cash' ? 'white' : '#475569', 
+                                  border: selectedPaymentMethod === 'cash' ? 'none' : '1px solid #cbd5e1', 
+                                  borderRadius: '12px', 
+                                  fontWeight: 1000, 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px', 
+                                  textTransform: 'uppercase', 
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                Cash
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => setSelectedPaymentMethod('upi')} 
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '12px 6px', 
+                                  backgroundColor: selectedPaymentMethod === 'upi' ? '#0ea5e9' : '#ffffff', 
+                                  color: selectedPaymentMethod === 'upi' ? 'white' : '#475569', 
+                                  border: selectedPaymentMethod === 'upi' ? 'none' : '1px solid #cbd5e1', 
+                                  borderRadius: '12px', 
+                                  fontWeight: 1000, 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px', 
+                                  textTransform: 'uppercase', 
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                Online
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => setSelectedPaymentMethod('credit')} 
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '12px 6px', 
+                                  backgroundColor: selectedPaymentMethod === 'credit' ? '#f59e0b' : '#ffffff', 
+                                  color: selectedPaymentMethod === 'credit' ? 'white' : '#475569', 
+                                  border: selectedPaymentMethod === 'credit' ? 'none' : '1px solid #cbd5e1', 
+                                  borderRadius: '12px', 
+                                  fontWeight: 1000, 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px', 
+                                  textTransform: 'uppercase', 
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                Credit
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Food Delivery Partner Section (Only for Online Counter!) */}
+                          {isOnlineCounter && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '8px', borderTop: '1px solid var(--bg-border)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                  FOOD DELIVERY SERVICE (OPTIONAL)
+                                </label>
+                                {selectedDeliveryPartner && (
+                                  <button 
+                                    type="button" 
+                                    onClick={() => setSelectedDeliveryPartner('')} 
+                                    style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: '11px', fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                                  >
+                                    Clear
+                                  </button>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {customDeliveryPartners.map(partner => {
+                                  const isSelected = selectedDeliveryPartner === partner;
+                                  return (
+                                    <div 
+                                      key={partner}
+                                      style={{ 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: '6px',
+                                        padding: '8px 10px', 
+                                        backgroundColor: isSelected ? (partner === 'Zomato' ? '#e11d48' : partner === 'Swiggy' ? '#ea580c' : '#8b5cf6') : '#ffffff', 
+                                        color: isSelected ? 'white' : '#475569', 
+                                        border: isSelected ? 'none' : '1px solid #cbd5e1', 
+                                        borderRadius: '12px', 
+                                        fontWeight: 1000, 
+                                        fontSize: '12px',
+                                        transition: 'all 0.2s'
+                                      }}
+                                    >
+                                      <span 
+                                        onClick={() => setSelectedDeliveryPartner(isSelected ? '' : partner)}
+                                        style={{ cursor: 'pointer', textTransform: 'uppercase' }}
+                                      >
+                                        {partner}
+                                      </span>
+                                      <button 
+                                        type="button" 
+                                        title={`Rename ${partner}`}
+                                        onClick={(e) => { e.stopPropagation(); handleRenamePartner(partner); }}
+                                        style={{ background: 'none', border: 'none', color: isSelected ? 'rgba(255,255,255,0.9)' : '#94a3b8', cursor: 'pointer', padding: '1px', display: 'flex', alignItems: 'center' }}
+                                      >
+                                        <Edit2 size={12} />
+                                      </button>
+                                      <button 
+                                        type="button" 
+                                        title={`Delete ${partner}`}
+                                        onClick={(e) => { e.stopPropagation(); handleDeletePartner(partner); }}
+                                        style={{ background: 'none', border: 'none', color: isSelected ? 'rgba(255,255,255,0.9)' : '#ef4444', cursor: 'pointer', padding: '1px', display: 'flex', alignItems: 'center' }}
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {!showAddPartnerInput ? (
+                                <button 
+                                  type="button" 
+                                  onClick={() => setShowAddPartnerInput(true)} 
+                                  style={{ background: 'none', border: 'none', color: '#a855f7', fontSize: '12px', fontWeight: 800, cursor: 'pointer', textAlign: 'left', marginTop: '2px', padding: '2px 0' }}
+                                >
+                                  + Add Food Delivery Service
+                                </button>
+                              ) : (
+                                <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                                  <input 
+                                    type="text" 
+                                    placeholder="Partner Name (e.g. UberEats)" 
+                                    value={newPartnerName}
+                                    onChange={e => setNewPartnerName(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddDeliveryPartner(); } }}
+                                    style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', color: '#0f172a', fontSize: '12px', outline: 'none' }}
+                                  />
+                                  <button type="button" onClick={handleAddDeliveryPartner} style={{ padding: '8px 12px', borderRadius: '8px', backgroundColor: '#a855f7', color: 'white', border: 'none', fontWeight: 800, fontSize: '12px', cursor: 'pointer' }}>Add</button>
+                                  <button type="button" onClick={() => setShowAddPartnerInput(false)} style={{ padding: '8px', borderRadius: '8px', backgroundColor: '#e2e8f0', border: 'none', color: '#64748b', cursor: 'pointer' }}><X size={14} /></button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                          {selectedPaymentMethod === 'credit' && (
                            <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
                              <div style={{ display: 'flex', gap: '12px' }}>
@@ -1057,6 +1188,105 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
           </div>
         </div>
       )}
+      {/* Custom Delete Partner Modal */}
+      {partnerToDelete && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '24px', padding: '24px', maxWidth: '400px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Trash2 size={24} />
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Remove Delivery Partner?</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 24px', lineHeight: 1.5 }}>
+              Are you sure you want to remove <strong style={{ color: 'var(--text-primary)' }}>"{partnerToDelete}"</strong>? This service option will be removed from your counter options.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setPartnerToDelete(null)}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const updated = customDeliveryPartners.filter(p => p !== partnerToDelete);
+                  setCustomDeliveryPartners(updated);
+                  localStorage.setItem('cfg_custom_delivery_partners', JSON.stringify(updated));
+                  if (selectedDeliveryPartner === partnerToDelete) setSelectedDeliveryPartner('');
+                  toast.success(`Removed ${partnerToDelete}`);
+                  setPartnerToDelete(null);
+                }}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#ef4444', color: '#ffffff', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Rename Partner Modal */}
+      {partnerToRename && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '24px', padding: '24px', maxWidth: '400px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Edit2 size={24} />
+            </div>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px', textAlign: 'center' }}>Rename Delivery Service</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', textAlign: 'center' }}>
+              Enter a new name for <strong style={{ color: 'var(--text-primary)' }}>"{partnerToRename}"</strong>
+            </p>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (renameValue.trim() && renameValue.trim() !== partnerToRename) {
+                    const updated = customDeliveryPartners.map(p => p === partnerToRename ? renameValue.trim() : p);
+                    setCustomDeliveryPartners(updated);
+                    localStorage.setItem('cfg_custom_delivery_partners', JSON.stringify(updated));
+                    if (selectedDeliveryPartner === partnerToRename) setSelectedDeliveryPartner(renameValue.trim());
+                    toast.success(`Renamed to ${renameValue.trim()}`);
+                  }
+                  setPartnerToRename(null);
+                }
+              }}
+              placeholder="Delivery Service Name"
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontSize: '14px', outline: 'none', marginBottom: '20px', boxSizing: 'border-box' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setPartnerToRename(null)}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '14px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (renameValue.trim() && renameValue.trim() !== partnerToRename) {
+                    const updated = customDeliveryPartners.map(p => p === partnerToRename ? renameValue.trim() : p);
+                    setCustomDeliveryPartners(updated);
+                    localStorage.setItem('cfg_custom_delivery_partners', JSON.stringify(updated));
+                    if (selectedDeliveryPartner === partnerToRename) setSelectedDeliveryPartner(renameValue.trim());
+                    toast.success(`Renamed to ${renameValue.trim()}`);
+                  }
+                  setPartnerToRename(null);
+                }}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#a855f7', color: '#ffffff', fontWeight: 800, fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(168, 85, 247, 0.3)' }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SwapModal isOpen={isSwapModalOpen} onClose={() => setSwapModalOpen(false)} tables={allTables} floors={passedFloors} onSwap={handleSwapTable} currentTable={table} />
     </div>
   );
