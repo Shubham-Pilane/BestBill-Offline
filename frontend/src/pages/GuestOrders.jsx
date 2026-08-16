@@ -32,7 +32,9 @@ const GuestOrders = () => {
     const activateSound = () => {
         localStorage.setItem('guest_order_sound', 'true');
         setAudioEnabled(true);
-        playInternalChime();
+        if (typeof playInternalChime === 'function') {
+            try { playInternalChime(); } catch (e) { console.error(e); }
+        }
         toast.success('Sound Engine Activated!', { icon: '🔊' });
     };
 
@@ -48,10 +50,10 @@ const GuestOrders = () => {
     const fetchOrdersFeed = async () => {
         try {
             const res = await api.get('/rooms/guest-orders-all');
-            setOrders(res.data);
-            if (selectedOrder) {
+            setOrders(Array.isArray(res.data) ? res.data : []);
+            if (selectedOrder?.order?.id) {
                 const chatRes = await api.get(`/rooms/orders/${selectedOrder.order.id}/chat`);
-                setChatMessages(chatRes.data);
+                setChatMessages(Array.isArray(chatRes.data) ? chatRes.data : []);
             }
         } catch (err) { console.error(err); } finally { setLoading(false); }
     };
@@ -67,12 +69,13 @@ const GuestOrders = () => {
     }, [chatMessages]);
 
     const viewDetails = async (order) => {
+        if (!order || !order.room_id) return;
         const l = toast.loading('Opening...');
         try {
             const res = await api.get(`/rooms/${order.room_id}/order`);
             const chatRes = await api.get(`/rooms/orders/${order.id}/chat`);
-            setSelectedOrder({ order, items: res.data.items });
-            setChatMessages(chatRes.data);
+            setSelectedOrder({ order, items: res.data?.items || [] });
+            setChatMessages(Array.isArray(chatRes.data) ? chatRes.data : []);
             setOwnerMessage('');
             toast.dismiss(l);
         } catch (err) { toast.error('Failed to load', { id: l }); }
@@ -80,16 +83,17 @@ const GuestOrders = () => {
 
     const sendMessage = async (e) => {
         e.preventDefault();
-        if (!ownerMessage.trim()) return;
+        if (!ownerMessage.trim() || !selectedOrder?.order?.id) return;
         try {
             await api.post(`/rooms/orders/${selectedOrder.order.id}/chat`, { message: ownerMessage });
             setOwnerMessage('');
             const chatRes = await api.get(`/rooms/orders/${selectedOrder.order.id}/chat`);
-            setChatMessages(chatRes.data);
+            setChatMessages(Array.isArray(chatRes.data) ? chatRes.data : []);
         } catch (err) { toast.error('Failed to send'); }
     };
 
     const markAsDelivered = async (orderId) => {
+        if (!orderId) return;
         try {
             await api.put(`/rooms/orders/${orderId}/deliver`);
             toast.success('Completed');
@@ -98,11 +102,12 @@ const GuestOrders = () => {
         } catch (err) { toast.error('Update failed'); }
     };
 
-    const activeList = orders.filter(o => !o.is_delivered && o.room_status === 'occupied').filter(o => o.room_number.includes(searchQuery));
-    const historyList = orders.filter(o => o.is_delivered || (o.room_status !== 'occupied' && !o.is_delivered)).filter(o => o.room_number.includes(searchQuery));
+    const safeOrders = Array.isArray(orders) ? orders : [];
+    const activeList = safeOrders.filter(o => o && !o.is_delivered && o.room_status === 'occupied').filter(o => String(o.room_number || '').includes(searchQuery));
+    const historyList = safeOrders.filter(o => o && (o.is_delivered || (o.room_status !== 'occupied' && !o.is_delivered))).filter(o => String(o.room_number || '').includes(searchQuery));
     const themeColor = '#0ea5e9';
 
-    if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+    if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-base)' }}>Loading...</div>;
 
     return (
         <div style={{display: 'flex', flexDirection: 'column', gap: '32px', width: '100%', color: 'var(--text-primary)' }}>
@@ -142,10 +147,10 @@ const GuestOrders = () => {
                     {activeList.map(order => (
                         <div key={order.id} onClick={() => viewDetails(order)} style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '24px', border: '1px solid var(--bg-border)', cursor: 'pointer' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div style={{ width: '50px', height: '50px', background: `${themeColor}15`, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bed color={themeColor} /></div><div><h4 style={{ margin: 0, fontWeight: 900 }}>Room {order.room_number}</h4><span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{order.guest_name}</span></div></div>
+                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div style={{ width: '50px', height: '50px', background: `${themeColor}15`, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bed color={themeColor} /></div><div><h4 style={{ margin: 0, fontWeight: 900 }}>Room {order.room_number || ''}</h4><span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{order.guest_name || ''}</span></div></div>
                                 <span style={{ fontSize: '10px', fontWeight: 900, background: `${themeColor}15`, color: themeColor, padding: '6px 12px', borderRadius: '100px' }}>INCOMING</span>
                             </div>
-                            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '14px', marginBottom: '16px', fontSize: '14px', fontWeight: 700, color: themeColor }}>{order.items_summary}</div>
+                            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '14px', marginBottom: '16px', fontSize: '14px', fontWeight: 700, color: themeColor }}>{order.items_summary || 'Order Items'}</div>
                             <div style={{ display: 'flex', gap: '12px' }}>
                                 <button onClick={(e) => { e.stopPropagation(); viewDetails(order); }} style={{flex: 1, background: 'var(--bg-border)', color: 'var(--text-primary)', padding: '12px', border: 'none', borderRadius: '12px', fontWeight: 800 }}>Chat</button>
                                 <button onClick={(e) => { e.stopPropagation(); markAsDelivered(order.id); }} style={{flex: 1, background: themeColor, color: 'var(--text-primary)', padding: '12px', border: 'none', borderRadius: '12px', fontWeight: 800 }}>Complete</button>
@@ -161,7 +166,7 @@ const GuestOrders = () => {
                 <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', border: '1px solid var(--bg-border)', overflow: 'hidden' }}>
                     {historyList.map(order => (
                         <div key={order.id} onClick={() => viewDetails(order)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 32px', borderBottom: '1px solid var(--bg-border)', cursor: 'pointer' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', width: '200px' }}><div style={{ width: '38px', height: '38px', background: '#10b98110', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bed size={18} color="#10b981" /></div><span style={{ fontWeight: 920, fontSize: '16px' }}>Room {order.room_number}</span></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', width: '200px' }}><div style={{ width: '38px', height: '38px', background: '#10b98110', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Bed size={18} color="#10b981" /></div><span style={{ fontWeight: 920, fontSize: '16px' }}>Room {order.room_number || ''}</span></div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}><CheckCircle2 size={14} color="#10b981" /><span style={{ color: '#10b981', fontWeight: 800, fontSize: '12px' }}>DELIVERED</span></div>
                             <div style={{ fontSize: '18px', fontWeight: 1000, color: '#10b981' }}>₹{order.total_amount || 0}</div>
                         </div>
@@ -169,14 +174,14 @@ const GuestOrders = () => {
                 </div>
             </div>
 
-            {selectedOrder && (
+            {selectedOrder && selectedOrder.order && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.98)', backdropFilter: 'blur(32px)', zIndex: 5000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
                     <div style={{ width: '100%', maxWidth: '900px', backgroundColor: 'var(--bg-card)', borderRadius: '48px', padding: '48px', border: '1px solid var(--border-rgba-05)', display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '48px' }}>
                         <div>
-                            <h3 style={{fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 32px' }}>Room {selectedOrder.order.room_number}</h3>
+                            <h3 style={{fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', margin: '0 0 32px' }}>Room {selectedOrder.order?.room_number || ''}</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto', paddingRight: '8px' }}>
-                                {selectedOrder.items.map(item => (
-                                    <div key={item.id} style={{ 
+                                {(selectedOrder.items || []).map(item => (
+                                    <div key={item.id || item.name} style={{ 
                                         display: 'flex', 
                                         justifyContent: 'space-between', 
                                         alignItems: 'center',
@@ -191,19 +196,19 @@ const GuestOrders = () => {
                                             </div>
                                             <span style={{fontWeight: 800, color: 'var(--text-primary)', fontSize: '15px' }}>{item.name}</span>
                                         </div>
-                                        <span style={{ fontWeight: 900, color: themeColor }}>₹{item.price * item.quantity}</span>
+                                        <span style={{ fontWeight: 900, color: themeColor }}>₹{(item.price || 0) * (item.quantity || 1)}</span>
                                     </div>
                                 ))}
                             </div>
                             <div style={{ marginTop: '32px', borderTop: '1px solid var(--bg-border)', paddingTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                                 <div>
                                     <span style={{ color: 'var(--text-muted)', fontWeight: 800, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Grand Total</span>
-                                    <div style={{fontSize: '32px', fontWeight: 1000, color: 'var(--text-primary)' }}>₹{selectedOrder.order.total_amount || selectedOrder.items.reduce((s, i) => s + (i.price * i.quantity), 0)}</div>
+                                    <div style={{fontSize: '32px', fontWeight: 1000, color: 'var(--text-primary)' }}>₹{selectedOrder.order?.total_amount || (selectedOrder.items || []).reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0)}</div>
                                 </div>
                                 <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 900, backgroundColor: '#10b98115', padding: '6px 12px', borderRadius: '100px' }}>VERIFIED GUEST</span>
                             </div>
                         </div>
-                        <div style={{ borderLeft: '1px solid var(--bg-border)', paddingLeft: '48px', display: 'flex', flexDirection: 'column', height: '600px' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}><h4 style={{ fontWeight: 900, color: '#0ea5e9' }}>Chat</h4><button onClick={() => setSelectedOrder(null)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={32}/></button></div><div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-base)', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--bg-border)', marginBottom: '20px' }}>{chatMessages.map(msg => (<div key={msg.id} style={{ alignSelf: msg.sender === 'owner' ? 'flex-end' : 'flex-start', maxWidth: '85%', backgroundColor: msg.sender === 'owner' ? 'var(--bg-border)' : '#0ea5e920', padding: '10px 16px', borderRadius: '14px' }}><p style={{margin: 0, fontSize: '14px', color: 'var(--text-primary)' }}>{msg.message}</p></div>))}<div ref={chatEndRef} /></div><form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px' }}><input placeholder="Type..." value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={{flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', padding: '14px', borderRadius: '16px', color: 'var(--text-primary)' }} /><button type="submit" style={{backgroundColor: themeColor, color: 'var(--text-primary)', padding: '14px 20px', borderRadius: '16px', border: 'none' }}><Send size={18}/></button></form></div>
+                        <div style={{ borderLeft: '1px solid var(--bg-border)', paddingLeft: '48px', display: 'flex', flexDirection: 'column', height: '600px' }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}><h4 style={{ fontWeight: 900, color: '#0ea5e9' }}>Chat</h4><button onClick={() => setSelectedOrder(null)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={32}/></button></div><div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-base)', borderRadius: '24px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--bg-border)', marginBottom: '20px' }}>{(chatMessages || []).map(msg => (<div key={msg.id} style={{ alignSelf: msg.sender === 'owner' ? 'flex-end' : 'flex-start', maxWidth: '85%', backgroundColor: msg.sender === 'owner' ? 'var(--bg-border)' : '#0ea5e920', padding: '10px 16px', borderRadius: '14px' }}><p style={{margin: 0, fontSize: '14px', color: 'var(--text-primary)' }}>{msg.message}</p></div>))}<div ref={chatEndRef} /></div><form onSubmit={sendMessage} style={{ display: 'flex', gap: '10px' }}><input placeholder="Type..." value={ownerMessage} onChange={e => setOwnerMessage(e.target.value)} style={{flex: 1, backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', padding: '14px', borderRadius: '16px', color: 'var(--text-primary)' }} /><button type="submit" style={{backgroundColor: themeColor, color: 'var(--text-primary)', padding: '14px 20px', borderRadius: '16px', border: 'none' }}><Send size={18}/></button></form></div>
                     </div>
                 </div>
             )}

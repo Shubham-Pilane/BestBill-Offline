@@ -3,8 +3,10 @@ import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Save, Search, UploadCloud } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 const MenuManagement = () => {
+  const { t } = useLanguage();
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
   const [newCatName, setNewCatName] = useState('');
@@ -265,16 +267,17 @@ const MenuManagement = () => {
             <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <Layers size={22} style={{ color: '#818cf8', margin: 'auto' }} />
             </div>
-            <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Groups</h2>
+            <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{t('menu_groups', 'Groups')}</h2>
           </div>
 
           <form onSubmit={addCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>New Category Title</label>
+              <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('category_name', 'New Category Title')}</label>
               <div style={{ position: 'relative' }}>
                 <Tag style={{ position: 'absolute', top: '14px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                 <input
                   type="text"
+                  placeholder={t('category_name', 'Category Title...')}
                   style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '12px 16px 12px 40px', borderRadius: '14px', outline: 'none', fontSize: '14px', fontWeight: 600 }}
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
@@ -283,12 +286,12 @@ const MenuManagement = () => {
               </div>
             </div>
             <button type="submit" style={{width: '100%', backgroundColor: '#6366f1', color: 'var(--text-primary)', border: 'none', padding: '14px', borderRadius: '14px', fontSize: '14px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-              <Plus size={18} strokeWidth={3} /> Add
+              <Plus size={18} strokeWidth={3} /> {t('add_category', 'Add')}
             </button>
           </form>
 
           <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <h3 style={{ fontSize: '10px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', borderBottom: '1px solid var(--bg-border)', paddingBottom: '8px' }}>Active Groups</h3>
+            <h3 style={{ fontSize: '10px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', borderBottom: '1px solid var(--bg-border)', paddingBottom: '8px' }}>{t('menu_groups', 'Active Groups')}</h3>
             {(categories || []).map(cat => (
               <div key={cat.id} style={{padding: '14px 16px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', borderRadius: '14px', color: 'var(--text-primary)', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 {editingCatId === cat.id ? (
@@ -325,14 +328,14 @@ const MenuManagement = () => {
               <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Utensils size={22} style={{ color: '#10b981' }} />
               </div>
-              <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Add To Live Menu</h2>
+              <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{t('add_item', 'Add To Live Menu')}</h2>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
               <button onClick={() => fileInputRef.current?.click()} type="button" style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '160px', justifyContent: 'center' }}>
-                <UploadCloud size={18} /> Import CSV
+                <UploadCloud size={18} /> {t('import_csv', 'Import CSV')}
               </button>
               <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '160px', justifyContent: 'center' }}>
-                <Trash2 size={18} /> Delete All
+                <Trash2 size={18} /> {t('purge_all', 'Delete All')}
               </button>
             </div>
             <input type="file" accept=".csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
@@ -340,7 +343,7 @@ const MenuManagement = () => {
 
           <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Dish Name</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')}</label>
               <input
                 type="text"
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
@@ -350,7 +353,7 @@ const MenuManagement = () => {
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Price (₹)</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_price', 'Price (₹)')}</label>
               <div style={{ position: 'relative' }}>
                 <IndianRupee style={{ position: 'absolute', top: '15px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                 <input
@@ -363,13 +366,13 @@ const MenuManagement = () => {
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Category</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('category_name', 'Category')}</label>
               <select
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
                 value={newItem.category_id}
                 onChange={(e) => setNewItem({...newItem, category_id: e.target.value})}
               >
-                <option value="">Choose Alignment</option>
+                <option value="">{t('select_category', '-- Select Category --')}</option>
                 {(categories || []).map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name.toUpperCase()}</option>
                 ))}
@@ -385,7 +388,7 @@ const MenuManagement = () => {
               />
             </div>
             <button type="submit" style={{ gridColumn: 'span 12', backgroundColor: '#10b981', color: 'white', border: 'none', padding: '18px', borderRadius: '20px', fontSize: '16px', fontWeight: 950, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-              <Plus size={22} strokeWidth={4} /> Publish To Menu
+              <Plus size={22} strokeWidth={4} /> {t('add_item', 'Publish To Menu')}
             </button>
           </form>
         </div>
@@ -395,14 +398,14 @@ const MenuManagement = () => {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                <ListChecks size={20} style={{ color: 'var(--text-muted)' }} />
-               <h3 style={{ fontSize: '14px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', margin: 0 }}>Current Menu Catalog</h3>
+               <h3 style={{ fontSize: '14px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.2em', margin: 0 }}>{t('menu_management_title', 'Current Menu Catalog')}</h3>
             </div>
             
             <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
                <Search style={{ position: 'absolute', top: '12px', left: '16px', color: 'var(--text-muted)' }} size={16} />
                <input
                  type="text"
-                 placeholder="Search dishes or groups..."
+                 placeholder={t('search_menu', 'Search dishes or groups...')}
                  value={searchTerm}
                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                  style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '10px 16px 10px 42px', borderRadius: '12px', outline: 'none', fontSize: '13px', fontWeight: 700 }}

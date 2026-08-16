@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
 import { toast } from 'react-hot-toast';
 import api from '../services/api';
@@ -27,7 +28,7 @@ import {
   Ban
 } from 'lucide-react';
 
-const playInternalChime = () => {
+export const playInternalChime = () => {
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -53,12 +54,29 @@ const playInternalChime = () => {
 
 const Layout = ({ children }) => {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
 
   const location = useLocation();
   const isWaiter = user?.role === 'waiter';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [pendingGuestOrders, setPendingGuestOrders] = useState(0);
+
+  const getNavName = (path, defaultName) => {
+    switch (path) {
+      case '/': return t('nav_dashboard', defaultName);
+      case '/menu': return t('nav_menu_management', defaultName);
+      case '/kitchen-kot': return t('nav_kitchen_kot', defaultName);
+      case '/history': return t('nav_billing_history', defaultName);
+      case '/cancel-orders': return t('nav_cancel_orders', defaultName);
+      case '/expenses': return t('nav_expense', defaultName);
+      case '/credit': return t('nav_credit_management', defaultName);
+      case '/inventory': return t('nav_inventory', defaultName);
+      case '/lodging': return t('nav_lodging', defaultName);
+      case '/profile': return t('nav_profile_settings', defaultName);
+      default: return defaultName;
+    }
+  };
 
   // SIMPLIFIED DETECTION LOGIC
   const prevCount = useRef(-1); 
@@ -223,7 +241,7 @@ const Layout = ({ children }) => {
               style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', borderRadius: '14px', textDecoration: 'none', color: location.pathname === item.path ? '#0ea5e9' : 'var(--text-secondary)', backgroundColor: location.pathname === item.path ? 'rgba(14, 165, 233, 0.1)' : 'transparent', fontWeight: 700, fontSize: '16px' }}
             >
               {item.icon}
-              <span style={{ flex: 1 }}>{item.name}</span>
+              <span style={{ flex: 1 }}>{getNavName(item.path, item.name)}</span>
               {(item.path === '/orders') && pendingGuestOrders > 0 && (
                 <span style={{ backgroundColor: '#ef4444', color: 'white', fontSize: '11px', fontWeight: 900, padding: '2px 8px', borderRadius: '100px' }}>{pendingGuestOrders}</span>
               )}
@@ -256,7 +274,7 @@ const Layout = ({ children }) => {
 
         <div style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button onClick={logout} style={{ width: '100%', padding: '14px', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderRadius: '12px', border: '1px solid rgba(239, 68, 68, 0.3)', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-            <LogOut size={18} /> Sign Out
+            <LogOut size={18} /> {t('nav_logout', 'Sign Out')}
           </button>
         </div>
       </aside>
@@ -339,4 +357,3 @@ const Layout = ({ children }) => {
   );
 };
 export default Layout;
-export { playInternalChime };

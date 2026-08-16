@@ -2,6 +2,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import MenuManagement from './pages/MenuManagement';
@@ -49,113 +50,124 @@ const InventoryRoute = ({ children }) => {
 
 function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Home />
-                </Layout>
-              </ProtectedRoute>
-            } />
-            <Route path="/menu" element={
-              <ProtectedRoute>
-                <OwnerRoute>
+    <LanguageProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={
+                <ProtectedRoute>
                   <Layout>
-                    <MenuManagement />
+                    <Home />
                   </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/kitchen-kot" element={
-              <ProtectedRoute>
-                <OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/menu" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <MenuManagement />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/kitchen-kot" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <KitchenKOT />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/history" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <BillingHistory />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/cancel-orders" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <CancelOrders />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/expenses" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <ExpenseManagement />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/credit" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <CreditManagement />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/lodging" element={
+                <ProtectedRoute>
+                  <LodgingRoute>
+                    <Layout>
+                      <Lodging />
+                    </Layout>
+                  </LodgingRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/orders" element={
+                <ProtectedRoute>
+                  <LodgingRoute>
+                    <Layout>
+                      <GuestOrders />
+                    </Layout>
+                  </LodgingRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/lodging/guest-orders" element={
+                <ProtectedRoute>
+                  <LodgingRoute>
+                    <Layout>
+                      <GuestOrders />
+                    </Layout>
+                  </LodgingRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/inventory" element={
+                <ProtectedRoute>
+                  <InventoryRoute>
+                    <Layout>
+                      <InventoryManagement />
+                    </Layout>
+                  </InventoryRoute>
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute>
                   <Layout>
-                    <KitchenKOT />
+                    <Profile />
                   </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/history" element={
-              <ProtectedRoute>
-                <OwnerRoute>
-                  <Layout>
-                    <BillingHistory />
-                  </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/credit" element={
-              <ProtectedRoute>
-                <OwnerRoute>
-                  <Layout>
-                    <CreditManagement />
-                  </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/expenses" element={
-              <ProtectedRoute>
-                <OwnerRoute>
-                  <Layout>
-                    <ExpenseManagement />
-                  </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/cancel-orders" element={
-              <ProtectedRoute>
-                <OwnerRoute>
-                  <Layout>
-                    <CancelOrders />
-                  </Layout>
-                </OwnerRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/inventory" element={
-              <ProtectedRoute>
-                <InventoryRoute>
-                  <Layout>
-                    <InventoryManagement />
-                  </Layout>
-                </InventoryRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/lodging" element={
-              <ProtectedRoute>
-                <LodgingRoute>
-                  <Layout>
-                    <Lodging />
-                  </Layout>
-                </LodgingRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/orders" element={
-              <ProtectedRoute>
-                <LodgingRoute>
-                  <Layout>
-                    <GuestOrders />
-                  </Layout>
-                </LodgingRoute>
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Layout>
-                  <Profile />
-                </Layout>
-              </ProtectedRoute>
-            } />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/guest/order/:hotelId" element={<GuestPortal />} />
-          </Routes>
-          <Toaster position="top-right" />
-        </Router>
-      </AuthProvider>
-    </ThemeProvider>
+              <Route path="/guest/order/:hotelId" element={<GuestPortal />} />
+            </Routes>
+            <Toaster position="top-right" />
+          </Router>
+        </AuthProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   );
 }
 

@@ -4,9 +4,11 @@ import { toast } from 'react-hot-toast';
 import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import SwapModal from './SwapModal';
 const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floors: passedFloors }) => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [categories, setCategories] = useState(initialMenu?.categories || []);
   const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
@@ -657,19 +659,21 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
           </div>
 
           {/* Cart */}
-          <div className="order-modal-cart" style={{ width: '420px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '32px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-               <Receipt size={20} color="#0ea5e9" />
-               <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Active Selection</h3>
+          <div className="order-modal-cart" style={{ width: '420px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+               <Receipt size={18} color="#0ea5e9" />
+               <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                 {t('active_selection', 'Active Selection')} ({orderItems.length})
+               </h3>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
               {orderItems.map(item => (
-                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', backgroundColor: 'var(--bg-card)', borderRadius: '20px' }}>
-                  <div>
-                    <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{item.name}</div>
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px' }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                    <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                     {editingPriceId === item.id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                         <span style={{ color: '#10b981', fontSize: '13px' }}>₹</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                         <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
                          <input 
                            type="number" 
                            autoFocus
@@ -677,91 +681,103 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                            onChange={e => setEditPriceValue(e.target.value)}
                            onBlur={() => savePriceChange(item.id, item.menu_item_id)}
                            onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                           style={{ width: '85px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', outline: 'none', fontWeight: 800 }}
+                           style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
                          />
-                         <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/ unit</span>
+                         <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
                       </div>
                     ) : (
                       <div 
                         onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
-                        style={{ color: '#10b981', fontSize: '13px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '2px', marginTop: '4px' }}
+                        style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
                         title="Edit Unit Price (Updates Master Menu)"
                       >
-                         ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>(₹{Math.round(item.price)} each)</span>}
+                         ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <button 
                       onClick={() => updateQuantity(item.id, -1)} 
                       disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
+                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      <Minus size={14} />
+                      <Minus size={12} />
                     </button>
-                    <span style={{color: 'var(--text-primary)', fontWeight: 900 }}>{item.quantity}</span>
+                    <span style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '16px', textAlign: 'center' }}>{item.quantity}</span>
                     <button 
                       onClick={() => updateQuantity(item.id, 1)} 
                       disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
+                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      <Plus size={14} />
+                      <Plus size={12} />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-            <div style={{ padding: '20px 24px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
-              <div style={{ marginBottom: '16px' }}>
-                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 900, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                   <span>Loyalty Discount (%)</span>
+            <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
+              <div style={{ marginBottom: '8px' }}>
+                 <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '10px', fontWeight: 900, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                   <span>{t('loyalty_discount', 'Loyalty Discount (%)')}</span>
                    <input 
                       type="number" 
                       value={discount} 
                       onChange={e => setDiscount(Math.max(0, Math.min(100, e.target.value)))} 
-                      style={{width: '50px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none' }} 
+                      style={{width: '45px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '12px' }} 
                    />
                  </div>
                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
-                   <span style={{ fontSize: '22px', fontWeight: 1000 }}>Final Due</span>
-                    <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                   <span style={{ fontSize: '16px', fontWeight: 900 }}>{t('final_due', 'Final Due')}</span>
+                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
                  </div>
               </div>
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '10px' }}>
                 <input 
                   type="text" 
                   value={kitchenNotes} 
                   onChange={e => setKitchenNotes(e.target.value)}
-                  placeholder="Add notes for kitchen (e.g. less spicy)..." 
-                  style={{width: '100%', padding: '12px 16px', borderRadius: '12px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', fontWeight: 600, outline: 'none', fontSize: '13px' }} 
+                  placeholder={t('notes_placeholder', 'Add notes for kitchen (e.g. less spicy)...')} 
+                  style={{width: '100%', padding: '8px 12px', borderRadius: '8px', backgroundColor: 'var(--bg-border)', border: '1px solid #334155', color: 'var(--text-primary)', fontWeight: 600, outline: 'none', fontSize: '12px' }} 
                 />
               </div>
               {user?.role === 'waiter' ? (
-                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isCancelEnabled ? '1fr 1fr' : '1fr', gap: '8px' }}>
                   <button 
                     disabled={orderItems.length === 0} 
                     onClick={sendToKitchen} 
-                    style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}
+                    style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
                   >
-                    SEND TO KITCHEN
+                    {t('send_to_kitchen', 'SEND TO KITCHEN')}
                   </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t('cancel_order', 'CANCEL ORDER')}
+                    </button>
                   )}
                 </div>
               ) : (table.table_number === 'Parcel Counter' || user?.kotEnabled) ? (
-                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-                  <button disabled={orderItems.length === 0} onClick={sendToKitchen} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SEND TO KITCHEN</button>
-                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                <div style={{ display: 'grid', gridTemplateColumns: isCancelEnabled ? '1fr 1fr 1fr' : '1fr 1fr', gap: '8px' }}>
+                  <button disabled={orderItems.length === 0} onClick={sendToKitchen} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#f59e0b', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {t('send_to_kitchen', 'SEND TO KITCHEN')}
+                  </button>
+                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {t('settle_transaction', 'SETTLE TRANSACTION')}
+                  </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t('cancel_order', 'CANCEL ORDER')}
+                    </button>
                   )}
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>SETTLE TRANSACTION</button>
+                <div style={{ display: 'grid', gridTemplateColumns: isCancelEnabled ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                  <button disabled={orderItems.length === 0} onClick={generateBill} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#0ea5e9', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {t('settle_transaction', 'SETTLE TRANSACTION')}
+                  </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 1000, fontSize: '15px', cursor: 'pointer', scale: orderItems.length === 0 ? '1' : '1.02', transition: '0.2s', opacity: orderItems.length === 0 ? 0.3 : 1 }}>CANCEL ORDER</button>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {t('cancel_order', 'CANCEL ORDER')}
+                    </button>
                   )}
                 </div>
               )}
