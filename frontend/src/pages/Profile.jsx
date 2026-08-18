@@ -8,7 +8,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 const Profile = () => {
     const { user, updateUser } = useAuth();
     const { language, setLanguage, t } = useLanguage();
-    const [showLanguageSettings, setShowLanguageSettings] = useState(true);
+    const [showLanguageSettings, setShowLanguageSettings] = useState(false);
     const isAdmin = user?.role === 'admin';
     const isOwner = user?.role === 'owner';
     const themeColor = isAdmin ? '#10b981' : '#0ea5e9';

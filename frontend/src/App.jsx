@@ -72,6 +72,15 @@ function App() {
                   </OwnerRoute>
                 </ProtectedRoute>
               } />
+              <Route path="/kot" element={
+                <ProtectedRoute>
+                  <OwnerRoute>
+                    <Layout>
+                      <KitchenKOT />
+                    </Layout>
+                  </OwnerRoute>
+                </ProtectedRoute>
+              } />
               <Route path="/kitchen-kot" element={
                 <ProtectedRoute>
                   <OwnerRoute>

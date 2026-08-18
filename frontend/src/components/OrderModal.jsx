@@ -852,7 +852,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                           {/* Payment Method Section */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              PAYMENT METHOD
+                              {t('payment_method', 'PAYMENT METHOD')}
                             </label>
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <button 
@@ -872,7 +872,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                Cash
+                                {t('cash', 'Cash')}
                               </button>
                               <button 
                                 type="button"
@@ -891,7 +891,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                Online
+                                {t('online', 'Online')}
                               </button>
                               <button 
                                 type="button"
@@ -910,7 +910,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                Credit
+                                {t('credit', 'Credit')}
                               </button>
                             </div>
                           </div>
