@@ -447,7 +447,7 @@ router.post('/:tableId/clear-order', auth, async (req, res) => {
 // Generate Bill
 router.post('/:tableId/bill', auth, async (req, res) => {
   const { tableId } = req.params;
-  const { discount_percentage } = req.body;
+  const { discount_percentage, selected_discount_item_ids } = req.body;
   
   const client = await db.getClient();
   try {
@@ -457,7 +457,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       client.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       client.query(`
-        SELECT o.id as order_id, oi.quantity, mi.name, mi.price
+        SELECT o.id as order_id, oi.id, oi.menu_item_id, oi.quantity, mi.name, mi.price
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
@@ -473,11 +473,28 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     const orderId = orderRes.rows[0].order_id;
     const gstRate = parseFloat(hotelRes.rows[0].gst_percentage || 0);
 
-    const subtotal = orderRes.rows.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const subtotal = orderRes.rows.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
     const gst = subtotal * (gstRate / 100);
     const initialTotal = subtotal + gst;
     const discount = parseFloat(discount_percentage) || 0;
-    const finalAmount = initialTotal - (initialTotal * (discount / 100));
+
+    let discountAmount = 0;
+    if (discount > 0) {
+      if (Array.isArray(selected_discount_item_ids)) {
+        const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
+          if (selected_discount_item_ids.includes(item.id) || selected_discount_item_ids.includes(item.menu_item_id)) {
+            return sum + (parseFloat(item.price) * parseInt(item.quantity));
+          }
+          return sum;
+        }, 0);
+        const selectedTotal = selectedSubtotal * (1 + gstRate / 100);
+        discountAmount = selectedTotal * (discount / 100);
+      } else {
+        discountAmount = initialTotal * (discount / 100);
+      }
+    }
+
+    const finalAmount = Math.max(0, initialTotal - discountAmount);
 
     // Deduct stock from inventory
     await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
@@ -494,6 +511,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
 
     const responsePayload = {
       ...billRes.rows[0],
+      discount_amount: discountAmount,
       subtotal: subtotal,
       total_amount: finalAmount,
       gst_percentage: gstRate,

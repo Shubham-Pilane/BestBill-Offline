@@ -19,6 +19,8 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [customerPhone, setCustomerPhone] = useState(room.guest_phone || '');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [discount, setDiscount] = useState(0);
+  const [uncheckedDiscountItemIds, setUncheckedDiscountItemIds] = useState(new Set());
+  const [includeRoomChargeInDiscount, setIncludeRoomChargeInDiscount] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
   const [isEditingStay, setEditingStay] = useState(false);
@@ -226,7 +228,12 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
   const generateBill = async () => {
     try {
-      const res = await api.post(`/rooms/${room.id}/bill`, { discount_percentage: discount });
+      const selectedItemIds = orderItems.filter(i => !uncheckedDiscountItemIds.has(i.id)).map(i => i.id);
+      const res = await api.post(`/rooms/${room.id}/bill`, { 
+        discount_percentage: discount,
+        selected_discount_item_ids: selectedItemIds,
+        include_room_charge_in_discount: includeRoomChargeInDiscount
+      });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', { icon: '🧾' });
@@ -611,59 +618,97 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                             </div>
                           )}
                       </div>
-                      
-                      <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
-                         <div style={{ padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', border: '1px solid var(--bg-border)' }}>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>ROOM CHARGE ({room.booking_days}D)</span>
-                            <span style={{ color: '#f43f5e', fontWeight: 900 }}>₹{room.total_cost}</span>
-                         </div>
-                         {orderItems.map(item => (
-                            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px' }}>
-                               <div>
-                                 <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{item.name}</div>
-                                 {editingPriceId === item.id ? (
-                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                                      <span style={{ color: '#10b981', fontSize: '13px' }}>₹</span>
+                           <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
+                         {(() => {
+                            const discVal = parseFloat(discount) || 0;
+                            const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                            return (
+                               <>
+                                 <div style={{ padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--bg-border)', gap: '12px' }}>
+                                    {hasDiscountValue && (
                                       <input 
-                                        type="number" 
-                                        autoFocus
-                                        value={editPriceValue} 
-                                        onChange={e => setEditPriceValue(e.target.value)}
-                                        onBlur={() => savePriceChange(item.id, item.menu_item_id)}
-                                        onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                                        style={{ width: '85px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', outline: 'none', fontWeight: 800 }}
+                                        type="checkbox"
+                                        checked={includeRoomChargeInDiscount}
+                                        onChange={(e) => setIncludeRoomChargeInDiscount(e.target.checked)}
+                                        style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0ea5e9', flexShrink: 0 }}
+                                        title={includeRoomChargeInDiscount ? "Discount applied to Room Charge" : "Discount excluded from Room Charge"}
                                       />
-                                      <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/ unit</span>
-                                   </div>
-                                 ) : (
-                                   <div 
-                                     onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
-                                     style={{ color: '#10b981', fontSize: '13px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '2px', marginTop: '4px' }}
-                                     title="Edit Unit Price (Updates Master Menu)"
-                                   >
-                                      ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>(₹{Math.round(item.price)} each)</span>}
-                                   </div>
-                                 )}
-                               </div>
-                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                  <button 
-                                    onClick={() => item.id && updateQuantity(item.id, -1)} 
-                                    disabled={!item.id}
-                                    style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
-                                  >
-                                    <Minus size={14} />
-                                  </button>
-                                  <span style={{color: 'var(--text-primary)', fontWeight: 1000 }}>{item.quantity}</span>
-                                  <button 
-                                    onClick={() => item.id && updateQuantity(item.id, 1)} 
-                                    disabled={!item.id}
-                                    style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
-                                  >
-                                    <Plus size={14} />
-                                  </button>
-                               </div>
-                            </div>
-                         ))}
+                                    )}
+                                    <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                       <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>ROOM CHARGE ({room.booking_days}D)</span>
+                                       <span style={{ color: '#f43f5e', fontWeight: 900 }}>₹{room.total_cost}</span>
+                                    </div>
+                                 </div>
+                                 {orderItems.map(item => (
+                                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', gap: '12px' }}>
+                                       {hasDiscountValue && (
+                                         <input 
+                                           type="checkbox"
+                                           checked={!uncheckedDiscountItemIds.has(item.id)}
+                                           onChange={(e) => {
+                                             const checked = e.target.checked;
+                                             setUncheckedDiscountItemIds(prev => {
+                                               const next = new Set(prev);
+                                               if (checked) {
+                                                 next.delete(item.id);
+                                               } else {
+                                                 next.add(item.id);
+                                               }
+                                               return next;
+                                             });
+                                           }}
+                                           style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0ea5e9', flexShrink: 0 }}
+                                           title={!uncheckedDiscountItemIds.has(item.id) ? "Discount applied to this item" : "Discount excluded from this item"}
+                                         />
+                                       )}
+                                       <div style={{ flex: 1, minWidth: 0 }}>
+                                         <div style={{color: 'var(--text-primary)', fontWeight: 900 }}>{item.name}</div>
+                                         {editingPriceId === item.id ? (
+                                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                                              <span style={{ color: '#10b981', fontSize: '13px' }}>₹</span>
+                                              <input 
+                                                type="number" 
+                                                autoFocus
+                                                value={editPriceValue} 
+                                                onChange={e => setEditPriceValue(e.target.value)}
+                                                onBlur={() => savePriceChange(item.id, item.menu_item_id)}
+                                                onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
+                                                style={{ width: '85px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '4px 6px', fontSize: '13px', outline: 'none', fontWeight: 800 }}
+                                              />
+                                              <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>/ unit</span>
+                                           </div>
+                                         ) : (
+                                           <div 
+                                             onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
+                                             style={{ color: '#10b981', fontSize: '13px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '2px', marginTop: '4px' }}
+                                             title="Edit Unit Price (Updates Master Menu)"
+                                           >
+                                              ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: '6px' }}>(₹{Math.round(item.price)} each)</span>}
+                                           </div>
+                                         )}
+                                       </div>
+                                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                          <button 
+                                            onClick={() => item.id && updateQuantity(item.id, -1)} 
+                                            disabled={!item.id}
+                                            style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
+                                          >
+                                            <Minus size={14} />
+                                          </button>
+                                          <span style={{color: 'var(--text-primary)', fontWeight: 1000 }}>{item.quantity}</span>
+                                          <button 
+                                            onClick={() => item.id && updateQuantity(item.id, 1)} 
+                                            disabled={!item.id}
+                                            style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '32px', height: '32px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)' }}
+                                          >
+                                            <Plus size={14} />
+                                          </button>
+                                       </div>
+                                    </div>
+                                 ))}
+                               </>
+                            );
+                         })()}
                       </div>
 
                    <div style={{ padding: '20px 24px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
@@ -674,7 +719,22 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                          </div>
                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
                             <span style={{ fontSize: '22px', fontWeight: 1000 }}>Total Due</span>
-                            <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{((subtotalVal * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                            <span style={{ color: '#10b981', fontSize: '22px', fontWeight: 1000 }}>₹{(() => {
+                              const discVal = parseFloat(discount) || 0;
+                              const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                              const foodSubtotal = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                              const roomCharge = parseFloat(room.total_cost || 0);
+                              const subtotalVal = foodSubtotal + roomCharge;
+                              const gstRate = user?.gst_percentage || 0;
+                              const totalBeforeDiscount = subtotalVal * (1 + gstRate / 100);
+                              if (!hasDiscountValue || discVal <= 0) {
+                                return totalBeforeDiscount.toFixed(2);
+                              }
+                              const selectedFoodSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
+                              const selectedSubtotal = selectedFoodSubtotal + (includeRoomChargeInDiscount ? roomCharge : 0);
+                              const discountAmount = selectedSubtotal * (1 + gstRate / 100) * (discVal / 100);
+                              return Math.max(0, totalBeforeDiscount - discountAmount).toFixed(2);
+                            })()}</span>
                          </div>
                       </div>
                       <div style={{ marginBottom: '16px' }}>

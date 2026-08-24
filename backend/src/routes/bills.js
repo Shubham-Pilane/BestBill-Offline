@@ -12,7 +12,7 @@ router.get('/history', auth, async (req, res) => {
                 SELECT json_group_array(json_object('name', mi.name, 'quantity', oi.quantity, 'price', mi.price))
                 FROM order_items oi
                 JOIN menu_items mi ON oi.menu_item_id = mi.id
-                WHERE oi.order_id = b.order_id
+                WHERE oi.order_id = b.order_id AND oi.quantity > 0
              ) as items_json
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
@@ -51,7 +51,7 @@ router.get('/:id', auth, async (req, res) => {
       SELECT oi.quantity, mi.name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1`,
+      WHERE oi.order_id = $1 AND oi.quantity > 0`,
       [bill.rows[0].order_id]
     );
     
@@ -108,7 +108,7 @@ router.post('/:id/print', auth, async (req, res) => {
       SELECT oi.quantity, mi.name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1`,
+      WHERE oi.order_id = $1 AND oi.quantity > 0`,
       [billData.order_id]
     );
 

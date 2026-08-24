@@ -147,7 +147,7 @@ class CreditRepository {
         `SELECT oi.quantity, mi.name, mi.price 
          FROM order_items oi 
          JOIN menu_items mi ON oi.menu_item_id = mi.id 
-         WHERE oi.order_id = $1`,
+         WHERE oi.order_id = $1 AND oi.quantity > 0`,
         [bill.order_id]
       );
       items = itemsRes.rows;

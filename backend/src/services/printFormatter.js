@@ -406,7 +406,8 @@ function formatBill(data) {
     builder.bold(false);
 
     (data.items || []).forEach(i => {
-      const qty = i.quantity || i.qty || 1;
+      const qty = Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0));
+      if (qty <= 0) return;
       const nameStr = toTitleCase(String(i.name));
       const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
       let remainingStr = nameStr.substring(ACTUAL_ITEM_LEN);
@@ -439,9 +440,11 @@ function formatBill(data) {
     }
     
     if (data.discountPercentage > 0) {
-      const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
-      builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
-      addedSubItems = true;
+      const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+      if (discAmt > 0) {
+        builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+        addedSubItems = true;
+      }
     }
     
     if (addedSubItems) {
@@ -551,7 +554,8 @@ function formatBill(data) {
   }
   
   (data.items || []).forEach(i => {
-    const qty = i.quantity || i.qty || 1;
+    const qty = Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0));
+    if (qty <= 0) return;
     const nameStr = toTitleCase(String(i.name));
     const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
     let remainingStr = nameStr.substring(ACTUAL_ITEM_LEN);
@@ -584,9 +588,11 @@ function formatBill(data) {
   }
   
   if (data.discountPercentage > 0) {
-    const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
-    builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
-    addedSubItems = true;
+    const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+    if (discAmt > 0) {
+      builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
   }
   
   if (addedSubItems) {

@@ -22,6 +22,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [selectedDeliveryPartner, setSelectedDeliveryPartner] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [uncheckedDiscountItemIds, setUncheckedDiscountItemIds] = useState(new Set());
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [allTables, setAllTables] = useState(passedTables || []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -295,7 +296,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const generateBill = async () => {
     try {
-      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discount });
+      const selectedItemIds = orderItems.filter(i => !uncheckedDiscountItemIds.has(i.id)).map(i => i.id);
+      const res = await api.post(`/tables/${table.id}/bill`, { 
+        discount_percentage: discount,
+        selected_discount_item_ids: selectedItemIds
+      });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', {
@@ -440,18 +445,20 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     const subVal = parseFloat(billData.subtotal);
     const taxVal = parseFloat(billData.gst);
     const preVal = subVal + taxVal;
+    const finalVal = parseFloat(billData.final_amount);
+    const discountAmt = billData.discount_amount !== undefined ? parseFloat(billData.discount_amount) : (preVal - finalVal);
     
     let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} RECEIPT ---*\n\n`;
     msg += `Table No: ${table.table_numberByFloor || table.table_number}\n`;
     msg += `Bill No: #${billData.id}\n`;
     msg += `Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
     msg += `\n*Items:*\n`;
-    (billData.items || []).forEach(i => msg += `• ${i.name} x ${i.quantity} = ₹${(i.price * i.quantity).toFixed(2)}\n`);
+    (billData.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
     msg += `\n*------------------------*\n`;
     msg += `*Subtotal:* ₹${subVal.toFixed(2)}\n`;
     msg += `*GST (${billData.gst_percentage}%):* ₹${taxVal.toFixed(2)}\n`;
-    if (billData.discount_percentage > 0) msg += `*Discount (${billData.discount_percentage}%):* -₹${(preVal * billData.discount_percentage / 100).toFixed(2)}\n`;
-    msg += `*GRAND TOTAL: ₹${parseFloat(billData.final_amount).toFixed(2)}*\n`;
+    if (discountAmt > 0) msg += `*Discount (${billData.discount_percentage}%):* -₹${discountAmt.toFixed(2)}\n`;
+    msg += `*GRAND TOTAL: ₹${finalVal.toFixed(2)}*\n`;
     msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;
     
     const cleanPhone = customerPhone.replace(/\D/g, '');
@@ -665,53 +672,77 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                </h3>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
-              {orderItems.map(item => (
-                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px' }}>
-                  <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                    <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                    {editingPriceId === item.id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                         <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
-                         <input 
-                           type="number" 
-                           autoFocus
-                           value={editPriceValue} 
-                           onChange={e => setEditPriceValue(e.target.value)}
-                           onBlur={() => savePriceChange(item.id, item.menu_item_id)}
-                           onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                           style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
-                         />
-                         <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
-                      </div>
-                    ) : (
-                      <div 
-                        onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
-                        style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
-                        title="Edit Unit Price (Updates Master Menu)"
-                      >
-                         ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
-                      </div>
+              {(() => {
+                const discVal = parseFloat(discount) || 0;
+                const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                return orderItems.map(item => (
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', gap: '10px' }}>
+                    {hasDiscountValue && (
+                      <input 
+                        type="checkbox"
+                        checked={!uncheckedDiscountItemIds.has(item.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUncheckedDiscountItemIds(prev => {
+                            const next = new Set(prev);
+                            if (checked) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0ea5e9', flexShrink: 0 }}
+                        title={!uncheckedDiscountItemIds.has(item.id) ? "Discount applied to this item" : "Discount excluded from this item"}
+                      />
                     )}
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                      <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                      {editingPriceId === item.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                           <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
+                           <input 
+                             type="number" 
+                             autoFocus
+                             value={editPriceValue} 
+                             onChange={e => setEditPriceValue(e.target.value)}
+                             onBlur={() => savePriceChange(item.id, item.menu_item_id)}
+                             onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
+                             style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
+                           />
+                           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
+                        </div>
+                      ) : (
+                        <div 
+                          onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
+                          style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
+                          title="Edit Unit Price (Updates Master Menu)"
+                        >
+                           ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button 
+                        onClick={() => updateQuantity(item.id, -1)} 
+                        disabled={!item.id}
+                        style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '16px', textAlign: 'center' }}>{item.quantity}</span>
+                      <button 
+                        onClick={() => updateQuantity(item.id, 1)} 
+                        disabled={!item.id}
+                        style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button 
-                      onClick={() => updateQuantity(item.id, -1)} 
-                      disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Minus size={12} />
-                    </button>
-                    <span style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '16px', textAlign: 'center' }}>{item.quantity}</span>
-                    <button 
-                      onClick={() => updateQuantity(item.id, 1)} 
-                      disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
             <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
               <div style={{ marginBottom: '8px' }}>
@@ -726,7 +757,19 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                  </div>
                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
                    <span style={{ fontSize: '16px', fontWeight: 900 }}>Final Due</span>
-                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{(() => {
+                      const discVal = parseFloat(discount) || 0;
+                      const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                      const totalSubtotal = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                      const gstRate = user?.gst_percentage || 0;
+                      const totalBeforeDiscount = totalSubtotal * (1 + gstRate / 100);
+                      if (!hasDiscountValue || discVal <= 0) {
+                        return totalBeforeDiscount.toFixed(2);
+                      }
+                      const selectedSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
+                      const discountAmount = selectedSubtotal * (1 + gstRate / 100) * (discVal / 100);
+                      return Math.max(0, totalBeforeDiscount - discountAmount).toFixed(2);
+                    })()}</span>
                  </div>
               </div>
               <div style={{ marginBottom: '10px' }}>
