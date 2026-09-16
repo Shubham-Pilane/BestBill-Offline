@@ -9,9 +9,9 @@ router.get('/history', auth, async (req, res) => {
     const result = await db.query(`
       SELECT b.*, t.table_number, o.created_at as order_time,
              (
-                SELECT json_group_array(json_object('name', mi.name, 'quantity', oi.quantity, 'price', mi.price))
+                SELECT json_group_array(json_object('name', COALESCE(oi.custom_name, mi.name, 'Other'), 'quantity', oi.quantity, 'price', COALESCE(oi.custom_price, mi.price, 0)))
                 FROM order_items oi
-                JOIN menu_items mi ON oi.menu_item_id = mi.id
+                LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
                 WHERE oi.order_id = b.order_id AND oi.quantity > 0
              ) as items_json
       FROM bills b 
@@ -48,9 +48,9 @@ router.get('/:id', auth, async (req, res) => {
     if (bill.rows.length === 0) return res.status(404).json({ message: 'Bill not found' });
     
     const items = await db.query(`
-      SELECT oi.quantity, mi.name, mi.price 
+      SELECT oi.quantity, COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
       FROM order_items oi 
-      JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0`,
       [bill.rows[0].order_id]
     );
@@ -58,7 +58,7 @@ router.get('/:id', auth, async (req, res) => {
     res.json({
       ...bill.rows[0],
       items: items.rows,
-      subtotal: items.rows.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+      subtotal: items.rows.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0)
     });
   } catch (err) {
     console.error(err);
@@ -105,9 +105,9 @@ router.post('/:id/print', auth, async (req, res) => {
 
     // Fetch items
     const items = await db.query(`
-      SELECT oi.quantity, mi.name, mi.price 
+      SELECT oi.quantity, COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
       FROM order_items oi 
-      JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0`,
       [billData.order_id]
     );

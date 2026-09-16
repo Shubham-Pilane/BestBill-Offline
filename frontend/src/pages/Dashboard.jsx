@@ -38,6 +38,7 @@ const Dashboard = () => {
   const [subStatus, setSubStatus] = useState(null);
   const [timeRemainingStr, setTimeRemainingStr] = useState('');
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
 
   const fetchSubscriptionStatus = async () => {
     try {
@@ -277,27 +278,65 @@ const Dashboard = () => {
     }
   };
 
-  // Extract Parcel Counter tables (any table with "parcel" in its name)
+  // Extract Parcel Counter tables (filtered by search query if active)
   const parcelTables = useMemo(() => {
-    return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('parcel'));
-  }, [tables]);
+    let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('parcel'));
+    if (tableSearchQuery.trim()) {
+      const q = tableSearchQuery.toLowerCase().trim();
+      list = list.filter(t => 
+        String(t.table_number || '').toLowerCase().includes(q) || 
+        `table ${t.table_number}`.toLowerCase().includes(q) || 
+        String(t.floor || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [tables, tableSearchQuery]);
 
-  // Extract Token Counter tables (any table with "token" in its name)
+  // Extract Token Counter tables
   const tokenTables = useMemo(() => {
-    return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('token'));
-  }, [tables]);
+    let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('token'));
+    if (tableSearchQuery.trim()) {
+      const q = tableSearchQuery.toLowerCase().trim();
+      list = list.filter(t => 
+        String(t.table_number || '').toLowerCase().includes(q) || 
+        `table ${t.table_number}`.toLowerCase().includes(q) || 
+        String(t.floor || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [tables, tableSearchQuery]);
 
-  // Extract Online Counter tables (any table with "online" in its name)
+  // Extract Online Counter tables
   const onlineTables = useMemo(() => {
-    return (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('online'));
-  }, [tables]);
+    let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('online'));
+    if (tableSearchQuery.trim()) {
+      const q = tableSearchQuery.toLowerCase().trim();
+      list = list.filter(t => 
+        String(t.table_number || '').toLowerCase().includes(q) || 
+        `table ${t.table_number}`.toLowerCase().includes(q) || 
+        String(t.floor || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [tables, tableSearchQuery]);
 
   // Group tables by floor - Memoized for performance (excluding parcel, token, and online counters)
   const groupedTables = useMemo(() => {
+    const q = tableSearchQuery.toLowerCase().trim();
     return (tables || [])
       .filter(t => {
         const name = String(t.table_number || '').toLowerCase();
-        return !name.includes('parcel') && !name.includes('token') && !name.includes('online');
+        const isCounter = name.includes('parcel') || name.includes('token') || name.includes('online');
+        if (isCounter) return false;
+        if (!q) return true;
+        const floor = String(t.floor || '').toLowerCase();
+        return (
+          name.includes(q) || 
+          `table ${name}`.includes(q) || 
+          `table-${name}`.includes(q) || 
+          floor.includes(q) || 
+          (t.status && t.status.toLowerCase().includes(q))
+        );
       })
       .reduce((acc, table) => {
         let floor = table.floor || 'Floor 1';
@@ -305,7 +344,12 @@ const Dashboard = () => {
         acc[floor].push(table);
         return acc;
       }, {});
-  }, [tables]);
+  }, [tables, tableSearchQuery]);
+
+  const totalFilteredTables = useMemo(() => {
+    const groupedCount = Object.values(groupedTables).reduce((sum, list) => sum + list.length, 0);
+    return parcelTables.length + tokenTables.length + onlineTables.length + groupedCount;
+  }, [groupedTables, parcelTables, tokenTables, onlineTables]);
 
   // Dynamically resolve existing floors for selector lists
   const existingFloors = useMemo(() => {
@@ -522,17 +566,36 @@ const Dashboard = () => {
             <input
               type="text"
               placeholder="Search tables..."
+              value={tableSearchQuery}
+              onChange={(e) => setTableSearchQuery(e.target.value)}
               style={{width: '100%',
                 backgroundColor: 'var(--bg-card)',
                 border: '2px solid var(--bg-border)',
                 color: 'var(--text-primary)',
-                padding: '12px 16px 12px 48px',
+                padding: tableSearchQuery ? '12px 40px 12px 48px' : '12px 16px 12px 48px',
                 borderRadius: '16px',
                 outline: 'none',
                 fontSize: '14px',
                 fontWeight: 600
               }}
             />
+            {tableSearchQuery && (
+              <button
+                onClick={() => setTableSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '16px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px'
+                }}
+              >
+                <X size={18} />
+              </button>
+            )}
           </div>
         </div>
         {isOwner && (
@@ -726,6 +789,28 @@ const Dashboard = () => {
             onClick={() => setAddTableOpen(true)}
             style={{ color: '#0ea5e9', fontWeight: 900, background: 'none', border: 'none', cursor: 'pointer', marginTop: '12px', fontSize: '16px', textDecoration: 'underline' }}>
             Setup Initial Floor Plan
+          </button>
+        </div>
+      ) : tableSearchQuery.trim() && totalFilteredTables === 0 ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '60px 24px',
+          backgroundColor: 'var(--bg-card)',
+          borderRadius: '24px',
+          border: '2px dashed var(--bg-border)',
+          textAlign: 'center'
+        }}>
+          <div style={{ width: '60px', height: '60px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+            <Search size={28} style={{ color: '#0ea5e9' }} />
+          </div>
+          <p style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 800, margin: 0 }}>No tables found matching "{tableSearchQuery}"</p>
+          <button 
+            onClick={() => setTableSearchQuery('')}
+            style={{ color: '#0ea5e9', fontWeight: 800, background: 'none', border: 'none', cursor: 'pointer', marginTop: '12px', fontSize: '14px', textDecoration: 'underline' }}>
+            Clear Search
           </button>
         </div>
       ) : (

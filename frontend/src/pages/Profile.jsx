@@ -4,6 +4,7 @@ import api from '../services/api';
 import { toast } from 'react-hot-toast';
 import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2, RefreshCw } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
+import { BluetoothPrinterService, formatBill, formatKOT } from '../services/bluetoothPrinterService';
 const Profile = () => {
     const { user, updateUser } = useAuth();
     const isAdmin = user?.role === 'admin';
@@ -40,6 +41,11 @@ const Profile = () => {
         kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42 }
     });
     const [installedPrinters, setInstalledPrinters] = useState([]);
+    const [bluetoothDevices, setBluetoothDevices] = useState([]);
+    const [isScanning, setIsScanning] = useState(false);
+
+    const [billingConnected, setBillingConnected] = useState(false);
+    const [kotConnected, setKotConnected] = useState(false);
     const [availableIps, setAvailableIps] = useState([]);
     const [selectedGuestIp, setSelectedGuestIp] = useState('');
     const [isRefreshingIp, setIsRefreshingIp] = useState(false);
@@ -543,8 +549,28 @@ const Profile = () => {
 
     const fetchInstalledPrinters = async () => {
         try {
-            const res = await api.get('/hotel/installed-printers');
-            setInstalledPrinters(res.data || []);
+            const systemRes = await api.get('/hotel/installed-printers').catch(() => ({ data: [] }));
+            setInstalledPrinters(systemRes.data || []);
+            
+            const [btPaired, backendBtRes] = await Promise.all([
+                BluetoothPrinterService.listPairedDevices().catch(() => []),
+                api.get('/hotel/bluetooth-devices').catch(() => ({ data: [] }))
+            ]);
+
+            const btFormatted = (btPaired || []).map(d => typeof d === 'string' ? d : (d.name ? `${d.name} (${d.id || d.address})` : (d.id || d.address)));
+            const backendBtList = backendBtRes.data || [];
+
+            const combinedBt = [...btFormatted, ...backendBtList].filter(Boolean);
+
+            if (combinedBt.length > 0) {
+                setBluetoothDevices(prev => {
+                    const combined = [...prev];
+                    combinedBt.forEach(item => {
+                        if (item && !combined.includes(item)) combined.push(item);
+                    });
+                    return combined;
+                });
+            }
         } catch (err) {
             console.error('Failed to fetch installed printers', err);
         }
@@ -581,9 +607,15 @@ const Profile = () => {
         try {
             const res = await api.get('/hotel/printers-config');
             if (res.data) {
+                const bType = res.data.printers?.billing?.type || localStorage.getItem('cfg_printer_type_billing') || 'usb';
+                const kType = res.data.printers?.kitchen?.type || localStorage.getItem('cfg_printer_type_kot') || 'usb';
+
+                localStorage.setItem('cfg_printer_type_billing', bType);
+                localStorage.setItem('cfg_printer_type_kot', kType);
+
                 setPrinterConfig({
-                    billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.billing || {}) },
-                    kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.kitchen || {}) }
+                    billing: { type: bType, printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.billing || {}) },
+                    kitchen: { type: kType, printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.kitchen || {}) }
                 });
                 setSelectedGuestIp(res.data.guestIp || '');
             }
@@ -592,19 +624,207 @@ const Profile = () => {
         }
     };
 
+    const scanUnpairedPrinters = async () => {
+        // 1. First check if Bluetooth radio is turned ON
+        const isBtOn = await BluetoothPrinterService.isBluetoothEnabled();
+        if (!isBtOn) {
+            toast.error('Please turn ON Bluetooth on your device first!');
+            if (typeof window !== 'undefined' && window.bluetoothSerial && typeof window.bluetoothSerial.enable === 'function') {
+                try {
+                    window.bluetoothSerial.enable(
+                        () => console.log('[BT PRINTER] Native BT enable prompt accepted'),
+                        () => console.warn('[BT PRINTER] Native BT enable prompt declined')
+                    );
+                } catch (e) {}
+            }
+            return;
+        }
+
+        setIsScanning(true);
+        const tId = toast.loading('Scanning all nearby Bluetooth devices...');
+        try {
+            const [paired, unpaired, backendBtRes] = await Promise.all([
+                BluetoothPrinterService.listPairedDevices().catch(() => []),
+                BluetoothPrinterService.discoverUnpairedDevices().catch(() => []),
+                api.get('/hotel/bluetooth-devices').catch(() => ({ data: [] }))
+            ]);
+
+            const allDiscovered = [];
+
+            (paired || []).forEach(d => {
+                const devStr = typeof d === 'string' ? d : (d.name ? `${d.name} (${d.id || d.address})` : (d.id || d.address));
+                if (devStr && !allDiscovered.includes(devStr)) {
+                    allDiscovered.push(devStr);
+                }
+            });
+
+            (unpaired || []).forEach(d => {
+                const devStr = typeof d === 'string' ? d : (d.name ? `${d.name} (${d.id || d.address})` : (d.id || d.address));
+                if (devStr && !allDiscovered.includes(devStr)) {
+                    allDiscovered.push(devStr);
+                }
+            });
+
+            (backendBtRes.data || []).forEach(devStr => {
+                if (devStr && !allDiscovered.includes(devStr)) {
+                    allDiscovered.push(devStr);
+                }
+            });
+
+            if (allDiscovered.length === 0 && typeof navigator !== 'undefined' && navigator.bluetooth && typeof navigator.bluetooth.requestDevice === 'function') {
+                try {
+                    const webDevice = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: ['00001101-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb']
+                    });
+                    if (webDevice) {
+                        const webDevStr = webDevice.name ? `${webDevice.name} (${webDevice.id})` : webDevice.id;
+                        if (webDevStr && !allDiscovered.includes(webDevStr)) {
+                            allDiscovered.push(webDevStr);
+                        }
+                    }
+                } catch (webErr) {
+                    console.log('[WEB BT] Request device cancelled or unavailable:', webErr);
+                }
+            }
+
+            setIsScanning(false);
+            if (allDiscovered.length > 0) {
+                toast.success(`Found ${allDiscovered.length} Bluetooth device(s). Select your device from the list below.`, { id: tId });
+                setBluetoothDevices(prev => {
+                    const combined = [...prev];
+                    allDiscovered.forEach(devStr => {
+                        if (!combined.includes(devStr)) {
+                            combined.push(devStr);
+                        }
+                    });
+                    return combined;
+                });
+            } else {
+                toast.error('No Bluetooth devices found nearby. Make sure your Bluetooth device is powered ON and in range.', { id: tId });
+            }
+        } catch (err) {
+            setIsScanning(false);
+            toast.error('Discovery scan error: ' + err.message, { id: tId });
+        }
+    };
+
+
+
+
+    const handleTestPrintBilling = async () => {
+        const tId = toast.loading('Sending test receipt to Billing Printer...');
+        try {
+            if (printerConfig.billing.type === 'bluetooth') {
+                const sampleItems = [
+                    { name: 'Butter Chicken', price: 280.00, qty: 1 },
+                    { name: 'Butter Naan', price: 40.00, qty: 3 },
+                    { name: 'Paneer Tikka', price: 220.00, qty: 1 },
+                    { name: 'Cold Coffee', price: 70.00, qty: 2 }
+                ];
+                const subtotal = sampleItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                const gstPct = hotelData.gst_percentage !== undefined ? Number(hotelData.gst_percentage) : 5;
+                const gst = (subtotal * gstPct) / 100;
+                const finalAmount = subtotal + gst;
+
+                const testPayload = {
+                    type: 'FINAL_BILL',
+                    billId: 9999,
+                    table: 'Table 1 (Test Print)',
+                    subtotal, gst, finalAmount,
+                    discountPercentage: 0,
+                    items: sampleItems,
+                    hotelName: hotelData.name || 'Sample Hotel',
+                    hotelPhone: hotelData.phone || '9999999999',
+                    hotelLocation: hotelData.address || 'Sample Location',
+                    upiId: hotelData.upi_id || '',
+                    isPaid: false,
+                    gst_percentage: gstPct
+                };
+
+                const size = printerConfig.billing.paperSize || '80mm';
+                const bytes = await formatBill(testPayload, size);
+                const targetMac = printerConfig.billing.printerName || BluetoothPrinterService.getSelectedPrinter('billing');
+                const success = await BluetoothPrinterService.printData(bytes, targetMac);
+                if (success) {
+                    toast.success('Billing Bluetooth Test Print Successful!', { id: tId });
+                }
+            } else {
+                const res = await api.post('/hotel/test-print', { type: 'billing' });
+                if (res.data.success) {
+                    toast.success(res.data.message || 'Billing Test Print Sent!', { id: tId });
+                }
+            }
+        } catch (err) {
+            toast.error('Test print error: ' + (err.response?.data?.message || err.message), { id: tId });
+        }
+    };
+
+    const handleTestPrintKot = async () => {
+        const tId = toast.loading('Sending test ticket to KOT Printer...');
+        try {
+            if (printerConfig.kitchen.type === 'bluetooth') {
+                const sampleItems = [
+                    { name: 'Paneer Butter Masala', qty: 2 },
+                    { name: 'Garlic Naan', qty: 4 },
+                    { name: 'Jeera Rice', qty: 1 }
+                ];
+
+                const testPayload = {
+                    type: 'KOT',
+                    orderNumber: 'KOT-999',
+                    table: 'Table 1 (KOT Test)',
+                    floor: 'Ground Floor',
+                    items: sampleItems,
+                    waiter: user?.name || 'Owner',
+                    notes: 'Test KOT Notes'
+                };
+
+                const size = printerConfig.kitchen.paperSize || '80mm';
+                const bytes = await formatKOT(testPayload, size);
+                const targetMac = printerConfig.kitchen.printerName || BluetoothPrinterService.getSelectedPrinter('kot');
+                const success = await BluetoothPrinterService.printData(bytes, targetMac);
+                if (success) {
+                    toast.success('Kitchen Bluetooth KOT Test Print Successful!', { id: tId });
+                }
+            } else {
+                const res = await api.post('/hotel/test-print', { type: 'kitchen' });
+                if (res.data.success) {
+                    toast.success(res.data.message || 'Kitchen KOT Test Print Sent!', { id: tId });
+                }
+            }
+        } catch (err) {
+            toast.error('KOT test print error: ' + (err.response?.data?.message || err.message), { id: tId });
+        }
+    };
+
     const handlePrinterConfigSubmit = async (e) => {
         e.preventDefault();
         try {
+            localStorage.setItem('cfg_printer_type_billing', printerConfig.billing.type || 'usb');
+            localStorage.setItem('cfg_printer_type_kot', printerConfig.kitchen.type || 'usb');
+
+            if (printerConfig.billing.printerName) {
+                localStorage.setItem('cfg_bluetooth_mac', printerConfig.billing.printerName);
+            }
+            localStorage.setItem('cfg_printer_size', printerConfig.billing.paperSize || '80mm');
+
+            if (printerConfig.kitchen.printerName) {
+                localStorage.setItem('cfg_bluetooth_mac_kot', printerConfig.kitchen.printerName);
+            }
+            localStorage.setItem('cfg_printer_size_kot', printerConfig.kitchen.paperSize || '80mm');
+
             await api.post('/hotel/printers-config', {
                 billing: printerConfig.billing,
                 kitchen: printerConfig.kitchen,
                 guestIp: selectedGuestIp
             });
-            toast.success('Configurations updated successfully!');
+            toast.success('Printer configurations updated successfully!');
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to update configurations');
         }
     };
+
 
     const fetchHotelDetails = async () => {
         try {
@@ -874,6 +1094,38 @@ const Profile = () => {
                     {showPrinters && (
                         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
                             <form onSubmit={handlePrinterConfigSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                
+                                {/* Discovery Action Header for Bluetooth & Physical Printers */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '14px 16px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)' }}>
+                                    <div>
+                                        <h3 style={{fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+                                            Thermal Printer Device Discovery
+                                        </h3>
+                                        <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '2px 0 0' }}>
+                                            Configure USB, LAN/Wi-Fi network, or Bluetooth printers for Cashier Billing & Kitchen KOT.
+                                        </p>
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={scanUnpairedPrinters}
+                                            disabled={isScanning}
+                                            style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '10px 16px', borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                        >
+                                            {isScanning ? '🔍 Searching Printers...' : '📡 Find Bluetooth Printer'}
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={fetchInstalledPrinters}
+                                            style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--bg-border)', padding: '10px 16px', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '12px' }}
+                                        >
+                                            🔄 Refresh Device List
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                                     
                                     {/* Billing Printer Form */}
@@ -895,6 +1147,7 @@ const Profile = () => {
                                                 >
                                                     <option value="usb">USB / Windows Spooled</option>
                                                     <option value="network">Network (LAN/Wi-Fi)</option>
+                                                    <option value="bluetooth">Bluetooth Printer</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
@@ -955,6 +1208,30 @@ const Profile = () => {
                                                     </div>
                                                 )}
                                             </div>
+                                        ) : printerConfig.billing.type === 'bluetooth' ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>SELECT BLUETOOTH PRINTER DEVICE / MAC</label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <select 
+                                                        value={printerConfig.billing.printerName} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            billing: { ...printerConfig.billing, printerName: e.target.value }
+                                                        })}
+                                                        style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                    >
+                                                        <option value="">-- Select Bluetooth Device --</option>
+                                                        {printerConfig.billing.printerName && !bluetoothDevices.includes(printerConfig.billing.printerName) && (
+                                                            <option value={printerConfig.billing.printerName}>{printerConfig.billing.printerName} (Saved Device)</option>
+                                                        )}
+                                                        {bluetoothDevices.map(p => (
+                                                            <option key={p} value={p}>{p}</option>
+                                                        ))}
+
+                                                    </select>
+                                                    <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                </div>
+                                            </div>
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -995,8 +1272,8 @@ const Profile = () => {
                                                     })}
                                                     style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
-                                                    <option value="80mm">Standard Receipt (80mm)</option>
-                                                    <option value="58mm">Compact Receipt (58mm)</option>
+                                                    <option value="80mm">Standard Receipt (80mm / 3 inch)</option>
+                                                    <option value="58mm">Compact Receipt (58mm / 2 inch)</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
@@ -1042,6 +1319,7 @@ const Profile = () => {
                                                 >
                                                     <option value="usb">USB / Windows Spooled</option>
                                                     <option value="network">Network (LAN/Wi-Fi)</option>
+                                                    <option value="bluetooth">Bluetooth Printer</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
@@ -1102,6 +1380,30 @@ const Profile = () => {
                                                     </div>
                                                 )}
                                             </div>
+                                        ) : printerConfig.kitchen.type === 'bluetooth' ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>SELECT KOT BLUETOOTH PRINTER DEVICE / MAC</label>
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                    <select 
+                                                        value={printerConfig.kitchen.printerName} 
+                                                        onChange={e => setPrinterConfig({
+                                                            ...printerConfig,
+                                                            kitchen: { ...printerConfig.kitchen, printerName: e.target.value }
+                                                        })}
+                                                        style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                    >
+                                                        <option value="">Same as Billing Printer (Default)</option>
+                                                        {printerConfig.kitchen.printerName && !bluetoothDevices.includes(printerConfig.kitchen.printerName) && (
+                                                            <option value={printerConfig.kitchen.printerName}>{printerConfig.kitchen.printerName} (Saved Device)</option>
+                                                        )}
+                                                        {bluetoothDevices.map(p => (
+                                                            <option key={p} value={p}>{p}</option>
+                                                        ))}
+
+                                                    </select>
+                                                    <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                                </div>
+                                            </div>
                                         ) : (
                                             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1142,8 +1444,8 @@ const Profile = () => {
                                                     })}
                                                     style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                 >
-                                                    <option value="80mm">Standard Receipt (80mm)</option>
-                                                    <option value="58mm">Compact Receipt (58mm)</option>
+                                                    <option value="80mm">Standard Receipt (80mm / 3 inch)</option>
+                                                    <option value="58mm">Compact Receipt (58mm / 2 inch)</option>
                                                 </select>
                                                 <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
                                             </div>
@@ -1170,6 +1472,26 @@ const Profile = () => {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* Sample Test Print Buttons Header */}
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                    <button 
+                                        type="button"
+                                        onClick={handleTestPrintBilling}
+                                        style={{ backgroundColor: 'rgba(14, 165, 233, 0.15)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.3)', padding: '10px 16px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        🖨️ Test Print Billing Receipt
+                                    </button>
+
+                                    <button 
+                                        type="button"
+                                        onClick={handleTestPrintKot}
+                                        style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '10px 16px', borderRadius: '8px', fontWeight: 800, cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                    >
+                                        👨‍🍳 Test Print KOT Ticket
+                                    </button>
+                                </div>
+
                                 <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>
                                     <button type="submit" style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#10b981', color: 'white', padding: '12px 24px', borderRadius: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', width: 'fit-content' }}>
                                         <Save size={18} />

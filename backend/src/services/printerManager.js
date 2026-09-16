@@ -73,15 +73,253 @@ async function processQueue() {
   processQueue();
 }
 
+// COM Port resolution cache: key is printer name or MAC, value is resolved COM port (e.g. 'COM10')
+const comPortCache = {};
+
+class PersistentBluetoothWorker {
+  constructor() {
+    this.psProcess = null;
+    this.isReady = false;
+    this.pendingCallbacks = {};
+    this.callbackIdSeq = 0;
+  }
+
+  ensureStarted() {
+    if (this.psProcess && !this.psProcess.killed) return;
+
+    const psScript = [
+      '$ports = @{}',
+      '$resolvedComs = @{}',
+      '',
+      'function Get-SerialPort([string]$comName) {',
+      '    if (-not $ports.ContainsKey($comName) -or -not $ports[$comName].IsOpen) {',
+      '        try {',
+      '            $sp = New-Object System.IO.Ports.SerialPort($comName, 115200, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)',
+      '            $sp.ReadTimeout = 2000',
+      '            $sp.WriteTimeout = 2000',
+      '            $sp.Open()',
+      '            $ports[$comName] = $sp',
+      '        } catch {',
+      '            return $null',
+      '        }',
+      '    }',
+      '    return $ports[$comName]',
+      '}',
+      '',
+      'function Print-TargetJob([string]$target, [string]$filePath) {',
+      '    $bytes = [System.IO.File]::ReadAllBytes($filePath)',
+      '',
+      '    if ($resolvedComs.ContainsKey($target)) {',
+      '        $cachedPort = $resolvedComs[$target]',
+      '        $sp = Get-SerialPort -comName $cachedPort',
+      '        if ($sp) {',
+      '            try {',
+      '                $sp.Write($bytes, 0, $bytes.Length)',
+      '                return "SUCCESS|$cachedPort"',
+      '            } catch {',
+      '                if ($ports.ContainsKey($cachedPort)) {',
+      '                    try { $ports[$cachedPort].Close() } catch {}',
+      '                    $ports.Remove($cachedPort)',
+      '                }',
+      '                $resolvedComs.Remove($target)',
+      '            }',
+      '        } else {',
+      '            $resolvedComs.Remove($target)',
+      '        }',
+      '    }',
+      '',
+      '    if ($target -match \'^COM\\d+$\') {',
+      '        $sp = Get-SerialPort -comName $target',
+      '        if ($sp) {',
+      '            $sp.Write($bytes, 0, $bytes.Length)',
+      '            $resolvedComs[$target] = $target',
+      '            return "SUCCESS|$target"',
+      '        }',
+      '    }',
+      '',
+      '    $cleanTarget = $target.Replace(\':\', \'\').Replace(\'-\', \'\').Replace(\' \', \'\')',
+      '    $btDevs = Get-PnpDevice -Class \'Bluetooth\' -ErrorAction SilentlyContinue',
+      '    $matchedMacs = @()',
+      '',
+      '    foreach ($dev in $btDevs) {',
+      '        $fName = [string]$dev.FriendlyName',
+      '        $iId = [string]$dev.InstanceId',
+      '        if ($fName.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or $iId.IndexOf($target, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {',
+      '            if ($iId -match \'DEV_([0-9A-Fa-f]{12})\') {',
+      '                $matchedMacs += $Matches[1]',
+      '            }',
+      '        }',
+      '    }',
+      '    if ($cleanTarget -match \'^[0-9A-Fa-f]{12}$\') {',
+      '        $matchedMacs += $cleanTarget',
+      '    }',
+      '',
+      '    $allPorts = Get-PnpDevice -Class \'PORTS\' -ErrorAction SilentlyContinue',
+      '',
+      '    foreach ($p in $allPorts) {',
+      '        $fName = [string]$p.FriendlyName',
+      '        $iId = [string]$p.InstanceId',
+      '        if ($fName -match \'\\((COM\\d+)\\)\') {',
+      '            $comName = $Matches[1]',
+      '            foreach ($mac in $matchedMacs) {',
+      '                if ($iId.IndexOf($mac, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {',
+      '                    $sp = Get-SerialPort -comName $comName',
+      '                    if ($sp) {',
+      '                        try {',
+      '                            $sp.Write($bytes, 0, $bytes.Length)',
+      '                            $resolvedComs[$target] = $comName',
+      '                            return "SUCCESS|$comName"',
+      '                        } catch {}',
+      '                    }',
+      '                }',
+      '            }',
+      '        }',
+      '    }',
+      '',
+      '    foreach ($p in $allPorts) {',
+      '        $fName = [string]$p.FriendlyName',
+      '        if ($fName.IndexOf(\'Bluetooth\', [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -and $fName -match \'\\((COM\\d+)\\)\') {',
+      '            $comName = $Matches[1]',
+      '            $sp = Get-SerialPort -comName $comName',
+      '            if ($sp) {',
+      '                try {',
+      '                    $sp.Write($bytes, 0, $bytes.Length)',
+      '                    $resolvedComs[$target] = $comName',
+      '                    return "SUCCESS|$comName"',
+      '                } catch {}',
+      '            }',
+      '        }',
+      '    }',
+      '',
+      '    return "ERROR|Could not write to Bluetooth COM port for $target"',
+      '}',
+      '',
+      'Write-Host "WORKER_READY"',
+      '',
+      'while ($true) {',
+      '    $line = [Console]::ReadLine()',
+      '    if (-not $line) { break }',
+      '    ',
+      '    $parts = $line.Split(\'|\')',
+      '    if ($parts.Length -lt 3) { continue }',
+      '    ',
+      '    $reqId = $parts[0]',
+      '    $targetDevice = $parts[1]',
+      '    $binPath = $parts[2]',
+      '    ',
+      '    try {',
+      '        $res = Print-TargetJob -target $targetDevice -filePath $binPath',
+      '        if ($res.StartsWith("SUCCESS|")) {',
+      '            $pName = $res.Split(\'|\')[1]',
+      '            Write-Host "WORKER_RESULT|$reqId|SUCCESS|$pName"',
+      '        } else {',
+      '            Write-Host "WORKER_RESULT|$reqId|ERROR|$targetDevice|$res"',
+      '        }',
+      '    } catch {',
+      '        Write-Host "WORKER_RESULT|$reqId|ERROR|$targetDevice|$($_.Exception.Message)"',
+      '    }',
+      '}'
+    ].join('\n');
+
+    try {
+      const { spawn } = require('child_process');
+      const readline = require('readline');
+      this.psProcess = spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-Command', psScript]);
+
+      const rl = readline.createInterface({ input: this.psProcess.stdout });
+      rl.on('line', (line) => {
+        const msg = line.trim();
+        if (msg === 'WORKER_READY') {
+          this.isReady = true;
+          logger.info('Persistent Bluetooth printer worker initialized and ready.');
+        } else if (msg.startsWith('WORKER_RESULT|')) {
+          const parts = msg.split('|');
+          const reqId = parts[1];
+          const status = parts[2];
+          const comName = parts[3];
+          const errMsg = parts[4] || '';
+
+          if (this.pendingCallbacks[reqId]) {
+            const { resolve, reject } = this.pendingCallbacks[reqId];
+            delete this.pendingCallbacks[reqId];
+            if (status === 'SUCCESS') {
+              resolve(comName);
+            } else {
+              reject(new Error(errMsg || 'Persistent print failed'));
+            }
+          }
+        }
+      });
+
+      this.psProcess.on('error', (err) => {
+        logger.error(`Persistent Bluetooth worker process error: ${err.message}`);
+        this.psProcess = null;
+        this.isReady = false;
+      });
+
+      this.psProcess.on('exit', () => {
+        this.psProcess = null;
+        this.isReady = false;
+      });
+    } catch (err) {
+      logger.error(`Failed to spawn Persistent Bluetooth worker: ${err.message}`);
+    }
+  }
+
+  printJob(targetDevice, binPath) {
+    return new Promise((resolve, reject) => {
+      this.ensureStarted();
+      if (!this.psProcess || !this.psProcess.stdin) {
+        return reject(new Error('Persistent worker unavailable'));
+      }
+
+      const reqId = String(++this.callbackIdSeq);
+
+      const timeout = setTimeout(() => {
+        if (this.pendingCallbacks[reqId]) {
+          delete this.pendingCallbacks[reqId];
+          reject(new Error('Persistent worker print timeout'));
+        }
+      }, 5000);
+
+      this.pendingCallbacks[reqId] = {
+        resolve: (val) => { clearTimeout(timeout); resolve(val); },
+        reject: (err) => { clearTimeout(timeout); reject(err); }
+      };
+
+      try {
+        this.psProcess.stdin.write(`${reqId}|${targetDevice}|${binPath}\n`);
+      } catch (err) {
+        clearTimeout(timeout);
+        delete this.pendingCallbacks[reqId];
+        reject(err);
+      }
+    });
+  }
+}
+
+const persistentWorker = new PersistentBluetoothWorker();
+try { persistentWorker.ensureStarted(); } catch (e) {}
+
+function cleanPrinterName(name) {
+  if (!name) return '';
+  let cleaned = String(name).trim();
+  const parenMatch = cleaned.match(/^([^(]+)/);
+  if (parenMatch && parenMatch[1].trim()) {
+    cleaned = parenMatch[1].trim();
+  }
+  return cleaned;
+}
+
 /**
  * Perform raw print command
  * @param {String} printerKey - 'kitchen' | 'billing'
  * @param {Buffer} payload - raw ESC/POS bytes
  */
 function executePrint(printerKey, payload) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const config = configManager.getConfig();
-    const printerConfig = config.printers[printerKey];
+    const printerConfig = config.printers?.[printerKey];
 
     if (!printerConfig) {
       return reject(new Error(`No configuration found for printer: ${printerKey}`));
@@ -94,12 +332,12 @@ function executePrint(printerKey, payload) {
 
       logger.info(`Connecting to network printer ${printerKey} at ${ip}:${port}...`);
       
-      client.setTimeout(5000); // 5 seconds timeout
+      client.setTimeout(5000);
 
       client.connect(port, ip, () => {
         logger.info(`Connected to network printer ${printerKey}. Sending payload (${payload.length} bytes)...`);
         client.write(payload, () => {
-          client.destroy(); // close connection
+          client.destroy();
           printerStatus[printerKey] = 'online';
           resolve();
         });
@@ -117,13 +355,11 @@ function executePrint(printerKey, payload) {
         reject(new Error('Connection timed out'));
       });
 
-    } else if (printerConfig.type === 'usb' || printerConfig.type === 'local') {
-      const printerName = printerConfig.printerName;
-      if (!printerName) {
-        return reject(new Error(`printerName must be specified for USB/Local printer: ${printerKey}`));
-      }
-
-      // Generate temp files in OS temporary directory (guaranteed read-write safe)
+    } else if (printerConfig.type === 'bluetooth' || printerConfig.type === 'usb' || printerConfig.type === 'local') {
+      const rawPrinterName = printerConfig.printerName || printerConfig.macAddress || '';
+      const cleanedName = cleanPrinterName(rawPrinterName);
+      const targetDevice = cleanedName || rawPrinterName;
+      
       const tmpDir = path.join(os.tmpdir(), 'bestbill-print');
 
       try {
@@ -138,19 +374,31 @@ function executePrint(printerKey, payload) {
 
       const jobId = Date.now() + Math.floor(Math.random() * 1000);
       const binPath = path.join(tmpDir, `print_job_${jobId}.bin`);
-      const psPath = path.join(tmpDir, `print_job_${jobId}.ps1`);
 
-      logger.info(`Writing print payload to temp file: ${binPath}`);
-
-      fs.writeFile(binPath, payload, (err) => {
+      fs.writeFile(binPath, payload, async (err) => {
         if (err) {
           logger.error(`Failed to write print payload to temp file: ${err.message}`);
           printerStatus[printerKey] = 'offline';
           return reject(err);
         }
 
-        // Construct PowerShell script calling native Windows Win32 Print Spooler APIs
-        const psScript = `$code = @'
+        // Try Instant Persistent Bluetooth Worker First (<10ms)!
+        try {
+          logger.info(`Routing print job for ${printerKey} (${targetDevice}) to Persistent Worker...`);
+          const comName = await persistentWorker.printJob(targetDevice, binPath);
+          try { fs.unlinkSync(binPath); } catch (e) {}
+          logger.info(`Successfully printed via Persistent Worker on ${comName}`);
+          printerStatus[printerKey] = 'online';
+          return resolve();
+        } catch (workerErr) {
+          logger.warn(`Persistent worker print failed for ${targetDevice}: ${workerErr.message}. Trying spooler fallback.`);
+        }
+
+        // Spooler Fallback for pure Windows Spooler USB printers
+        const psPath = path.join(tmpDir, `print_job_${jobId}.ps1`);
+        const psScript = `
+param([string]$TargetDevice, [string]$BinFilePath)
+$code = @'
 using System;
 using System.Runtime.InteropServices;
 public class RawPrinter {
@@ -174,7 +422,6 @@ public class RawPrinter {
     public static extern bool EndPagePrinter(IntPtr hPrinter);
     [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true)]
     public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
-    
     public static bool PrintRaw(string printerName, byte[] bytes) {
         IntPtr hPrinter;
         if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
@@ -196,45 +443,25 @@ public class RawPrinter {
     }
 }
 '@
-try {
-    Add-Type -TypeDefinition $code -ErrorAction Stop
-} catch {}
-
-$printer = "${printerName.replace(/\\/g, '\\\\')}"
-$filePath = "${binPath.replace(/\\/g, '\\\\')}"
-$bytes = [System.IO.File]::ReadAllBytes($filePath)
-$result = [RawPrinter]::PrintRaw($printer, $bytes)
-if ($result -eq $false) { exit 1 }
-exit 0
+try { Add-Type -TypeDefinition $code -ErrorAction Stop } catch {}
+$bytes = [System.IO.File]::ReadAllBytes($BinFilePath)
+$res = [RawPrinter]::PrintRaw($TargetDevice, $bytes)
+if ($res) { exit 0 } else { exit 1 }
 `;
 
         fs.writeFile(psPath, psScript, 'utf8', (err) => {
           if (err) {
-            logger.error(`Failed to write PowerShell print script: ${err.message}`);
             fs.unlink(binPath, () => {});
             printerStatus[printerKey] = 'offline';
             return reject(err);
           }
-
-          logger.info(`Executing PowerShell print command to target printer: ${printerName}`);
-          const cmd = `powershell -ExecutionPolicy Bypass -File "${psPath}"`;
-
-          exec(cmd, (execErr, stdout, stderr) => {
-            // Clean up temp files safely
-            try {
-              fs.unlinkSync(binPath);
-              fs.unlinkSync(psPath);
-            } catch (cleanupErr) {
-              // Ignore cleanup issues
-            }
-
+          const cmd = `powershell -ExecutionPolicy Bypass -File "${psPath}" -TargetDevice "${targetDevice.replace(/"/g, '""')}" -BinFilePath "${binPath.replace(/"/g, '""')}"`;
+          exec(cmd, (execErr) => {
+            try { fs.unlinkSync(binPath); fs.unlinkSync(psPath); } catch (e) {}
             if (execErr) {
-              logger.error(`PowerShell raw printing failed: ${execErr.message} | Stderr: ${stderr}`);
               printerStatus[printerKey] = 'offline';
-              return reject(new Error(`PowerShell print failed: ${execErr.message}`));
+              return reject(new Error(`Print failed: ${execErr.message}`));
             }
-
-            logger.info(`Successfully printed via PowerShell Spooler to ${printerName}`);
             printerStatus[printerKey] = 'online';
             resolve();
           });
@@ -260,7 +487,11 @@ async function checkPrinterStatuses() {
       continue;
     }
 
-    if (printerConfig.type === 'network') {
+    if (printerConfig.type === 'bluetooth') {
+      printerStatus[key] = 'online';
+      continue;
+    } else if (printerConfig.type === 'network') {
+
       const socket = new net.Socket();
       socket.setTimeout(2000);
       

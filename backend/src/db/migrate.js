@@ -215,6 +215,15 @@ const syncSchema = async () => {
                 created_by VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`,
+            `CREATE TABLE IF NOT EXISTS credit_payments (
+                id SERIAL PRIMARY KEY,
+                hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
+                credit_id INTEGER REFERENCES credits(id) ON DELETE CASCADE,
+                amount_paid DECIMAL(10,2) NOT NULL,
+                payment_method VARCHAR(50) NOT NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
             `CREATE TABLE IF NOT EXISTS cancelled_orders (
                 id SERIAL PRIMARY KEY,
                 hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
@@ -309,6 +318,17 @@ const syncSchema = async () => {
             "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS fssai_number VARCHAR(255)",
             "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
             "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS allow_negative_stock BOOLEAN DEFAULT false",
+            "ALTER TABLE credits ADD COLUMN IF NOT EXISTS paid_amount DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_type VARCHAR(50) DEFAULT 'general'",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vendor_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vendor_name VARCHAR(255)",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS vendor_phone VARCHAR(50)",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS staff_name VARCHAR(255)",
+            "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS salary_month VARCHAR(100)",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT false",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_name VARCHAR(255)",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_price DECIMAL(10,2)",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

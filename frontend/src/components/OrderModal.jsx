@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2 } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2, Pin } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import SwapModal from './SwapModal';
@@ -152,8 +152,44 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table.id]);
 
+  const togglePinItem = async (e, item) => {
+    e.stopPropagation();
+    try {
+      const res = await api.put(`/menu/items/${item.id}/pin`);
+      const isPinned = Boolean(res.data.is_pinned);
+      setAllItems(prev => prev.map(i => i.id === item.id ? { ...i, is_pinned: isPinned } : i));
+      toast.success(isPinned ? `Pinned ${item.name} to top!` : `Unpinned ${item.name}`);
+    } catch (err) {
+      toast.error('Failed to update pin status');
+    }
+  };
+
+  const addManualItem = async () => {
+    try {
+      const res = await api.post(`/tables/${table.id}/order/manual-item`, { name: 'Other', price: 0 });
+      setOrderItems(res.data.items);
+      toast.success('Added Manual Item ("Other")', { icon: '✨' });
+    } catch (err) {
+      toast.error('Failed to add manual item');
+    }
+  };
+
+  const handleUpdateCustomItem = async (itemId, customName, customPrice) => {
+    try {
+      const res = await api.put(`/tables/${table.id}/order/items/${itemId}/custom`, {
+        name: customName,
+        price: customPrice
+      });
+      setOrderItems(res.data.items);
+    } catch (err) {
+      toast.error('Failed to update manual item');
+    }
+  };
+
   useEffect(() => {
-    let filtered = allItems;
+    let filtered = [...allItems];
+    filtered.sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
+
     if (selectedCategory && selectedCategory !== 'all') {
       filtered = filtered.filter(i => String(i.category_id) === String(selectedCategory));
     }
@@ -611,6 +647,22 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button
+                        onClick={(e) => togglePinItem(e, item)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: item.is_pinned ? '#f59e0b' : 'var(--text-muted)'
+                        }}
+                        title={item.is_pinned ? "Unpin item" : "Pin item to top"}
+                      >
+                        <Pin size={16} fill={item.is_pinned ? '#f59e0b' : 'none'} />
+                      </button>
                       <span style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase' }}>{item.name}</span>
                       <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 800, backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>{item.category_name?.toUpperCase()}</span>
                     </div>
@@ -665,11 +717,31 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
           {/* Cart */}
           <div className="order-modal-cart" style={{ width: '420px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-               <Receipt size={18} color="#0ea5e9" />
-               <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                 Active Selection ({orderItems.length})
-               </h3>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                 <Receipt size={18} color="#0ea5e9" />
+                 <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                   Active Selection ({orderItems.length})
+                 </h3>
+               </div>
+               <button
+                 onClick={addManualItem}
+                 style={{
+                   backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                   border: '1px solid #10b981',
+                   color: '#10b981',
+                   padding: '6px 12px',
+                   borderRadius: '10px',
+                   fontSize: '12px',
+                   fontWeight: 800,
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '4px'
+                 }}
+               >
+                 <Plus size={14} /> Add Manual Item
+               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
               {(() => {
@@ -698,29 +770,84 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                       />
                     )}
                     <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                      <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                      {editingPriceId === item.id ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                           <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
-                           <input 
-                             type="number" 
-                             autoFocus
-                             value={editPriceValue} 
-                             onChange={e => setEditPriceValue(e.target.value)}
-                             onBlur={() => savePriceChange(item.id, item.menu_item_id)}
-                             onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                             style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
-                           />
-                           <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
+                      {item.is_manual ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              const newName = e.target.value;
+                              setOrderItems(prev => prev.map(i => i.id === item.id ? { ...i, name: newName } : i));
+                            }}
+                            onBlur={(e) => handleUpdateCustomItem(item.id, e.target.value, item.price)}
+                            placeholder="Item Name (e.g. Chips)"
+                            style={{
+                              width: '100%',
+                              backgroundColor: 'var(--bg-base)',
+                              border: '1px solid #0ea5e9',
+                              color: 'var(--text-primary)',
+                              borderRadius: '6px',
+                              padding: '3px 6px',
+                              fontSize: '13px',
+                              fontWeight: 800,
+                              outline: 'none'
+                            }}
+                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 800 }}>₹</span>
+                            <input
+                              type="number"
+                              step="1"
+                              value={item.price === 0 || item.price === '0' || item.price === '' ? '' : item.price}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const newPrice = val === '' ? '' : (parseFloat(val) || 0);
+                                setOrderItems(prev => prev.map(i => i.id === item.id ? { ...i, price: newPrice } : i));
+                              }}
+                              onBlur={(e) => handleUpdateCustomItem(item.id, item.name, parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              style={{
+                                width: '70px',
+                                backgroundColor: 'var(--bg-base)',
+                                border: '1px solid #10b981',
+                                color: '#10b981',
+                                borderRadius: '6px',
+                                padding: '2px 6px',
+                                fontSize: '12px',
+                                fontWeight: 800,
+                                outline: 'none'
+                              }}
+                            />
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Manual Item)</span>
+                          </div>
                         </div>
                       ) : (
-                        <div 
-                          onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
-                          style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
-                          title="Edit Unit Price (Updates Master Menu)"
-                        >
-                           ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
-                        </div>
+                        <>
+                          <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                          {editingPriceId === item.id ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                               <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
+                               <input 
+                                 type="number" 
+                                 autoFocus
+                                 value={editPriceValue} 
+                                 onChange={e => setEditPriceValue(e.target.value)}
+                                 onBlur={() => savePriceChange(item.id, item.menu_item_id)}
+                                 onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
+                                 style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
+                               />
+                               <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
+                            </div>
+                          ) : (
+                            <div 
+                              onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
+                              style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
+                              title="Edit Unit Price (Updates Master Menu)"
+                            >
+                               ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -83,9 +83,10 @@ router.get('/:tableId/order', auth, async (req, res) => {
 
     const order = orderResult.rows[0];
     const itemsQuery = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, mi.name, mi.price
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price
       FROM order_items oi
-      JOIN menu_items mi ON oi.menu_item_id = mi.id
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
@@ -102,30 +103,23 @@ router.get('/:tableId/order', auth, async (req, res) => {
 router.post('/:tableId/order/kot', auth, async (req, res) => {
   const { tableId } = req.params;
   const { waiter, notes } = req.body;
-  console.log(`[KOT DEBUG] Request received for tableId: ${tableId}, user:`, req.user);
   try {
     const [hotelRes, tableRes, orderRes] = await Promise.all([
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, COALESCE(oi.custom_name, mi.name, 'Other') as name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
-        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
       `, [tableId])
     ]);
 
-    console.log('[KOT DEBUG] hotelRes rows:', hotelRes.rows);
-    console.log('[KOT DEBUG] tableRes rows:', tableRes.rows);
-    console.log('[KOT DEBUG] orderRes rows:', orderRes.rows);
-
     if (orderRes.rows.length === 0) {
-      console.log('[KOT DEBUG] Returning 404 - No active order items found');
       return res.status(404).json({ message: 'No active order to print' });
     }
 
-    // Filter items to calculate incremental items to print
     const printItems = orderRes.rows
       .filter(item => item.quantity > (item.printed_quantity || 0))
       .map(item => ({
@@ -148,13 +142,11 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       }
     }
 
-    // Update waiter name, notes, KOT timestamp and reset preparation status for kitchen queue
     await db.query(
       "UPDATE orders SET waiter_name = $1, guest_note = $2, is_prepared = false, kot_sent_at = CURRENT_TIMESTAMP WHERE id = $3", 
       [finalWaiter, notes || '', orderRes.rows[0].order_id]
     );
 
-    // Update printed_quantity = quantity for all order items of this active order
     await db.query(
       "UPDATE order_items SET printed_quantity = quantity WHERE order_id = $1",
       [orderRes.rows[0].order_id]
@@ -182,7 +174,6 @@ router.post('/:tableId/order', auth, async (req, res) => {
   const { tableId } = req.params;
 
   try {
-    // Find or create active order for the table
     let orderRes = await db.query(`SELECT id FROM orders WHERE table_id = $1 AND status = 'active'`, [tableId]);
     let orderId;
     
@@ -196,9 +187,8 @@ router.post('/:tableId/order', auth, async (req, res) => {
       orderId = orderRes.rows[0].id;
     }
 
-    // Insert or update order item manually to avoid ON CONFLICT constraint requirements
     const existingItem = await db.query(
-      `SELECT id, quantity, max_quantity FROM order_items WHERE order_id = $1 AND menu_item_id = $2`,
+      `SELECT id, quantity, max_quantity FROM order_items WHERE order_id = $1 AND menu_item_id = $2 AND (is_manual IS NOT true)`,
       [orderId, menuItemId]
     );
 
@@ -218,9 +208,10 @@ router.post('/:tableId/order', auth, async (req, res) => {
     }
 
     const query2 = `
-      SELECT oi.*, mi.name, mi.price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
       FROM order_items oi 
-      JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
@@ -230,6 +221,87 @@ router.post('/:tableId/order', auth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error adding item' });
+  }
+});
+
+// Add Manual / "Other" Item to order
+router.post('/:tableId/order/manual-item', auth, async (req, res) => {
+  const { tableId } = req.params;
+  const { name = 'Other', price = 0 } = req.body || {};
+  try {
+    let orderRes = await db.query(`SELECT id FROM orders WHERE table_id = $1 AND status = 'active'`, [tableId]);
+    let orderId;
+    if (orderRes.rows.length === 0) {
+      const insertOrder = await db.query(
+        `INSERT INTO orders (table_id, status, source) VALUES ($1, 'active', 'admin') RETURNING id`,
+        [tableId]
+      );
+      orderId = insertOrder.rows[0].id;
+    } else {
+      orderId = orderRes.rows[0].id;
+    }
+
+    await db.query(
+      `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity, is_manual, custom_name, custom_price) VALUES ($1, NULL, 1, 1, true, $2, $3)`,
+      [orderId, (name || 'Other').trim(), parseFloat(price) || 0]
+    );
+
+    const query2 = `
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      FROM order_items oi 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      WHERE oi.order_id = $1 AND oi.quantity > 0
+      ORDER BY oi.created_at ASC
+    `;
+    const updatedItems = await db.query(query2, [orderId]);
+    notifyUpdate(req.user.hotel_id, 'table-update');
+    res.json({ items: updatedItems.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error adding manual item' });
+  }
+});
+
+// Update custom manual item (name and/or price)
+router.put('/:tableId/order/items/:itemId/custom', auth, async (req, res) => {
+  const { name, price } = req.body;
+  const { itemId, tableId } = req.params;
+  try {
+    const itemQuery = await db.query(`SELECT order_id FROM order_items WHERE id = $1`, [itemId]);
+    if (itemQuery.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
+    const orderId = itemQuery.rows[0].order_id;
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    if (name !== undefined) {
+      updates.push(`custom_name = $${idx++}`);
+      params.push((name || 'Other').trim());
+    }
+    if (price !== undefined) {
+      updates.push(`custom_price = $${idx++}`);
+      params.push(parseFloat(price) || 0);
+    }
+    if (updates.length > 0) {
+      params.push(itemId);
+      await db.query(`UPDATE order_items SET ${updates.join(', ')} WHERE id = $${idx}`, params);
+      notifyUpdate(req.user.hotel_id, 'table-update');
+    }
+
+    const query2 = `
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      FROM order_items oi 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      WHERE oi.order_id = $1 AND oi.quantity > 0
+      ORDER BY oi.created_at ASC
+    `;
+    const updatedItems = await db.query(query2, [orderId]);
+    res.json({ items: updatedItems.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to update custom item' });
   }
 });
 
@@ -249,9 +321,10 @@ router.put('/:tableId/order/items/:itemId', auth, async (req, res) => {
     notifyUpdate(req.user.hotel_id, 'table-update');
 
     const query2 = `
-      SELECT oi.*, mi.name, mi.price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
       FROM order_items oi 
-      JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
       ORDER BY oi.created_at ASC
     `;
@@ -275,8 +348,10 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
       if (orderCheck.rows.length === 0) return res.json({ items: [], order_deleted: true });
       
       const currentItems = await db.query(`
-        SELECT oi.*, mi.name, mi.price FROM order_items oi 
-        JOIN menu_items mi ON oi.menu_item_id = mi.id 
+        SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+        FROM order_items oi 
+        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
         WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
       `, [orderCheck.rows[0].id]);
       return res.json({ items: currentItems.rows, order_deleted: false });
@@ -284,20 +359,18 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
 
     const orderId = itemCheck.rows[0].order_id;
 
-    // Set quantity = 0 for this item, preserving max_quantity so full history is recorded if order gets cleared!
     await db.query('UPDATE order_items SET quantity = 0 WHERE id = $1', [itemId]);
 
-    // Check remaining total active quantity on this order
     const remainingRes = await db.query('SELECT COALESCE(SUM(quantity), 0) as total_qty FROM order_items WHERE order_id = $1', [orderId]);
     const totalActiveQty = parseInt(remainingRes.rows[0].total_qty || 0);
 
     let isOrderCleared = false;
     if (totalActiveQty === 0) {
-      // All items removed! Fetch ALL items that were part of this order using COALESCE(NULLIF(max_quantity, 0), quantity, 1)
       const allItemsRes = await db.query(`
-        SELECT oi.id, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty, mi.name, mi.price
+        SELECT oi.id, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price
         FROM order_items oi
-        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE oi.order_id = $1 AND (oi.max_quantity > 0 OR oi.quantity > 0)
       `, [orderId]);
 
@@ -356,8 +429,10 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
     }
 
     const updatedItems = await db.query(`
-      SELECT oi.*, mi.name, mi.price FROM order_items oi 
-      JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      FROM order_items oi 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
     `, [orderId]);
 
@@ -382,13 +457,13 @@ router.post('/:tableId/clear-order', auth, async (req, res) => {
     }
     const orderId = orderRes.rows[0].id;
 
-    // Fetch details & Record cancelled order
     const [tableRes, itemsRes] = await Promise.all([
       db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
       db.query(`
-        SELECT oi.quantity, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty, mi.name, mi.price
+        SELECT oi.quantity, oi.printed_quantity, COALESCE(NULLIF(oi.max_quantity, 0), oi.quantity, 1) as item_qty,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price
         FROM order_items oi
-        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE oi.order_id = $1 AND (oi.quantity > 0 OR oi.max_quantity > 0)
       `, [orderId])
     ]);
@@ -457,10 +532,11 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       client.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       client.query(`
-        SELECT o.id as order_id, oi.id, oi.menu_item_id, oi.quantity, mi.name, mi.price
+        SELECT o.id as order_id, oi.id, oi.menu_item_id, oi.quantity,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
-        JOIN menu_items mi ON oi.menu_item_id = mi.id
+        LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
       `, [tableId])
     ]);
@@ -482,7 +558,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     if (discount > 0) {
       if (Array.isArray(selected_discount_item_ids)) {
         const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
-          if (selected_discount_item_ids.includes(item.id) || selected_discount_item_ids.includes(item.menu_item_id)) {
+          if (selected_discount_item_ids.includes(item.id) || (item.menu_item_id && selected_discount_item_ids.includes(item.menu_item_id))) {
             return sum + (parseFloat(item.price) * parseInt(item.quantity));
           }
           return sum;
@@ -496,7 +572,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
 
     const finalAmount = Math.max(0, initialTotal - discountAmount);
 
-    // Deduct stock from inventory
+    // Deduct stock from inventory for standard menu items
     await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
 
     const billRes = await client.query(
@@ -567,12 +643,14 @@ router.post('/:tableId/bill/send', auth, async (req, res) => {
      const bill = billRes.rows[0];
 
      const itemsRes = await db.query(
-        'SELECT mi.name, oi.quantity FROM order_items oi JOIN menu_items mi ON oi.menu_item_id = mi.id WHERE oi.order_id = $1',
+        `SELECT COALESCE(oi.custom_name, mi.name, 'Other') as name, oi.quantity 
+         FROM order_items oi 
+         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
+         WHERE oi.order_id = $1 AND oi.quantity > 0`,
         [bill.order_id]
      );
      const items = itemsRes.rows;
 
-     // Generate Short Itemized Message
      let msg = `*--- ${hotelName.toUpperCase()} ---*\n`;
      msg += `Bill #${billId}\n`;
      items.forEach(i => msg += `${i.name} x ${i.quantity}\n`);
@@ -580,10 +658,7 @@ router.post('/:tableId/bill/send', auth, async (req, res) => {
      msg += `Thanks for visiting!`;
 
       if (method === 'whatsapp') {
-         // WhatsApp is handled via Direct Link on the frontend to keep it 100% free.
-         console.log(`[Notification] WhatsApp link generated for ${customerPhone}. No SMS charge triggered.`);
-      } else {
-         console.log(`[Notification] Non-supported notification method requested: ${method}`);
+         console.log(`[Notification] WhatsApp link generated for ${customerPhone}.`);
       }
 
       res.json({ success: true, message: `Invoice processed via ${method.toUpperCase()}` });
@@ -607,7 +682,7 @@ router.delete('/:id', auth, async (req, res) => {
 // Mark bill as paid
 router.put('/bill/:billId/pay', auth, async (req, res) => {
   const { billId } = req.params;
-  const { method } = req.body; // 'upi', 'cash', 'card'
+  const { method } = req.body;
   try {
      const result = await db.query(
         'UPDATE bills SET is_paid = true, payment_method = $1 WHERE id = $2 RETURNING *',
@@ -631,15 +706,12 @@ router.post('/:tableId/swap', auth, async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    // Check if source has active order
     const sourceOrder = await client.query('SELECT id FROM orders WHERE table_id = $1 AND status = $2', [tableId, 'active']);
     if (sourceOrder.rows.length === 0) return res.status(400).json({ message: 'No active order to swap' });
     
-    // Check if target has active order
     const targetOrder = await client.query('SELECT id FROM orders WHERE table_id = $1 AND status = $2', [targetTableId, 'active']);
     if (targetOrder.rows.length > 0) return res.status(400).json({ message: 'Target table is busy' });
 
-    // Transfer order
     await client.query('UPDATE orders SET table_id = $1 WHERE id = $2', [targetTableId, sourceOrder.rows[0].id]);
     
     await client.query('COMMIT');

@@ -106,7 +106,7 @@ router.get('/items', auth, async (req, res) => {
 
     // If page is not specified, return all items without pagination
     if (isNaN(page)) {
-      queryStr += ` ORDER BY mi.name ASC`;
+      queryStr += ` ORDER BY COALESCE(mi.is_pinned, false) DESC, mi.name ASC`;
       const result = await db.query(queryStr, params);
       return res.json(result.rows);
     }
@@ -135,7 +135,7 @@ router.get('/items', auth, async (req, res) => {
     // Add pagination order and limit
     const offset = (page - 1) * limit;
     params.push(limit, offset);
-    queryStr += ` ORDER BY mi.name ASC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    queryStr += ` ORDER BY COALESCE(mi.is_pinned, false) DESC, mi.name ASC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
     const itemsResult = await db.query(queryStr, params);
 
@@ -170,12 +170,65 @@ router.post('/items', auth, async (req, res) => {
   }
 });
 
+// Pin / Unpin menu item handler
+const handlePinToggle = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body || {};
+    const is_pinned = body.is_pinned;
+
+    const itemId = parseInt(id, 10);
+    if (isNaN(itemId)) {
+      return res.status(400).json({ message: 'Invalid item ID' });
+    }
+
+    const existing = await db.query(
+      'SELECT id, is_pinned FROM menu_items WHERE id = $1',
+      [itemId]
+    );
+
+    if (!existing.rows || existing.rows.length === 0) {
+      return res.status(404).json({ message: 'Menu item not found' });
+    }
+
+    const currentPinned = Boolean(existing.rows[0].is_pinned);
+    const targetStatus = typeof is_pinned === 'boolean' ? is_pinned : !currentPinned;
+    const pinVal = targetStatus ? 1 : 0;
+
+    await db.query(
+      'UPDATE menu_items SET is_pinned = $1 WHERE id = $2',
+      [pinVal, itemId]
+    );
+
+    const updated = await db.query(
+      'SELECT * FROM menu_items WHERE id = $1',
+      [itemId]
+    );
+
+    const rawItem = (updated.rows && updated.rows[0]) ? updated.rows[0] : {};
+    const item = {
+      ...rawItem,
+      id: itemId,
+      is_pinned: Boolean(targetStatus)
+    };
+
+    return res.json(item);
+  } catch (err) {
+    console.error('[PIN UPDATE ERROR]', err);
+    return res.status(500).json({ message: err.message || 'Failed to update pin status' });
+  }
+};
+
+router.put('/items/:id/pin', auth, handlePinToggle);
+router.post('/items/:id/pin', auth, handlePinToggle);
+router.patch('/items/:id/pin', auth, handlePinToggle);
+
 // Update menu item
 router.put('/items/:id', auth, async (req, res) => {
   const { name, price, category_id, description, is_available } = req.body;
   const { id } = req.params;
   try {
-    const lowercaseName = name.trim().toLowerCase();
+    const lowercaseName = name ? name.trim().toLowerCase() : '';
     
     const updated = await db.query(
       'UPDATE menu_items SET name = $1, price = $2, category_id = $3, description = $4, is_available = $5 WHERE id = $6 RETURNING *',

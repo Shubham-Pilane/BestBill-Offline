@@ -55,7 +55,18 @@ function preprocessSql(sql, params) {
   let adjustedParams = params ? [...params] : [];
 
   // 1. Convert PG parameterized placeholders ($1, $2, etc.) to SQLite placeholders (?)
-  cleanedSql = cleanedSql.replace(/\$(\d+)/g, '?');
+  // and construct new parameter array matching the order of placeholders (handles repeated $n references)
+  if (params && params.length > 0 && /\$\d+/.test(cleanedSql)) {
+    const newParams = [];
+    cleanedSql = cleanedSql.replace(/\$(\d+)/g, (match, p1) => {
+      const idx = parseInt(p1, 10) - 1;
+      newParams.push(adjustedParams[idx] !== undefined ? adjustedParams[idx] : null);
+      return '?';
+    });
+    adjustedParams = newParams;
+  } else {
+    cleanedSql = cleanedSql.replace(/\$(\d+)/g, '?');
+  }
 
   // 2. Map data type differences (primarily for schema initialization)
   cleanedSql = cleanedSql

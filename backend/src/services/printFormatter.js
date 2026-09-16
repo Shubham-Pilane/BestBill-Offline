@@ -310,12 +310,12 @@ function getBrandingRasterBuffer(is58mm = true) {
     };
 
     const textStr = "POWERED BY BESTBILL";
-    const charWidth = 6;
+    const charWidth = 7;
     const charHeight = 7;
     const scale = 2; 
 
     // Draw Vector Lightning Bolt Icon
-    const boltSize = 20;
+    const boltSize = 22;
     const textWidth = (textStr.length * charWidth * scale);
     const totalWidth = boltSize + 10 + textWidth;
     const startX = Math.floor((printerWidthDots - totalWidth) / 2);
@@ -335,7 +335,7 @@ function getBrandingRasterBuffer(is58mm = true) {
       }
     }
 
-    // Render Text Glyphs
+    // Render BOLD Text Glyphs (extra pixel stroke sx < scale + 1)
     let currentX = startX + boltSize + 10;
     for (let c = 0; c < textStr.length; c++) {
       const char = textStr[c];
@@ -345,7 +345,7 @@ function getBrandingRasterBuffer(is58mm = true) {
         for (let row = 0; row < charHeight; row++) {
           if (colVal & (1 << row)) {
             for (let sy = 0; sy < scale; sy++) {
-              for (let sx = 0; sx < scale; sx++) {
+              for (let sx = 0; sx < scale + 1; sx++) {
                 setPixel(currentX + (col * scale) + sx, startY + (row * scale) + sy);
               }
             }
