@@ -393,7 +393,7 @@ function executePrint(printerKey, payload) {
     } else if (printerConfig.type === 'bluetooth' || printerConfig.type === 'usb' || printerConfig.type === 'local') {
       const rawPrinterName = printerConfig.printerName || printerConfig.macAddress || '';
       const cleanedName = cleanPrinterName(rawPrinterName);
-      const targetDevice = cleanedName || rawPrinterName;
+      const targetDevice = rawPrinterName || cleanedName;
       
       const tmpDir = path.join(os.tmpdir(), 'bestbill-print');
 
@@ -417,21 +417,11 @@ function executePrint(printerKey, payload) {
           return reject(err);
         }
 
-        // Try Instant Persistent Bluetooth Worker First (<10ms)!
-        try {
-          logger.info(`Routing print job for ${printerKey} (${targetDevice}) to Persistent Worker...`);
-          const comName = await persistentWorker.printJob(targetDevice, binPath);
-          try { fs.unlinkSync(binPath); } catch (e) {}
-          logger.info(`Successfully printed via Persistent Worker on ${comName}`);
-          printerStatus[printerKey] = 'online';
-          return resolve();
-        } catch (workerErr) {
-          logger.warn(`Persistent worker print failed for ${targetDevice}: ${workerErr.message}. Trying spooler fallback.`);
-        }
-
-        // Spooler Fallback for pure Windows Spooler USB printers
-        const psPath = path.join(tmpDir, `print_job_${jobId}.ps1`);
-        const psScript = `
+        // Helper for Windows Spooler Printing (USB / Local Printers)
+        const printViaSpooler = () => {
+          return new Promise((spoolerResolve, spoolerReject) => {
+            const psPath = path.join(tmpDir, `print_job_${jobId}.ps1`);
+            const psScript = `
 param([string]$TargetDevice, [string]$BinFilePath)
 $code = @'
 using System;
@@ -458,6 +448,7 @@ public class RawPrinter {
     [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true)]
     public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
     public static bool PrintRaw(string printerName, byte[] bytes) {
+        if (string.IsNullOrEmpty(printerName)) return false;
         IntPtr hPrinter;
         if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;
         DOCINFOA di = new DOCINFOA();
@@ -481,26 +472,76 @@ public class RawPrinter {
 try { Add-Type -TypeDefinition $code -ErrorAction Stop } catch {}
 $bytes = [System.IO.File]::ReadAllBytes($BinFilePath)
 $res = [RawPrinter]::PrintRaw($TargetDevice, $bytes)
+
+if (-not $res -and $TargetDevice) {
+    $installed = Get-Printer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    $cleanDev = $TargetDevice.Split('(')[0].Trim()
+    $matched = $installed | Where-Object { $_ -eq $cleanDev -or $_ -like "*$cleanDev*" -or $_ -like "*$TargetDevice*" } | Select-Object -First 1
+    if ($matched) {
+        $res = [RawPrinter]::PrintRaw($matched, $bytes)
+    }
+}
+
+if (-not $res) {
+    $defaultPrinter = (Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue | Where-Object { $_.Default -eq $true }).Name
+    if ($defaultPrinter) {
+        $res = [RawPrinter]::PrintRaw($defaultPrinter, $bytes)
+    }
+}
+
 if ($res) { exit 0 } else { exit 1 }
 `;
 
-        fs.writeFile(psPath, psScript, 'utf8', (err) => {
-          if (err) {
-            fs.unlink(binPath, () => {});
-            printerStatus[printerKey] = 'offline';
-            return reject(err);
-          }
-          const cmd = `powershell -ExecutionPolicy Bypass -File "${psPath}" -TargetDevice "${targetDevice.replace(/"/g, '""')}" -BinFilePath "${binPath.replace(/"/g, '""')}"`;
-          exec(cmd, (execErr) => {
-            try { fs.unlinkSync(binPath); fs.unlinkSync(psPath); } catch (e) {}
-            if (execErr) {
-              printerStatus[printerKey] = 'offline';
-              return reject(new Error(`Print failed: ${execErr.message}`));
-            }
-            printerStatus[printerKey] = 'online';
-            resolve();
+            fs.writeFile(psPath, psScript, 'utf8', (writeErr) => {
+              if (writeErr) {
+                try { fs.unlinkSync(binPath); } catch (e) {}
+                return spoolerReject(writeErr);
+              }
+              const cmd = `powershell -ExecutionPolicy Bypass -File "${psPath}" -TargetDevice "${targetDevice.replace(/"/g, '""')}" -BinFilePath "${binPath.replace(/"/g, '""')}"`;
+              exec(cmd, (execErr) => {
+                try { fs.unlinkSync(binPath); fs.unlinkSync(psPath); } catch (e) {}
+                if (execErr) {
+                  return spoolerReject(new Error(`Spooler print failed: ${execErr.message}`));
+                }
+                spoolerResolve();
+              });
+            });
           });
-        });
+        };
+
+        if (printerConfig.type === 'bluetooth') {
+          try {
+            logger.info(`Routing Bluetooth print job for ${printerKey} (${targetDevice}) to Persistent Worker...`);
+            const comName = await persistentWorker.printJob(targetDevice, binPath);
+            try { fs.unlinkSync(binPath); } catch (e) {}
+            logger.info(`Successfully printed via Persistent Worker on ${comName}`);
+            printerStatus[printerKey] = 'online';
+            return resolve();
+          } catch (workerErr) {
+            logger.warn(`Persistent Bluetooth worker failed for ${targetDevice}: ${workerErr.message}. Trying Spooler fallback.`);
+            try {
+              await printViaSpooler();
+              printerStatus[printerKey] = 'online';
+              return resolve();
+            } catch (spoolerErr) {
+              printerStatus[printerKey] = 'offline';
+              return reject(spoolerErr);
+            }
+          }
+        } else {
+          // USB / Local printer: Route DIRECTLY to Windows Spooler!
+          try {
+            logger.info(`Routing USB/Local print job for ${printerKey} (${targetDevice}) directly to Windows Spooler...`);
+            await printViaSpooler();
+            logger.info(`Successfully printed USB/Local job for ${printerKey} (${targetDevice})`);
+            printerStatus[printerKey] = 'online';
+            return resolve();
+          } catch (spoolerErr) {
+            logger.error(`USB/Local Spooler printing failed for ${printerKey}: ${spoolerErr.message}`);
+            printerStatus[printerKey] = 'offline';
+            return reject(spoolerErr);
+          }
+        }
       });
     } else {
       reject(new Error(`Unsupported printer type: ${printerConfig.type}`));
