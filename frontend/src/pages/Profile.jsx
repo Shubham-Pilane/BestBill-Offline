@@ -715,7 +715,7 @@ const Profile = () => {
     const handleTestPrintBilling = async () => {
         const tId = toast.loading('Sending test receipt to Billing Printer...');
         try {
-            if (printerConfig.billing.type === 'bluetooth') {
+            if (printerConfig.billing.type === 'bluetooth' && typeof window !== 'undefined' && window.bluetoothSerial) {
                 const sampleItems = [
                     { name: 'Butter Chicken', price: 280.00, qty: 1 },
                     { name: 'Butter Naan', price: 40.00, qty: 3 },
@@ -750,7 +750,7 @@ const Profile = () => {
                     toast.success('Billing Bluetooth Test Print Successful!', { id: tId });
                 }
             } else {
-                const res = await api.post('/hotel/test-print', { type: 'billing' });
+                const res = await api.post('/hotel/test-print', { type: 'billing', printerConfig });
                 if (res.data.success) {
                     toast.success(res.data.message || 'Billing Test Print Sent!', { id: tId });
                 }
@@ -763,7 +763,7 @@ const Profile = () => {
     const handleTestPrintKot = async () => {
         const tId = toast.loading('Sending test ticket to KOT Printer...');
         try {
-            if (printerConfig.kitchen.type === 'bluetooth') {
+            if (printerConfig.kitchen.type === 'bluetooth' && typeof window !== 'undefined' && window.bluetoothSerial) {
                 const sampleItems = [
                     { name: 'Paneer Butter Masala', qty: 2 },
                     { name: 'Garlic Naan', qty: 4 },
@@ -788,7 +788,7 @@ const Profile = () => {
                     toast.success('Kitchen Bluetooth KOT Test Print Successful!', { id: tId });
                 }
             } else {
-                const res = await api.post('/hotel/test-print', { type: 'kitchen' });
+                const res = await api.post('/hotel/test-print', { type: 'kitchen', printerConfig });
                 if (res.data.success) {
                     toast.success(res.data.message || 'Kitchen KOT Test Print Sent!', { id: tId });
                 }

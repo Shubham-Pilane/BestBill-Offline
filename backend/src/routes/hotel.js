@@ -141,10 +141,17 @@ router.post('/printers-config', auth, (req, res) => {
 // Trigger a test print (Billing or Kitchen KOT)
 router.post('/test-print', auth, async (req, res) => {
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
-  const { type } = req.body;
+  const { type, printerConfig } = req.body;
   const printService = require('../services/printService');
 
   try {
+    if (printerConfig) {
+      const config = configManager.getConfig();
+      if (printerConfig.billing) config.printers.billing = printerConfig.billing;
+      if (printerConfig.kitchen) config.printers.kitchen = printerConfig.kitchen;
+      configManager.saveConfig(config);
+    }
+
     const hotelRes = await db.query('SELECT name, location, phone, upi_id, gst_percentage FROM hotels WHERE id = $1', [req.user.hotel_id]);
     const hotel = hotelRes.rows[0] || {};
 
