@@ -841,9 +841,8 @@ export class BluetoothPrinterService {
 
         if (job.type === 'KOT') {
           const printerType = this.getPrinterType('kot');
-          targetMac = this.getSelectedPrinter('kot');
-
-          if (printerType === 'bluetooth' || targetMac) {
+          if (printerType === 'bluetooth') {
+            targetMac = this.getSelectedPrinter('kot');
             const size = this.getPrinterSize('kot');
             printBytes = await formatKOT(job, size);
             if (printBytes) {
@@ -854,9 +853,8 @@ export class BluetoothPrinterService {
           }
         } else if (job.type === 'FINAL_BILL' || job.type === 'CANCEL_ORDER') {
           const printerType = this.getPrinterType('billing');
-          targetMac = this.getSelectedPrinter('billing');
-
-          if (printerType === 'bluetooth' || targetMac) {
+          if (printerType === 'bluetooth') {
+            targetMac = this.getSelectedPrinter('billing');
             const size = this.getPrinterSize('billing');
             printBytes = await formatBill(job, size);
             if (printBytes) {
