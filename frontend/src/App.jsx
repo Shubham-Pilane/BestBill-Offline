@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import CaptainDashboard from './captain/CaptainDashboard';
 import MenuManagement from './pages/MenuManagement';
 import BillingHistory from './pages/BillingHistory';
 import Profile from './pages/Profile';
@@ -26,6 +27,10 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const Home = () => {
+  const { user } = useAuth();
+  if (user?.role === 'waiter') {
+    return <CaptainDashboard />;
+  }
   return <Dashboard />;
 };
 

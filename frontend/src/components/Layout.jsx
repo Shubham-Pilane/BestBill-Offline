@@ -271,7 +271,7 @@ const Layout = ({ children }) => {
             </div>
           </div>
         )}
-        <header className="responsive-header" style={{ height: '72px', backgroundColor: 'var(--bg-card)', padding: '0 24px', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <header className="responsive-header" style={{ padding: 'max(env(safe-area-inset-top), 16px) 24px 16px 24px', backgroundColor: 'var(--bg-card)', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 100 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button onClick={() => setMobileMenuOpen(true)} style={{color: 'var(--text-primary)', background: 'var(--border-rgba-05)', border: '1px solid var(--border-rgba-1)', padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Menu size={24} />

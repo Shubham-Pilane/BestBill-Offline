@@ -484,3 +484,40 @@ html, body {
   stroke-opacity: 0.9;
 }
 
+/* Dashboard Compact Tweaks for PWA / Mobile Only */
+@media (max-width: 1024px) {
+  .mobile-hidden {
+    display: none !important;
+  }
+  .hotel-title-section {
+    gap: 12px !important;
+  }
+  .mobile-compact-icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
+  .mobile-compact-icon svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  .hotel-name-title {
+    font-size: 24px !important;
+  }
+  .dashboard-header {
+    gap: 12px !important;
+  }
+  .dashboard-tables-grid {
+    gap: 8px !important;
+  }
+  .table-card {
+    padding: 20px !important;
+    gap: 8px !important;
+    border-radius: 24px !important;
+  }
+  .table-card-title {
+    font-size: 36px !important;
+  }
+  .table-card-title-small {
+    font-size: 24px !important;
+  }
+}

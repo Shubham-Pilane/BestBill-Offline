@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import api from '../services/api';
-import OrderModal from '../components/OrderModal';
+import MobileOrderModal from './MobileOrderModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint, Sun, Moon, ChevronDown } from 'lucide-react';
@@ -1029,7 +1029,7 @@ const Dashboard = () => {
       />
 
       {isOrderModalOpen && (
-        <OrderModal
+        <MobileOrderModal
           table={tables.find(t => t.id === selectedTable.id) || selectedTable}
           initialMenu={menuData}
           allTables={tables}
