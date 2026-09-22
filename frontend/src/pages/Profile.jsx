@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2, RefreshCw } from 'lucide-react';
+import { User, Mail, Lock, ShieldCheck, Save, Eye, EyeOff, LayoutPanelLeft, UserCircle, Wallet, Users, Trash2, UserPlus, Fingerprint, MapPin, Percent, Upload, Image as ImageIcon, Printer, ChevronDown, Globe, Download, QrCode, KeyRound, CheckCircle2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { BluetoothPrinterService, formatBill, formatKOT } from '../services/bluetoothPrinterService';
 const Profile = () => {
@@ -74,6 +74,16 @@ const Profile = () => {
 
     // Cancel Orders State
     const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
+
+    // Settle Without Print State
+    const [settleWithoutPrintEnabled, setSettleWithoutPrintEnabled] = useState(
+        typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true'
+    );
+
+    // Clear Test Data State
+    const [testDataDate, setTestDataDate] = useState('');
+    const [isClearingData, setIsClearingData] = useState(false);
+    const [showClearTestDataConfirm, setShowClearTestDataConfirm] = useState(false);
 
     // Email Report State
     const [emailReportModuleEnabled, setEmailReportModuleEnabled] = useState(false);
@@ -354,6 +364,32 @@ const Profile = () => {
             }
         } catch (err) {
             toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Cancel Order Management`);
+        }
+    };
+
+    const handleToggleSettleWithoutPrint = (shouldEnable) => {
+        setSettleWithoutPrintEnabled(shouldEnable);
+        localStorage.setItem('cfg_settle_without_print', shouldEnable ? 'true' : 'false');
+        toast.success(`Settle Without Print ${shouldEnable ? 'Enabled' : 'Disabled'}`);
+    };
+
+    const handleClearTestDataClick = () => {
+        if (!testDataDate) return;
+        setShowClearTestDataConfirm(true);
+    };
+
+    const confirmClearTestData = async () => {
+        setIsClearingData(true);
+        try {
+            const res = await api.delete('/hotel/clear-test-data', { data: { targetDate: testDataDate } });
+            toast.success(res.data.message || 'Test data cleared successfully');
+            setTestDataDate('');
+            setShowClearTestDataConfirm(false);
+        } catch (err) {
+            console.error('Clear data error:', err);
+            toast.error(err.response?.data?.message || 'Failed to clear test data');
+        } finally {
+            setIsClearingData(false);
         }
     };
 
@@ -2123,6 +2159,84 @@ const Profile = () => {
                             </div>
                         </div>
 
+                        {/* Settle Without Print Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Settle Without Print</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Enable a quick "Settle Without Print" button during bill settlement for faster checkout when customers don't need a physical bill.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="settleWithoutPrintModule"
+                                        checked={!settleWithoutPrintEnabled} 
+                                        onChange={() => handleToggleSettleWithoutPrint(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="settleWithoutPrintModule"
+                                        checked={settleWithoutPrintEnabled} 
+                                        onChange={() => handleToggleSettleWithoutPrint(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Clear Test Data Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Clear Test Data</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Clear all transaction records (bills, orders, KOTs, expenses, credits) for a specific date. Hotel settings will not be affected.
+                                </p>
+                            </div>
+                            
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                <input 
+                                    type="date" 
+                                    value={testDataDate}
+                                    onChange={(e) => setTestDataDate(e.target.value)}
+                                    style={{ 
+                                        padding: '10px 16px', 
+                                        borderRadius: '8px', 
+                                        border: '1px solid var(--border-rgba-05)',
+                                        backgroundColor: 'var(--bg-base)',
+                                        color: 'var(--text-primary)',
+                                        fontWeight: 600,
+                                        outline: 'none'
+                                    }}
+                                />
+                                <button 
+                                    onClick={handleClearTestDataClick}
+                                    disabled={!testDataDate || isClearingData}
+                                    style={{
+                                        padding: '10px 20px',
+                                        backgroundColor: '#f43f5e',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '8px',
+                                        fontWeight: 600,
+                                        cursor: (!testDataDate || isClearingData) ? 'not-allowed' : 'pointer',
+                                        opacity: (!testDataDate || isClearingData) ? 0.6 : 1
+                                    }}
+                                >
+                                    {isClearingData ? 'Clearing...' : 'Clear Data'}
+                                </button>
+                            </div>
+                        </div>
 
                         {/* Automated Email Reports Module */}
                         <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
@@ -2563,6 +2677,33 @@ const Profile = () => {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {/* Clear Test Data Modal */}
+            {showClearTestDataConfirm && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={() => setShowClearTestDataConfirm(false)}>
+                    <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '24px', padding: '36px', border: '1px solid var(--bg-border)', width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <AlertTriangle size={28} style={{ color: '#f43f5e' }} />
+                            <h3 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                                Confirm Deletion
+                            </h3>
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.6' }}>
+                            Are you sure you want to permanently clear all bills, orders, KOTs, credits, and expenses for <strong>{testDataDate}</strong>? This cannot be undone.
+                        </p>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                                onClick={() => setShowClearTestDataConfirm(false)}
+                                style={{ flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: 'var(--bg-border)', color: 'var(--text-secondary)', fontWeight: 800, border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >Cancel</button>
+                            <button
+                                onClick={confirmClearTestData}
+                                disabled={isClearingData}
+                                style={{flex: 1, padding: '14px', borderRadius: '14px', backgroundColor: '#f43f5e', color: 'white', fontWeight: 900, border: 'none', cursor: isClearingData ? 'not-allowed' : 'pointer', fontSize: '14px', boxShadow: '0 8px 20px rgba(244,63,94,0.3)', opacity: isClearingData ? 0.7 : 1 }}
+                            >{isClearingData ? 'Clearing...' : 'Clear Data'}</button>
+                        </div>
                     </div>
                 </div>
             )}

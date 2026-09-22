@@ -37,6 +37,9 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [vendors, setVendors] = useState([]);
   const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const [settleWithoutPrintEnabled, setSettleWithoutPrintEnabled] = useState(() => {
+    return typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true';
+  });
   const [customDeliveryPartners, setCustomDeliveryPartners] = useState(() => {
     try {
       const saved = localStorage.getItem('cfg_custom_delivery_partners');
@@ -399,6 +402,21 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
       toast.success('Bill cancelled. Returning to order.');
     } catch (err) {
       toast.error('Rollback failed');
+    }
+  };
+
+  const settleWithoutPrint = async () => {
+    if (!billData) return;
+    try {
+      if (!billData.is_paid) {
+        await confirmPayment(selectedPaymentMethod);
+      } else {
+        toast.success('Transaction settled!');
+        setTimeout(() => onClose(), 1500);
+      }
+    } catch (err) {
+      console.error('Settlement failed:', err);
+      toast.error(err.response?.data?.message || 'Settlement failed');
     }
   };
 
@@ -1329,13 +1347,18 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                      </div>
                    )}
 
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)', transition: 'background-color 0.2s' }}>
-                        <Printer size={18} /> {!billData.is_paid ? 'Print' : 'Re-Print'}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                     <button onClick={printBill} style={{flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)', transition: 'background-color 0.2s', whiteSpace: 'nowrap' }}>
+                        <Printer size={16} /> {!billData.is_paid ? 'Print' : 'Re-Print'}
                      </button>
+                     {settleWithoutPrintEnabled && selectedPaymentMethod !== 'credit' && (
+                       <button onClick={settleWithoutPrint} style={{ flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)', whiteSpace: 'nowrap' }}>
+                          <CheckCircle size={16} /> Settle Only
+                       </button>
+                     )}
                      {user?.whatsAppBillingEnabled && selectedPaymentMethod !== 'credit' && (
-                       <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
-                          <MessageCircle size={18} /> WhatsApp
+                       <button onClick={shareViaWhatsApp} style={{ flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)', whiteSpace: 'nowrap' }}>
+                          <MessageCircle size={16} /> WhatsApp
                        </button>
                      )}
                  </div>

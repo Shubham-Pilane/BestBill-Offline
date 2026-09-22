@@ -618,6 +618,50 @@ router.post('/test-print', auth, async (req, res) => {
   }
 });
 
+// --- CLEAR TEST DATA ---
+router.delete('/clear-test-data', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  
+  const { targetDate } = req.body;
+  if (!targetDate) return res.status(400).json({ message: 'Target date is required' });
+
+  try {
+    await db.query('BEGIN');
+    
+    // Clear Orders (cascades to bills, order_items, order_chats)
+    // Join with tables and rooms to ensure the orders belong to this hotel
+    await db.query(`
+      DELETE FROM orders WHERE id IN (
+        SELECT o.id FROM orders o
+        LEFT JOIN tables t ON o.table_id = t.id
+        LEFT JOIN rooms r ON o.room_id = r.id
+        WHERE date(o.created_at) = $1 AND (t.hotel_id = $2 OR r.hotel_id = $2)
+      )
+    `, [targetDate, req.user.hotel_id]);
+
+    // Clear Cancelled Orders
+    await db.query(`DELETE FROM cancelled_orders WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    // Clear Expenses
+    await db.query(`DELETE FROM expenses WHERE date(expense_date) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    // Clear Credits
+    await db.query(`DELETE FROM credits WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    await db.query(`DELETE FROM credit_payments WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    
+    // Clear Inventory transactions
+    await db.query(`DELETE FROM purchase_entries WHERE date(invoice_date) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    await db.query(`DELETE FROM stock_transactions WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    await db.query('COMMIT');
+    res.json({ message: 'Test data cleared successfully for ' + targetDate });
+  } catch (err) {
+    await db.query('ROLLBACK');
+    console.error('Error clearing test data:', err);
+    res.status(500).json({ message: 'Error clearing test data' });
+  }
+});
+
 module.exports = router;
 
 

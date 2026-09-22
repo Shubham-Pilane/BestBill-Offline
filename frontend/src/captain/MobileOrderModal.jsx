@@ -1028,9 +1028,9 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   </div>
                   <button 
                     onClick={() => setIsMobileCartOpen(false)}
-                    style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--border-rgba-05)', border: 'none', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    style={{ padding: '6px 12px', borderRadius: '16px', backgroundColor: 'var(--border-rgba-05)', border: 'none', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '12px', fontWeight: 800, letterSpacing: '0.02em' }}
                   >
-                    <ChevronDown size={16} />
+                    Back
                   </button>
                 </div>
 
