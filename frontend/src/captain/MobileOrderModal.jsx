@@ -862,7 +862,8 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                         <button 
                           onClick={(e) => { e.stopPropagation(); addToOrder(item); }}
                           style={{
-                            padding: '6px 12px',
+                            height: '32px',
+                            padding: '0 12px',
                             borderRadius: '8px',
                             border: '1px solid #0ea5e9',
                             backgroundColor: 'rgba(14, 165, 233, 0.15)',
@@ -872,7 +873,9 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            justifyContent: 'center',
+                            gap: '4px',
+                            boxSizing: 'border-box'
                           }}
                         >
                           <Plus size={14} /> ADD
@@ -881,13 +884,16 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                         <div 
                           onClick={(e) => e.stopPropagation()}
                           style={{
+                            height: '32px',
                             display: 'flex',
                             alignItems: 'center',
+                            justifyContent: 'center',
                             gap: '8px',
                             backgroundColor: '#0ea5e9',
                             borderRadius: '8px',
-                            padding: '4px 8px',
-                            boxShadow: '0 2px 8px rgba(14, 165, 233, 0.4)'
+                            padding: '0 8px',
+                            boxShadow: '0 2px 8px rgba(14, 165, 233, 0.4)',
+                            boxSizing: 'border-box'
                           }}
                         >
                           <button 

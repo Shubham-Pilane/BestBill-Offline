@@ -9,14 +9,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['logo.svg', 'logo.png', 'robots.txt'],
+      manifestFilename: 'manifest.json',
       manifest: {
         name: 'BestBill - POS & Waiter App',
         short_name: 'BestBill',
         description: 'Hotel Billing Software & Restaurant POS System',
-        theme_color: '#2563eb',
-        background_color: '#ffffff',
+        theme_color: '#0f172a',
+        background_color: '#020617',
         display: 'standalone',
         orientation: 'any',
+        scope: '/',
         start_url: '/',
         icons: [
           {

@@ -174,7 +174,7 @@ const Layout = ({ children }) => {
 
 
   return (
-    <div style={{display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-layout)', color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{display: 'flex', height: '100dvh', overflow: 'hidden', backgroundColor: 'var(--bg-layout)', color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div 
@@ -262,7 +262,7 @@ const Layout = ({ children }) => {
       </aside>
 
       {/* Main Content Area */}
-      <div className="main-content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0 }}>
+      <div className="main-content-wrapper" style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', minWidth: 0, height: '100dvh' }}>
         {user?.licenseWarning && (
           <div style={{ backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', zIndex: 101 }}>
             <AlertTriangle size={20} color="#ef4444" />
@@ -271,7 +271,7 @@ const Layout = ({ children }) => {
             </div>
           </div>
         )}
-        <header className="responsive-header" style={{ padding: 'max(env(safe-area-inset-top), 16px) 24px 16px 24px', backgroundColor: 'var(--bg-card)', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-border)', position: 'sticky', top: 0, zIndex: 100 }}>
+        <header className="responsive-header" style={{ position: 'sticky', top: 0, padding: 'max(env(safe-area-inset-top), 16px) 24px 16px 24px', backgroundColor: 'var(--bg-card)', display: 'none', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--bg-border)', zIndex: 100, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button onClick={() => setMobileMenuOpen(true)} style={{color: 'var(--text-primary)', background: 'var(--border-rgba-05)', border: '1px solid var(--border-rgba-1)', padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Menu size={24} />
@@ -290,7 +290,7 @@ const Layout = ({ children }) => {
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: '40px' }} className="main-responsive">{children}</main>
+        <main style={{ flex: 1, padding: '40px', overflowY: 'auto', WebkitOverflowScrolling: 'touch' }} className="main-responsive">{children}</main>
       </div>
 
       <style>{`

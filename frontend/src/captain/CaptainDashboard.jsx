@@ -283,11 +283,15 @@ const Dashboard = () => {
     let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('parcel'));
     if (tableSearchQuery.trim()) {
       const q = tableSearchQuery.toLowerCase().trim();
-      list = list.filter(t => 
-        String(t.table_number || '').toLowerCase().includes(q) || 
-        `table ${t.table_number}`.toLowerCase().includes(q) || 
-        String(t.floor || '').toLowerCase().includes(q)
-      );
+      list = list.filter(t => {
+        const name = String(t.table_number || '').toLowerCase();
+        const floor = String(t.floor || '').toLowerCase();
+        if (/^\d+$/.test(q)) {
+          const exactNumRegex = new RegExp('(^|\\D)' + q + '(\\D|$)');
+          return exactNumRegex.test(name);
+        }
+        return name.includes(q) || `table ${name}`.includes(q) || floor.includes(q);
+      });
     }
     return list;
   }, [tables, tableSearchQuery]);
@@ -297,11 +301,15 @@ const Dashboard = () => {
     let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('token'));
     if (tableSearchQuery.trim()) {
       const q = tableSearchQuery.toLowerCase().trim();
-      list = list.filter(t => 
-        String(t.table_number || '').toLowerCase().includes(q) || 
-        `table ${t.table_number}`.toLowerCase().includes(q) || 
-        String(t.floor || '').toLowerCase().includes(q)
-      );
+      list = list.filter(t => {
+        const name = String(t.table_number || '').toLowerCase();
+        const floor = String(t.floor || '').toLowerCase();
+        if (/^\d+$/.test(q)) {
+          const exactNumRegex = new RegExp('(^|\\D)' + q + '(\\D|$)');
+          return exactNumRegex.test(name);
+        }
+        return name.includes(q) || `table ${name}`.includes(q) || floor.includes(q);
+      });
     }
     return list;
   }, [tables, tableSearchQuery]);
@@ -311,11 +319,15 @@ const Dashboard = () => {
     let list = (tables || []).filter(t => String(t.table_number || '').toLowerCase().includes('online'));
     if (tableSearchQuery.trim()) {
       const q = tableSearchQuery.toLowerCase().trim();
-      list = list.filter(t => 
-        String(t.table_number || '').toLowerCase().includes(q) || 
-        `table ${t.table_number}`.toLowerCase().includes(q) || 
-        String(t.floor || '').toLowerCase().includes(q)
-      );
+      list = list.filter(t => {
+        const name = String(t.table_number || '').toLowerCase();
+        const floor = String(t.floor || '').toLowerCase();
+        if (/^\d+$/.test(q)) {
+          const exactNumRegex = new RegExp('(^|\\D)' + q + '(\\D|$)');
+          return exactNumRegex.test(name);
+        }
+        return name.includes(q) || `table ${name}`.includes(q) || floor.includes(q);
+      });
     }
     return list;
   }, [tables, tableSearchQuery]);
@@ -330,6 +342,12 @@ const Dashboard = () => {
         if (isCounter) return false;
         if (!q) return true;
         const floor = String(t.floor || '').toLowerCase();
+        
+        if (/^\d+$/.test(q)) {
+            const exactNumRegex = new RegExp('(^|\\D)' + q + '(\\D|$)');
+            return exactNumRegex.test(name);
+        }
+
         return (
           name.includes(q) || 
           `table ${name}`.includes(q) || 
