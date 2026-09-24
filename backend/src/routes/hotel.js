@@ -630,27 +630,40 @@ router.delete('/clear-test-data', auth, async (req, res) => {
     
     // Clear Orders (cascades to bills, order_items, order_chats)
     // Join with tables and rooms to ensure the orders belong to this hotel
-    await db.query(`
-      DELETE FROM orders WHERE id IN (
-        SELECT o.id FROM orders o
-        LEFT JOIN tables t ON o.table_id = t.id
-        LEFT JOIN rooms r ON o.room_id = r.id
-        WHERE date(o.created_at) = $1 AND (t.hotel_id = $2 OR r.hotel_id = $2)
-      )
+    // Clear Orders (and manually cascade to bills, order_items, order_chats)
+    // We check if either the order OR its bill was created on the target date.
+    // This catches orders that were left open overnight and billed the next morning.
+    const orderIdsRes = await db.query(`
+      SELECT DISTINCT o.id FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      LEFT JOIN rooms r ON o.room_id = r.id
+      LEFT JOIN bills b ON b.order_id = o.id
+      WHERE (date(o.created_at) = $1 OR date(b.created_at) = $1)
+        AND (t.hotel_id = $2 OR r.hotel_id = $2)
     `, [targetDate, req.user.hotel_id]);
+
+    const orderIds = orderIdsRes.rows.map(row => row.id);
+    if (orderIds.length > 0) {
+      const idsList = orderIds.join(',');
+      await db.query(`DELETE FROM bills WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM order_items WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM order_chats WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM orders WHERE id IN (${idsList})`);
+    }
 
     // Clear Cancelled Orders
     await db.query(`DELETE FROM cancelled_orders WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
 
-    // Clear Expenses
-    await db.query(`DELETE FROM expenses WHERE date(expense_date) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    // Clear Expenses (expense_date is an ISO UTC string, so it needs 'localtime' to match local days)
+    await db.query(`DELETE FROM expenses WHERE date(expense_date, 'localtime') = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
 
-    // Clear Credits
+    // Clear Credits (created_at is already stored as local time string by SQLite)
     await db.query(`DELETE FROM credits WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
     await db.query(`DELETE FROM credit_payments WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
     
-    // Clear Inventory transactions
-    await db.query(`DELETE FROM purchase_entries WHERE date(invoice_date) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    // Clear Inventory transactions (invoice_date is ISO UTC string)
+    await db.query(`DELETE FROM purchase_entries WHERE date(invoice_date, 'localtime') = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    // stock_transactions created_at is local time string
     await db.query(`DELETE FROM stock_transactions WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
 
     await db.query('COMMIT');
