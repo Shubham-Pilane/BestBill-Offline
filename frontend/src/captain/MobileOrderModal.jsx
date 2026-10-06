@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
 import { shareBillPDFViaWhatsApp } from '../utils/pdfBill';
@@ -572,12 +573,12 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
 
   if (loading) return null;
 
-  return (
-    <div className="order-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-      <div className="order-modal-container" style={{ width: '100%', maxWidth: '1280px', height: '92vh', backgroundColor: 'var(--bg-base)', borderRadius: '32px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 30px 90px rgba(0,0,0,0.9)', border: '1px solid var(--border-color)' }}>
+  return createPortal(
+    <div className="order-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: isMobile ? 0 : '16px' }}>
+      <div className="order-modal-container" style={{ width: '100%', maxWidth: '1280px', height: isMobile ? '100dvh' : '92vh', backgroundColor: 'var(--bg-base)', borderRadius: isMobile ? 0 : '32px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 30px 90px rgba(0,0,0,0.9)', border: isMobile ? 'none' : '1px solid var(--border-color)', position: 'relative' }}>
         
         {/* Header - Matching Screenshot Style */}
-        <div className="order-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-card)' }}>
+        <div className="order-modal-header" style={{ padding: isMobile ? 'max(env(safe-area-inset-top, 16px), 16px) 16px 16px 16px' : '16px 24px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--bg-card)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{
               minWidth: '48px', 
@@ -1000,11 +1001,11 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
           {isMobile && isMobileCartOpen && (
             <div 
               style={{
-                position: 'absolute',
+                position: 'fixed',
                 inset: 0,
                 backgroundColor: 'rgba(0, 0, 0, 0.8)',
                 backdropFilter: 'blur(8px)',
-                zIndex: 200,
+                zIndex: 999999,
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'flex-end'
@@ -1015,19 +1016,16 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 onClick={(e) => e.stopPropagation()}
                 style={{
                   width: '100%',
-                  height: '90vh',
+                  height: '100dvh',
                   backgroundColor: 'var(--bg-base)',
-                  borderTopLeftRadius: '24px',
-                  borderTopRightRadius: '24px',
                   display: 'flex',
                   flexDirection: 'column',
                   overflow: 'hidden',
-                  boxShadow: '0 -20px 50px rgba(0,0,0,0.8)',
-                  border: '1px solid var(--border-color)'
+                  boxShadow: '0 -20px 50px rgba(0,0,0,0.8)'
                 }}
               >
                 {/* Drawer Header */}
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-card)' }}>
+                <div style={{ padding: 'max(env(safe-area-inset-top, 16px), 16px) 16px 12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-card)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Receipt size={16} color="#0ea5e9" />
                     <h3 style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Active Selection ({orderItems.length})</h3>
@@ -1934,7 +1932,8 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
       )}
 
       <SwapModal isOpen={isSwapModalOpen} onClose={() => setSwapModalOpen(false)} tables={allTables} onSwap={handleSwapTable} currentTable={table} />
-    </div>
+    </div>,
+    document.body
   );
 };
 
