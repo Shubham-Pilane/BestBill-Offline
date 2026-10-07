@@ -1,3 +1,5 @@
+const { containsDevanagari, renderItemRowToRaster, renderKOTItemRowToRaster, renderTextLineToRaster, renderTableHeaderToRaster } = require('./devanagariNodeRenderer');
+
 /**
  * Raw ESC/POS Command Constants
  */
@@ -101,45 +103,111 @@ function formatKOT(data) {
   const LINE_WIDTH = data.charLimit ? Number(data.charLimit) : (is58mm ? 31 : 42);
   const mg = '';
   
+  const isMarathi = data.lang === 'mr' || data.isMarathi || (data.items && data.items.some(i => containsDevanagari(i.name)));
+  const paperOpt = { paperSize: is58mm ? '58mm' : '80mm' };
+
   const builder = new EscposBuilder(is58mm);
   const dateStr = new Date().toLocaleString();
 
   let tStr = String(data.table);
-  if (!tStr.toLowerCase().includes('room') && !tStr.toLowerCase().includes('parcel')) {
-    tStr = `Table ${tStr}`;
+  if (!tStr.toLowerCase().includes('room') && !tStr.toLowerCase().includes('parcel') && !tStr.includes('टेबल')) {
+    tStr = isMarathi ? `टेबल: ${tStr}` : `Table ${tStr}`;
   }
   if (data.floor && !tStr.toLowerCase().includes('parcel')) {
     tStr += ` - ${data.floor}`;
   }
 
-  builder.alignCenter()
-    .setFontDouble()
-    .bold()
-    .text(mg + 'KITCHEN ORDER')
-    .setFontNormal()
-    .bold(false)
-    .line('=', LINE_WIDTH)
-    .alignLeft()
-    .bold()
-    .text(mg + tStr);
-    
-  if (data.waiter && data.waiter.toLowerCase() !== 'owner') {
-    builder.text(mg + `WAITER: ${data.waiter}`);
+  if (isMarathi) {
+    const titleBuf = renderTextLineToRaster('किचन ऑर्डर', { ...paperOpt, isTitle: true, align: 'center' });
+    if (titleBuf.length > 0) {
+      builder.alignCenter();
+      builder.bufferList.push(titleBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.alignCenter().setFontDouble().bold().text(mg + 'KITCHEN ORDER');
+    }
+  } else {
+    builder.alignCenter().setFontDouble().bold().text(mg + 'KITCHEN ORDER');
   }
 
-  builder.bold(false)
-    .text(mg + `DATE: ${dateStr}`)
-    .line('-', LINE_WIDTH)
-    .setFontNormal();
+  builder.setFontNormal().bold(false).line('=', LINE_WIDTH);
+
+  if (isMarathi) {
+    const tableBuf = renderTextLineToRaster(tStr, { ...paperOpt, align: 'left', bold: true });
+    if (tableBuf.length > 0) {
+      builder.alignLeft();
+      builder.bufferList.push(tableBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.alignLeft().bold().text(mg + tStr);
+    }
+  } else {
+    builder.alignLeft().bold().text(mg + tStr);
+  }
+    
+  if (data.waiter && data.waiter.toLowerCase() !== 'owner') {
+    if (isMarathi) {
+      const waiterBuf = renderTextLineToRaster(`वेटर: ${data.waiter}`, { ...paperOpt, align: 'left' });
+      if (waiterBuf.length > 0) {
+        builder.bufferList.push(waiterBuf);
+        builder.bufferList.push(Buffer.from([0x0A]));
+      } else {
+        builder.text(mg + `WAITER: ${data.waiter}`);
+      }
+    } else {
+      builder.text(mg + `WAITER: ${data.waiter}`);
+    }
+  }
+
+  if (isMarathi) {
+    const dateBuf = renderTextLineToRaster(`दिनांक: ${dateStr}`, { ...paperOpt, align: 'left' });
+    if (dateBuf.length > 0) {
+      builder.bufferList.push(dateBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.text(mg + `DATE: ${dateStr}`);
+    }
+  } else {
+    builder.text(mg + `DATE: ${dateStr}`);
+  }
+
+  builder.line('-', LINE_WIDTH).setFontNormal();
 
   // Print items
   const qtyLen = is58mm ? 4 : 6;
   const itemLen = LINE_WIDTH - qtyLen - 1;
   
-  builder.bold(true).text(mg + padText('ITEM', itemLen) + ' ' + padText('QTY', qtyLen, 'right')).bold(false);
+  if (isMarathi) {
+    const headerBuf = renderTableHeaderToRaster({ ...paperOpt, isKOT: true });
+    if (headerBuf.length > 0) {
+      builder.bufferList.push(headerBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.bold(true).text(mg + padText('ITEM', itemLen) + ' ' + padText('QTY', qtyLen, 'right')).bold(false);
+    }
+  } else {
+    builder.bold(true).text(mg + padText('ITEM', itemLen) + ' ' + padText('QTY', qtyLen, 'right')).bold(false);
+  }
   builder.line('-', LINE_WIDTH);
 
   data.items.forEach(item => {
+    if (item.rasterBase64) {
+      builder.bufferList.push(Buffer.from(item.rasterBase64, 'base64'));
+      builder.bufferList.push(Buffer.from([0x0A]));
+      return;
+    }
+    if (containsDevanagari(item.name)) {
+      try {
+        const rasterBuf = renderKOTItemRowToRaster(item, { paperSize: is58mm ? '58mm' : '80mm' });
+        if (rasterBuf && rasterBuf.length > 0) {
+          builder.bufferList.push(rasterBuf);
+          builder.bufferList.push(Buffer.from([0x0A]));
+          return;
+        }
+      } catch (e) {
+        console.error('[DEVANAGARI KOT RENDER ERROR]', e);
+      }
+    }
     const qty = item.quantity || item.qty || 1;
     const nameStr = toTitleCase(String(item.name));
     const firstChunk = nameStr.substring(0, itemLen);
@@ -492,9 +560,25 @@ function formatBill(data) {
   }
   
   builder.alignLeft();
+  const isMarathi = data.lang === 'mr' || data.isMarathi || (data.items && data.items.some(i => containsDevanagari(i.name)));
+  const paperOpt = { paperSize: is58mm ? '58mm' : '80mm' };
+
+  builder.alignLeft();
   builder.bold(true);
   builder.line('-', LINE_WIDTH);
-  builder.alignCenter().setFontLarge().text('INVOICE').setFontNormal();
+
+  if (isMarathi) {
+    const titleBuf = renderTextLineToRaster('ग्राहक बिल', { ...paperOpt, isTitle: true, align: 'center' });
+    if (titleBuf.length > 0) {
+      builder.alignCenter();
+      builder.bufferList.push(titleBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.alignCenter().setFontLarge().text('INVOICE').setFontNormal();
+    }
+  } else {
+    builder.alignCenter().setFontLarge().text('INVOICE').setFontNormal();
+  }
   builder.alignLeft();
   builder.line('-', LINE_WIDTH);
   
@@ -504,17 +588,49 @@ function formatBill(data) {
     if (tableStr.toLowerCase().includes('room') || tableStr.toLowerCase().includes('parcel')) {
       tStr = tableStr;
     } else {
-      tStr = `Table: ${tableStr}`;
+      tStr = isMarathi ? `टेबल: ${tableStr}` : `Table: ${tableStr}`;
     }
-    builder.text(mg + padText(tStr, LINE_WIDTH));
+
+    if (isMarathi) {
+      const tableBuf = renderTextLineToRaster(tStr, { ...paperOpt, align: 'left' });
+      if (tableBuf.length > 0) {
+        builder.bufferList.push(tableBuf);
+        builder.bufferList.push(Buffer.from([0x0A]));
+      } else {
+        builder.text(mg + padText(tStr, LINE_WIDTH));
+      }
+    } else {
+      builder.text(mg + padText(tStr, LINE_WIDTH));
+    }
   }
   
-  builder.text(mg + padText(`Bill No: #${data.billId || ''}`, LINE_WIDTH));
+  if (isMarathi) {
+    const billNoBuf = renderTextLineToRaster(`बिल क्र.: #${data.billId || ''}`, { ...paperOpt, align: 'left' });
+    if (billNoBuf.length > 0) {
+      builder.bufferList.push(billNoBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.text(mg + padText(`Bill No: #${data.billId || ''}`, LINE_WIDTH));
+    }
+  } else {
+    builder.text(mg + padText(`Bill No: #${data.billId || ''}`, LINE_WIDTH));
+  }
   
   const d = new Date();
   const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + 
                   d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-  builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
+
+  if (isMarathi) {
+    const dateBuf = renderTextLineToRaster(`दिनांक: ${dateStr}`, { ...paperOpt, align: 'left' });
+    if (dateBuf.length > 0) {
+      builder.bufferList.push(dateBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
+    }
+  } else {
+    builder.text(mg + padText(`Date: ${dateStr}`, LINE_WIDTH));
+  }
 
   if (data.guestName) {
     builder.text(mg + padText(`Guest: ${data.guestName.toUpperCase()}`, LINE_WIDTH));
@@ -531,12 +647,27 @@ function formatBill(data) {
   
   builder.line('-', LINE_WIDTH);
   
-  builder.text(
-    mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
-    padText('PRICE', PRC_LEN, 'right') + ' ' + 
-    padText('QTY', QTY_LEN, 'right') + ' ' + 
-    padText('TOTAL', TOT_LEN, 'right')
-  );
+  if (isMarathi) {
+    const headerBuf = renderTableHeaderToRaster({ ...paperOpt, isKOT: false });
+    if (headerBuf.length > 0) {
+      builder.bufferList.push(headerBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.text(
+        mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
+        padText('PRICE', PRC_LEN, 'right') + ' ' + 
+        padText('QTY', QTY_LEN, 'right') + ' ' + 
+        padText('TOTAL', TOT_LEN, 'right')
+      );
+    }
+  } else {
+    builder.text(
+      mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
+      padText('PRICE', PRC_LEN, 'right') + ' ' + 
+      padText('QTY', QTY_LEN, 'right') + ' ' + 
+      padText('TOTAL', TOT_LEN, 'right')
+    );
+  }
   builder.line('-', LINE_WIDTH);
   builder.bold(false);
 
@@ -551,6 +682,23 @@ function formatBill(data) {
   }
   
   (data.items || []).forEach(i => {
+    if (i.rasterBase64) {
+      builder.bufferList.push(Buffer.from(i.rasterBase64, 'base64'));
+      builder.bufferList.push(Buffer.from([0x0A]));
+      return;
+    }
+    if (containsDevanagari(i.name)) {
+      try {
+        const rasterBuf = renderItemRowToRaster(i, { paperSize: is58mm ? '58mm' : '80mm' });
+        if (rasterBuf && rasterBuf.length > 0) {
+          builder.bufferList.push(rasterBuf);
+          builder.bufferList.push(Buffer.from([0x0A]));
+          return;
+        }
+      } catch (e) {
+        console.error('[DEVANAGARI BILL RENDER ERROR]', e);
+      }
+    }
     const qty = i.quantity || i.qty || 1;
     const nameStr = toTitleCase(String(i.name));
     const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
@@ -579,13 +727,15 @@ function formatBill(data) {
   
   let addedSubItems = false;
   if (gstVal > 0) {
-    builder.text(mg + padText(`GST (${data.gst_percentage || 5}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
+    const gstLabel = isMarathi ? `जीएसटी (${data.gst_percentage || 5}%):` : `GST (${data.gst_percentage || 5}%):`;
+    builder.text(mg + padText(gstLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
     addedSubItems = true;
   }
   
   if (data.discountPercentage > 0) {
     const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
-    builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+    const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
+    builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
     addedSubItems = true;
   }
   
@@ -593,12 +743,31 @@ function formatBill(data) {
     builder.line('-', LINE_WIDTH);
   }
   
-  const totalText = 'TOTAL: Rs ' + Math.round(finalAmount);
-  builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+  const totalText = isMarathi ? `एकूण रक्कम: ₹ ${Math.round(finalAmount)}` : `TOTAL: Rs ${Math.round(finalAmount)}`;
+  if (isMarathi) {
+    const totalBuf = renderTextLineToRaster(totalText, { ...paperOpt, align: 'right', bold: true });
+    if (totalBuf.length > 0) {
+      builder.bufferList.push(totalBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+    }
+  } else {
+    builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+  }
   builder.line('-', LINE_WIDTH);
   
-  builder.alignLeft();
-  builder.text(mg + padText('Thank You! Visit Again!', LINE_WIDTH, 'center'));
+  if (isMarathi) {
+    const thanksBuf = renderTextLineToRaster('धन्यवाद! पुन्हा भेट द्या!', { ...paperOpt, align: 'center', bold: true });
+    if (thanksBuf.length > 0) {
+      builder.bufferList.push(thanksBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.alignLeft().text(mg + padText('Thank You! Visit Again!', LINE_WIDTH, 'center'));
+    }
+  } else {
+    builder.alignLeft().text(mg + padText('Thank You! Visit Again!', LINE_WIDTH, 'center'));
+  }
   builder.bold(false);
   
   // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
@@ -610,7 +779,17 @@ function formatBill(data) {
   }
   
   if (!data.isPaid && data.upiId) {
-    builder.text(mg + padText('[Scan to Pay via UPI]', LINE_WIDTH, 'center'));
+    if (isMarathi) {
+      const upiBuf = renderTextLineToRaster('[युपीआय द्वारे पेमेंट करा]', { ...paperOpt, align: 'center' });
+      if (upiBuf.length > 0) {
+        builder.bufferList.push(upiBuf);
+        builder.bufferList.push(Buffer.from([0x0A]));
+      } else {
+        builder.text(mg + padText('[Scan to Pay via UPI]', LINE_WIDTH, 'center'));
+      }
+    } else {
+      builder.text(mg + padText('[Scan to Pay via UPI]', LINE_WIDTH, 'center'));
+    }
     builder.alignCenter();
     const upiLink = `upi://pay?pa=${data.upiId}&pn=${encodeURIComponent(hName)}&am=${Math.round(finalAmount)}&cu=INR`;
     const qrBuffer = getQRCodeBuffer(upiLink, is58mm);

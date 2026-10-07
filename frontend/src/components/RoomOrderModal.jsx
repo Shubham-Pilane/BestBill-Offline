@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const { user } = useAuth();
   const [categories, setCategories] = useState(initialMenu?.categories || []);
+  const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,12 +69,11 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     }
   }, [room]);
 
-  const fetchMenuPage = async (page = 1, category = 'all', search = '') => {
+  const fetchAllMenu = async () => {
     try {
-      const res = await api.get(`/menu/items?page=${page}&limit=10&category_id=${category}&search=${encodeURIComponent(search)}`);
-      setItems(res.data.items || []);
-      setTotalPages(res.data.totalPages || 1);
-      setCurrentPage(res.data.currentPage || 1);
+      const appLang = localStorage.getItem('app_language') || 'en';
+      const res = await api.get(`/menu/items?lang=${appLang}`);
+      setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
     }
@@ -92,7 +92,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
         setCategories(catRes.data || []);
         setOrderItems(orderRes.data.items || []);
         
-        await fetchMenuPage(1, 'all', '');
+        await fetchAllMenu();
         
         setLoading(false);
       } catch (err) {
@@ -104,10 +104,36 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   }, [room.id]);
 
   useEffect(() => {
-    if (!loading) {
-      fetchMenuPage(currentPage, selectedCategory, searchQuery);
+    let filtered = allItems;
+    if (selectedCategory && selectedCategory !== 'all') {
+      filtered = filtered.filter(i => String(i.category_id) === String(selectedCategory));
     }
-  }, [currentPage, selectedCategory, searchQuery]);
+    if (searchQuery.trim().length > 0) {
+      const query = searchQuery.toLowerCase().replace(/\s/g, '');
+      filtered = filtered.filter(i => {
+        const name = i.name.toLowerCase();
+        const categoryName = (i.category_name || '').toLowerCase();
+        if (name.includes(searchQuery.toLowerCase()) || categoryName.includes(searchQuery.toLowerCase())) return true;
+        
+        let patternIdx = 0;
+        for (let char of name) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+
+        patternIdx = 0;
+        for (let char of categoryName) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+
+        return false;
+      });
+    }
+    setTotalPages(Math.ceil(filtered.length / 10) || 1);
+    const startIndex = (currentPage - 1) * 10;
+    setItems(filtered.slice(startIndex, startIndex + 10));
+  }, [allItems, currentPage, selectedCategory, searchQuery]);
 
   const addToOrder = async (item) => {
     if (!isOccupied) return toast.error('Please confirm booking first');
@@ -365,7 +391,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
              <div style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)', flexWrap: 'wrap' }}>
                 <div className="category-bar-container" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, paddingBottom: '4px', minWidth: 0 }}>
                    <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>ALL MENU</button>
-                   {categories.map(cat => (
+                   {categories.filter(cat => allItems.some(item => String(item.category_id) === String(cat.id))).map(cat => (
                       <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', backgroundColor: parseInt(selectedCategory) === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
                    ))}
                 </div>
@@ -376,7 +402,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
              </div>
              
              <div style={{ flex: 1, padding: '32px 48px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', alignContent: 'start' }}>
-                {filteredItems.map(item => (
+                {items.map(item => (
                    <div key={item.id} onClick={() => isOccupied && addToOrder(item)} style={{ 
                      backgroundColor: 'var(--bg-base)', 
                      border: '1px solid var(--bg-border)', 

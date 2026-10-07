@@ -93,7 +93,8 @@ class PrintService {
       waiter: waiter || 'Staff',
       items: items.map(item => ({
         name: item.name,
-        qty: Number(item.quantity || item.qty || 1)
+        qty: Number(item.quantity || item.qty || 1),
+        rasterBase64: item.rasterBase64
       })),
       notes: notes || ''
     };
@@ -118,7 +119,8 @@ class PrintService {
       items: items.map(item => ({
         name: item.name,
         price: Number(item.price),
-        qty: Number(item.quantity || item.qty || 1)
+        qty: Number(item.quantity || item.qty || 1),
+        rasterBase64: item.rasterBase64
       })),
       hotelName: hotelName || '',
       hotelPhone: hotelPhone || '',

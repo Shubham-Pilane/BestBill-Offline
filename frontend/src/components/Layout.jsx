@@ -73,6 +73,7 @@ const Layout = ({ children }) => {
       case '/credit': return t('nav_credit_management', defaultName);
       case '/inventory': return t('nav_inventory', defaultName);
       case '/lodging': return t('nav_lodging', defaultName);
+      case '/orders': return t('nav_guest_orders', defaultName);
       case '/profile': return t('nav_profile_settings', defaultName);
       default: return defaultName;
     }
@@ -256,7 +257,7 @@ const Layout = ({ children }) => {
             style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 20px', borderRadius: '14px', backgroundColor: showSupport ? 'rgba(14, 165, 233, 0.1)' : 'transparent', border: 'none', cursor: 'pointer', color: showSupport ? '#0ea5e9' : 'var(--text-secondary)', fontWeight: 700, fontSize: '16px', textAlign: 'left' }}
           >
             <Headset size={20} />
-            <span style={{ flex: 1 }}>Customer Care</span>
+            <span style={{ flex: 1 }}>{t('nav_customer_care', 'Customer Care')}</span>
           </button>
           {showSupport && (
             <div style={{ backgroundColor: 'rgba(14, 165, 233, 0.05)', borderRadius: '14px', padding: '16px', border: '1px solid rgba(14, 165, 233, 0.1)', marginTop: '6px', animation: 'fadeIn 0.2s ease' }}>

@@ -84,12 +84,17 @@ router.get('/items', auth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
     const category_id = req.query.category_id || 'all';
+    const targetLang = req.query.lang || 'en';
+
+    const langCondition = targetLang === 'mr' 
+      ? "mi.lang = 'mr'" 
+      : "(mi.lang = 'en' OR mi.lang IS NULL OR mi.lang = '')";
 
     let queryStr = `
       SELECT mi.*, c.name as category_name 
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0 AND ${langCondition}
     `;
     const params = [req.user.hotel_id];
 
@@ -116,7 +121,7 @@ router.get('/items', auth, async (req, res) => {
       SELECT COUNT(*) AS count
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0 AND ${langCondition}
     `;
     const countParams = [req.user.hotel_id];
     if (search) {
@@ -153,15 +158,16 @@ router.get('/items', auth, async (req, res) => {
 
 // Create menu item
 router.post('/items', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available } = req.body;
+  const { name, price, category_id, description, is_available, lang } = req.body;
   const hotelId = req.user.hotel_id;
+  const itemLang = lang || 'en';
   try {
     const lowercaseName = name.trim().toLowerCase();
     
     // Create the hotel-specific menu item directly
     const newItem = await db.query(
-      'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [hotelId, category_id, lowercaseName, price, description, is_available ?? true]
+      'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available, lang) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [hotelId, category_id, lowercaseName, price, description, is_available ?? true, itemLang]
     );
     res.status(201).json(newItem.rows[0]);
   } catch (err) {
@@ -172,14 +178,15 @@ router.post('/items', auth, async (req, res) => {
 
 // Update menu item
 router.put('/items/:id', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available } = req.body;
+  const { name, price, category_id, description, is_available, lang } = req.body;
   const { id } = req.params;
+  const itemLang = lang || 'en';
   try {
     const lowercaseName = name.trim().toLowerCase();
     
     const updated = await db.query(
-      'UPDATE menu_items SET name = $1, price = $2, category_id = $3, description = $4, is_available = $5 WHERE id = $6 RETURNING *',
-      [lowercaseName, price, category_id, description, is_available, id]
+      'UPDATE menu_items SET name = $1, price = $2, category_id = $3, description = $4, is_available = $5, lang = $6 WHERE id = $7 RETURNING *',
+      [lowercaseName, price, category_id, description, is_available, itemLang, id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -206,8 +213,9 @@ router.delete('/items/:id', auth, async (req, res) => {
 
 // Bulk import menu items
 router.post('/items/bulk', auth, async (req, res) => {
-  const { items } = req.body;
+  const { items, lang } = req.body;
   const hotelId = req.user.hotel_id;
+  const itemLang = lang || 'en';
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'No items provided' });
@@ -221,8 +229,9 @@ router.post('/items/bulk', auth, async (req, res) => {
       categoriesMap.set(c.name.toLowerCase().trim(), c);
     });
 
-    // 2. Get existing menu items
-    const existingItemsResult = await db.query('SELECT * FROM menu_items WHERE hotel_id = $1', [hotelId]);
+    // 2. Get existing menu items for the target language
+    const langCond = itemLang === 'mr' ? "lang = 'mr'" : "(lang = 'en' OR lang IS NULL OR lang = '')";
+    const existingItemsResult = await db.query(`SELECT * FROM menu_items WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
     const existingItemsMap = new Map();
     existingItemsResult.rows.forEach(item => {
       existingItemsMap.set(item.name.toLowerCase().trim(), item);
@@ -268,16 +277,16 @@ router.post('/items/bulk', auth, async (req, res) => {
 
         if (hasPriceChanged || hasCategoryChanged || wasDeleted) {
           await db.query(
-            'UPDATE menu_items SET category_id = $1, price = $2, description = $3, is_deleted = 0, is_available = true WHERE id = $4',
-            [categoryId, newPrice, item.description || existingItem.description || '', existingItem.id]
+            'UPDATE menu_items SET category_id = $1, price = $2, description = $3, is_deleted = 0, is_available = true, lang = $4 WHERE id = $5',
+            [categoryId, newPrice, item.description || existingItem.description || '', itemLang, existingItem.id]
           );
           updatedCount++;
         }
       } else {
         // Insert new item
         await db.query(
-          'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6)',
-          [hotelId, categoryId, lowercaseName, parseFloat(item.price), item.description || '', true]
+          'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available, lang) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [hotelId, categoryId, lowercaseName, parseFloat(item.price), item.description || '', true, itemLang]
         );
         createdCount++;
       }
@@ -294,30 +303,41 @@ router.post('/items/bulk', auth, async (req, res) => {
   }
 });
 
-// Purge all menu items and categories
+// Purge all menu items and categories for specific language
 router.delete('/purge-all', auth, async (req, res) => {
   const hotelId = req.user.hotel_id;
+  const targetLang = req.query.lang || 'en';
+  const langCond = targetLang === 'mr' ? "lang = 'mr'" : "(lang = 'en' OR lang IS NULL OR lang = '')";
   try {
-    // Try hard deleting menu items first
+    // Try hard deleting menu items matching language first
     try {
-      await db.query('DELETE FROM menu_items WHERE hotel_id = $1', [hotelId]);
+      await db.query(`DELETE FROM menu_items WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
     } catch (err) {
       // Soft delete if referenced in active orders / bills
-      await db.query('UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
+      await db.query(`UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
     }
 
-    // Try hard deleting categories first
-    try {
-      await db.query('DELETE FROM categories WHERE hotel_id = $1', [hotelId]);
-    } catch (err) {
-      // Soft delete if referenced
-      await db.query('UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
-    }
-
-    res.json({ message: 'Menu and categories cleared successfully' });
+    res.json({ message: `${targetLang === 'mr' ? 'Marathi' : 'English'} menu cleared successfully` });
   } catch (err) {
     console.error('[PURGE ALL ERROR]', err);
     res.status(500).json({ message: 'Failed to purge menu' });
+  }
+});
+
+// Swap languages for menu items
+router.post('/swap-languages', auth, async (req, res) => {
+  const hotelId = req.user.hotel_id;
+  try {
+    // mr -> temp
+    await db.query(`UPDATE menu_items SET lang = 'temp' WHERE hotel_id = $1 AND lang = 'mr'`, [hotelId]);
+    // en/null -> mr
+    await db.query(`UPDATE menu_items SET lang = 'mr' WHERE hotel_id = $1 AND (lang = 'en' OR lang IS NULL OR lang = '')`, [hotelId]);
+    // temp -> en
+    await db.query(`UPDATE menu_items SET lang = 'en' WHERE hotel_id = $1 AND lang = 'temp'`, [hotelId]);
+    res.json({ message: 'Languages swapped successfully' });
+  } catch (err) {
+    console.error('[SWAP LANGUAGES ERROR]', err);
+    res.status(500).json({ message: 'Failed to swap languages' });
   }
 });
 

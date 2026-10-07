@@ -116,7 +116,8 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const fetchAllMenu = async () => {
     try {
-      const res = await api.get('/menu/items');
+      const appLang = localStorage.getItem('app_language') || 'en';
+      const res = await api.get(`/menu/items?lang=${appLang}`);
       setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
@@ -512,7 +513,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
             <div className="order-modal-top-bar" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)', flexWrap: 'wrap' }}>
               <div className="category-bar" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, minWidth: 0 }}>
                 <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>ALL ITEMS</button>
-                {categories.map(cat => (
+                {categories.filter(cat => allItems.some(item => String(item.category_id) === String(cat.id))).map(cat => (
                   <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
                 ))}
               </div>
