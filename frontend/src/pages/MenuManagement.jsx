@@ -430,22 +430,23 @@ const MenuManagement = () => {
 
           <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')} (English)</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')} (English) {language === 'mr' ? '(Optional)' : ''}</label>
               <input
                 type="text"
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
                 value={newItem.name}
                 onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-                required
+                required={language !== 'mr'}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Marathi Name (Optional)</label>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Marathi Name {language !== 'mr' ? '(Optional)' : ''}</label>
               <input
                 type="text"
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
                 value={newItem.marathi_name || ''}
                 onChange={(e) => setNewItem({...newItem, marathi_name: e.target.value})}
+                required={language === 'mr'}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
@@ -470,7 +471,9 @@ const MenuManagement = () => {
               >
                 <option value="">{t('select_category', '-- Select Category --')}</option>
                 {(categories || []).map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name.toUpperCase()}</option>
+                  <option key={cat.id} value={cat.id}>
+                    {language === 'mr' ? (cat.marathi_name || cat.name) : cat.name.toUpperCase()}
+                  </option>
                 ))}
               </select>
             </div>

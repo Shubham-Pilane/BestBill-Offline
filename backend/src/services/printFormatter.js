@@ -689,8 +689,8 @@ function formatBill(data) {
       padText('TOTAL', TOT_LEN, 'right')
     );
   }
-  builder.line('-', LINE_WIDTH);
   builder.bold(false);
+  builder.line('-', LINE_WIDTH);
 
   if (data.room_charge > 0) {
     const rDays = data.booking_days || 1;
