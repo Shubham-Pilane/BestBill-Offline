@@ -1,8 +1,61 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['logo.svg', 'logo.png', 'robots.txt'],
+      manifestFilename: 'manifest.json',
+      manifest: {
+        name: 'BestBill - POS & Waiter App',
+        short_name: 'BestBill',
+        description: 'Hotel Billing Software & Restaurant POS System',
+        theme_color: '#0f172a',
+        background_color: '#020617',
+        display: 'standalone',
+        orientation: 'any',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          {
+            src: '/logo.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: '/logo.png',
+            sizes: '512x512',
+            type: 'image/png'
+          },
+          {
+            src: '/logo.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
+          {
+            src: '/logo.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
+          {
+            src: '/logo.svg',
+            sizes: 'any',
+            type: 'image/svg+xml'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024
+      }
+    })
+  ],
   base: './'
 })
+

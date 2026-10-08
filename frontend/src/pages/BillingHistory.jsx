@@ -255,11 +255,12 @@ const BillingHistory = () => {
         msg += `Bill No: #${selectedBill.id}\n`;
         msg += `Date: ${new Date(selectedBill.created_at).toLocaleDateString()} ${new Date(selectedBill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
         msg += `\n*Items:*\n`;
-        (selectedBill.items || []).forEach(i => msg += `• ${i.name} x ${i.quantity} = ₹${(i.price * i.quantity).toFixed(2)}\n`);
+        (selectedBill.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
         msg += `\n*------------------------*\n`;
         msg += `*Subtotal:* ₹${subVal.toFixed(2)}\n`;
         msg += `*GST (${selectedBill.gst_percentage || 0}%):* ₹${taxVal.toFixed(2)}\n`;
-        if (selectedBill.discount_percentage > 0) msg += `*Discount (${selectedBill.discount_percentage}%):* -₹${(preVal * selectedBill.discount_percentage / 100).toFixed(2)}\n`;
+        const discAmt = selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : (preVal - parseFloat(selectedBill.final_amount));
+        if (discAmt > 0) msg += `*Discount (${selectedBill.discount_percentage}%):* -₹${discAmt.toFixed(2)}\n`;
         msg += `*GRAND TOTAL: ₹${parseFloat(selectedBill.final_amount).toFixed(2)}*\n`;
         msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;
         

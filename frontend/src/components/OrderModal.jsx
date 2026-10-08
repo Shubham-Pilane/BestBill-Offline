@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2 } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2, Pin } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -21,7 +21,7 @@ const categoryMarathiMap = {
   "CHICKEN HANDI": "चिकन हांडी",
   "SPECIAL FISH FRY": "स्पेशल फिश फ्राय",
   "INDIAN VEG MAIN COURSE": "व्हेज मेन कोर्स",
-  "EXTRA": "एक्स्ट्रा",
+  "EXTRA": "एक्सट्रा",
   "VEG MAIN COURSE": "व्हेज मेन कोर्स",
   "INDIAN BREADS": "इंडियन ब्रेड्स",
   "ICE CREAM SINGLE / DOUBLE SCOOP": "आईस्क्रीम सिंगल / डबल स्कूप"
@@ -31,7 +31,6 @@ const translateCategory = (name) => {
   if (!name) return '';
   return categoryMarathiMap[name.toUpperCase()] || name;
 };
-
 const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floors: passedFloors }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -50,6 +49,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [selectedDeliveryPartner, setSelectedDeliveryPartner] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [uncheckedDiscountItemIds, setUncheckedDiscountItemIds] = useState(new Set());
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [allTables, setAllTables] = useState(passedTables || []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +64,9 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [vendors, setVendors] = useState([]);
   const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const [settleWithoutPrintEnabled, setSettleWithoutPrintEnabled] = useState(() => {
+    return typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true';
+  });
   const [customDeliveryPartners, setCustomDeliveryPartners] = useState(() => {
     try {
       const saved = localStorage.getItem('cfg_custom_delivery_partners');
@@ -142,7 +145,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const fetchAllMenu = async () => {
     try {
-      const res = await api.get(`/menu/items`);
+      const res = await api.get('/menu/items');
       setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
@@ -179,8 +182,44 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table.id]);
 
+  const togglePinItem = async (e, item) => {
+    e.stopPropagation();
+    try {
+      const res = await api.put(`/menu/items/${item.id}/pin`);
+      const isPinned = Boolean(res.data.is_pinned);
+      setAllItems(prev => prev.map(i => i.id === item.id ? { ...i, is_pinned: isPinned } : i));
+      toast.success(isPinned ? `Pinned ${item.name} to top!` : `Unpinned ${item.name}`);
+    } catch (err) {
+      toast.error('Failed to update pin status');
+    }
+  };
+
+  const addManualItem = async () => {
+    try {
+      const res = await api.post(`/tables/${table.id}/order/manual-item`, { name: 'Other', price: 0 });
+      setOrderItems(res.data.items);
+      toast.success('Added Manual Item ("Other")', { icon: '✨' });
+    } catch (err) {
+      toast.error('Failed to add manual item');
+    }
+  };
+
+  const handleUpdateCustomItem = async (itemId, customName, customPrice) => {
+    try {
+      const res = await api.put(`/tables/${table.id}/order/items/${itemId}/custom`, {
+        name: customName,
+        price: customPrice
+      });
+      setOrderItems(res.data.items);
+    } catch (err) {
+      toast.error('Failed to update manual item');
+    }
+  };
+
   useEffect(() => {
-    let filtered = allItems;
+    let filtered = [...allItems];
+    filtered.sort((a, b) => (b.is_pinned ? 1 : 0) - (a.is_pinned ? 1 : 0));
+
     if (selectedCategory && selectedCategory !== 'all') {
       filtered = filtered.filter(i => String(i.category_id) === String(selectedCategory));
     }
@@ -197,7 +236,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
           if (char === query[patternIdx]) patternIdx++;
           if (patternIdx === query.length) return true;
         }
-        
+
         patternIdx = 0;
         for (let char of marathiName) {
           if (char === query[patternIdx]) patternIdx++;
@@ -330,7 +369,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const generateBill = async () => {
     try {
-      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discount });
+      const selectedItemIds = orderItems.filter(i => !uncheckedDiscountItemIds.has(i.id)).map(i => i.id);
+      const res = await api.post(`/tables/${table.id}/bill`, { 
+        discount_percentage: discount,
+        selected_discount_item_ids: selectedItemIds
+      });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', {
@@ -393,6 +436,21 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
       toast.success('Bill cancelled. Returning to order.');
     } catch (err) {
       toast.error('Rollback failed');
+    }
+  };
+
+  const settleWithoutPrint = async () => {
+    if (!billData) return;
+    try {
+      if (!billData.is_paid) {
+        await confirmPayment(selectedPaymentMethod);
+      } else {
+        toast.success('Transaction settled!');
+        setTimeout(() => onClose(), 1500);
+      }
+    } catch (err) {
+      console.error('Settlement failed:', err);
+      toast.error(err.response?.data?.message || 'Settlement failed');
     }
   };
 
@@ -475,18 +533,20 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     const subVal = parseFloat(billData.subtotal);
     const taxVal = parseFloat(billData.gst);
     const preVal = subVal + taxVal;
+    const finalVal = parseFloat(billData.final_amount);
+    const discountAmt = billData.discount_amount !== undefined ? parseFloat(billData.discount_amount) : (preVal - finalVal);
     
     let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} RECEIPT ---*\n\n`;
     msg += `Table No: ${table.table_numberByFloor || table.table_number}\n`;
     msg += `Bill No: #${billData.id}\n`;
     msg += `Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
     msg += `\n*Items:*\n`;
-    (billData.items || []).forEach(i => msg += `• ${i.name} x ${i.quantity} = ₹${(i.price * i.quantity).toFixed(2)}\n`);
+    (billData.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
     msg += `\n*------------------------*\n`;
     msg += `*Subtotal:* ₹${subVal.toFixed(2)}\n`;
     msg += `*GST (${billData.gst_percentage}%):* ₹${taxVal.toFixed(2)}\n`;
-    if (billData.discount_percentage > 0) msg += `*Discount (${billData.discount_percentage}%):* -₹${(preVal * billData.discount_percentage / 100).toFixed(2)}\n`;
-    msg += `*GRAND TOTAL: ₹${parseFloat(billData.final_amount).toFixed(2)}*\n`;
+    if (discountAmt > 0) msg += `*Discount (${billData.discount_percentage}%):* -₹${discountAmt.toFixed(2)}\n`;
+    msg += `*GRAND TOTAL: ₹${finalVal.toFixed(2)}*\n`;
     msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;
     
     const cleanPhone = customerPhone.replace(/\D/g, '');
@@ -544,13 +604,9 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
           <div className="order-modal-menu" style={{ flex: 1, borderRight: '1px solid var(--border-rgba-05)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <div className="order-modal-top-bar" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)', flexWrap: 'wrap' }}>
               <div className="category-bar" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, minWidth: 0 }}>
-                <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                   {user?.app_language === 'mr' ? 'सर्व पदार्थ' : 'ALL ITEMS'}
-                </button>
-                {categories.filter(cat => allItems.some(item => String(item.category_id) === String(cat.id))).map(cat => (
-                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                     {user?.app_language === 'mr' ? ((cat.marathi_name || cat.name).toUpperCase()) : cat.name.toUpperCase()}
-                  </button>
+                <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>ALL ITEMS</button>
+                {categories.map(cat => (
+                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
                 ))}
               </div>
 
@@ -579,7 +635,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                       <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{padding: '14px 20px', cursor: 'pointer', borderBottom: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: '0.2s' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <Plus size={14} color="#0ea5e9" />
-                          <span>{user?.app_language === 'mr' ? (s.marathi_name || s.name) : s.name}</span>
+                          <span>{s.name}</span>
                         </div>
                         <span style={{ color: '#10b981' }}>₹{s.price}</span>
                       </div>
@@ -643,6 +699,13 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={(e) => togglePinItem(e, item)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.is_pinned ? '#f59e0b' : 'var(--text-muted)' }}
+                        title={item.is_pinned ? "Unpin item" : "Pin item to top"}
+                      >
+                        <Pin size={16} fill={item.is_pinned ? '#f59e0b' : 'none'} />
+                      </button>
                       <span style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                          {user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
                       </span>
@@ -704,67 +767,146 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
           {/* Cart */}
           <div className="order-modal-cart" style={{ width: '420px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-               <Receipt size={18} color="#0ea5e9" />
-               <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-                 {t('active_selection', 'Active Selection')} ({orderItems.length})
-               </h3>
+             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bg-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                 <Receipt size={18} color="#0ea5e9" />
+                 <h3 style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
+                   {t('active_selection', 'Active Selection')} ({orderItems.length})
+                 </h3>
+               </div>
+               <button
+                 onClick={addManualItem}
+                 style={{
+                   backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                   border: '1px solid #10b981',
+                   color: '#10b981',
+                   padding: '6px 12px',
+                   borderRadius: '10px',
+                   fontSize: '12px',
+                   fontWeight: 800,
+                   cursor: 'pointer',
+                   display: 'flex',
+                   alignItems: 'center',
+                   gap: '4px'
+                 }}
+               >
+                 <Plus size={14} /> Add Manual Item
+               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', minHeight: 0 }}>
-              {orderItems.map(item => (
-                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px' }}>
-                  <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                    <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                       {user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
-                    </div>
-                    {user?.app_language === 'hinglish' && item.marathi_name && (
-                        <div style={{color: 'var(--text-muted)', fontWeight: 700, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                           {item.marathi_name}
+              {(() => {
+                const discVal = parseFloat(discount) || 0;
+                const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                return orderItems.map(item => (
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', gap: '10px' }}>
+                    {hasDiscountValue && (
+                      <input 
+                        type="checkbox"
+                        checked={!uncheckedDiscountItemIds.has(item.id)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUncheckedDiscountItemIds(prev => {
+                            const next = new Set(prev);
+                            if (checked) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0ea5e9', flexShrink: 0 }}
+                        title={!uncheckedDiscountItemIds.has(item.id) ? "Discount applied to this item" : "Discount excluded from this item"}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                      {item.is_manual ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              const newName = e.target.value;
+                              setOrderItems(prev => prev.map(i => i.id === item.id ? { ...i, name: newName } : i));
+                            }}
+                            onBlur={(e) => handleUpdateCustomItem(item.id, e.target.value, item.price)}
+                            placeholder="Item Name (e.g. Chips)"
+                            style={{ width: '100%', backgroundColor: 'var(--bg-base)', border: '1px solid #0ea5e9', color: 'var(--text-primary)', borderRadius: '6px', padding: '3px 6px', fontSize: '13px', fontWeight: 800, outline: 'none' }}
+                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 800 }}>₹</span>
+                            <input
+                              type="number"
+                              step="1"
+                              value={item.price === 0 || item.price === '0' || item.price === '' ? '' : item.price}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const newPrice = val === '' ? '' : (parseFloat(val) || 0);
+                                setOrderItems(prev => prev.map(i => i.id === item.id ? { ...i, price: newPrice } : i));
+                              }}
+                              onBlur={(e) => handleUpdateCustomItem(item.id, item.name, parseFloat(e.target.value) || 0)}
+                              placeholder="0"
+                              style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '6px', padding: '2px 6px', fontSize: '12px', fontWeight: 800, outline: 'none' }}
+                            />
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(Manual Item)</span>
+                          </div>
                         </div>
-                    )}
-                    {editingPriceId === item.id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                         <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
-                         <input 
-                           type="number" 
-                           autoFocus
-                           value={editPriceValue} 
-                           onChange={e => setEditPriceValue(e.target.value)}
-                           onBlur={() => savePriceChange(item.id, item.menu_item_id)}
-                           onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
-                           style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
-                         />
-                         <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
-                      </div>
-                    ) : (
-                      <div 
-                        onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
-                        style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
-                        title="Edit Unit Price (Updates Master Menu)"
+                      ) : (
+                        <>
+                          <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
+                          </div>
+                          {user?.app_language === 'hinglish' && item.marathi_name && (
+                              <div style={{color: 'var(--text-muted)', fontWeight: 700, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                                 {item.marathi_name}
+                              </div>
+                          )}
+                          {editingPriceId === item.id ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                               <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
+                               <input 
+                                 type="number" 
+                                 autoFocus
+                                 value={editPriceValue} 
+                                 onChange={e => setEditPriceValue(e.target.value)}
+                                 onBlur={() => savePriceChange(item.id, item.menu_item_id)}
+                                 onKeyDown={e => e.key === 'Enter' && savePriceChange(item.id, item.menu_item_id)}
+                                 style={{ width: '70px', backgroundColor: 'var(--bg-base)', border: '1px solid #10b981', color: '#10b981', borderRadius: '4px', padding: '2px 4px', fontSize: '12px', outline: 'none', fontWeight: 800 }}
+                               />
+                               <span style={{ color: 'var(--text-muted)', fontSize: '10px' }}>/ unit</span>
+                            </div>
+                          ) : (
+                            <div 
+                              onClick={() => { setEditingPriceId(item.id); setEditPriceValue(Math.round(item.price)); }}
+                              style={{ color: '#10b981', fontSize: '12px', cursor: 'pointer', display: 'inline-block', borderBottom: '1px dashed rgba(16,185,129,0.4)', paddingBottom: '1px', marginTop: '2px' }}
+                              title="Edit Unit Price (Updates Master Menu)"
+                            >
+                               ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button 
+                        onClick={() => updateQuantity(item.id, -1)} 
+                        disabled={!item.id}
+                        style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
-                         ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '10px', marginLeft: '4px' }}>(₹{Math.round(item.price)} each)</span>}
-                      </div>
-                    )}
+                        <Minus size={12} />
+                      </button>
+                      <span style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '16px', textAlign: 'center' }}>{item.quantity}</span>
+                      <button 
+                        onClick={() => updateQuantity(item.id, 1)} 
+                        disabled={!item.id}
+                        style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button 
-                      onClick={() => updateQuantity(item.id, -1)} 
-                      disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Minus size={12} />
-                    </button>
-                    <span style={{color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '16px', textAlign: 'center' }}>{item.quantity}</span>
-                    <button 
-                      onClick={() => updateQuantity(item.id, 1)} 
-                      disabled={!item.id}
-                      style={{cursor: !item.id ? 'not-allowed' : 'pointer', opacity: !item.id ? 0.3 : 1, border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--bg-border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
             <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
               <div style={{ marginBottom: '8px' }}>
@@ -779,7 +921,19 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                  </div>
                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
                    <span style={{ fontSize: '16px', fontWeight: 900 }}>{t('final_due', 'Final Due')}</span>
-                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{(() => {
+                      const discVal = parseFloat(discount) || 0;
+                      const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
+                      const totalSubtotal = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                      const gstRate = user?.gst_percentage || 0;
+                      const totalBeforeDiscount = totalSubtotal * (1 + gstRate / 100);
+                      if (!hasDiscountValue || discVal <= 0) {
+                        return totalBeforeDiscount.toFixed(2);
+                      }
+                      const selectedSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
+                      const discountAmount = selectedSubtotal * (1 + gstRate / 100) * (discVal / 100);
+                      return Math.max(0, totalBeforeDiscount - discountAmount).toFixed(2);
+                    })()}</span>
                  </div>
               </div>
               <div style={{ marginBottom: '10px' }}>
@@ -876,7 +1030,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                    </div>
                    {billData.items.map((i, idx) => (
                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'white' }}>
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.app_language === 'mr' ? (i.marathi_name || i.name) : i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                        <span>{i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
                       </div>
                    ))}
                 </div>
@@ -903,7 +1057,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                           {/* Payment Method Section */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                              {t('payment_method', 'PAYMENT METHOD')}
+                              PAYMENT METHOD
                             </label>
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <button 
@@ -923,7 +1077,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                {t('cash', 'Cash')}
+                                Cash
                               </button>
                               <button 
                                 type="button"
@@ -942,7 +1096,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                {t('online', 'Online')}
+                                Online
                               </button>
                               <button 
                                 type="button"
@@ -961,7 +1115,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                {t('credit', 'Credit')}
+                                Credit
                               </button>
                             </div>
                           </div>
@@ -1212,13 +1366,18 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                      </div>
                    )}
 
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                     <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)', transition: 'background-color 0.2s' }}>
-                        <Printer size={18} /> {!billData.is_paid ? 'Print' : 'Re-Print'}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                     <button onClick={printBill} style={{flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)', transition: 'background-color 0.2s', whiteSpace: 'nowrap' }}>
+                        <Printer size={16} /> {!billData.is_paid ? 'Print' : 'Re-Print'}
                      </button>
+                     {settleWithoutPrintEnabled && selectedPaymentMethod !== 'credit' && (
+                       <button onClick={settleWithoutPrint} style={{ flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)', whiteSpace: 'nowrap' }}>
+                          <CheckCircle size={16} /> Settle Only
+                       </button>
+                     )}
                      {user?.whatsAppBillingEnabled && selectedPaymentMethod !== 'credit' && (
-                       <button onClick={shareViaWhatsApp} style={{ flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)' }}>
-                          <MessageCircle size={18} /> WhatsApp
+                       <button onClick={shareViaWhatsApp} style={{ flex: 1, minWidth: '100px', padding: '12px 8px', borderRadius: '12px', backgroundColor: '#22c55e', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '800', fontSize: '13px', boxShadow: '0 4px 12px rgba(34, 197, 94, 0.2)', whiteSpace: 'nowrap' }}>
+                          <MessageCircle size={16} /> WhatsApp
                        </button>
                      )}
                  </div>

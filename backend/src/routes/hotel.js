@@ -138,6 +138,74 @@ router.post('/printers-config', auth, (req, res) => {
   }
 });
 
+// Trigger a test print (Billing or Kitchen KOT)
+router.post('/test-print', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  const { type, printerConfig } = req.body;
+  const printService = require('../services/printService');
+
+  try {
+    if (printerConfig) {
+      const config = configManager.getConfig();
+      if (printerConfig.billing) config.printers.billing = printerConfig.billing;
+      if (printerConfig.kitchen) config.printers.kitchen = printerConfig.kitchen;
+      configManager.saveConfig(config);
+    }
+
+    const hotelRes = await db.query('SELECT name, location, phone, upi_id, gst_percentage FROM hotels WHERE id = $1', [req.user.hotel_id]);
+    const hotel = hotelRes.rows[0] || {};
+
+    if (type === 'kitchen' || type === 'KOT') {
+      const sampleItems = [
+        { name: 'Paneer Butter Masala', qty: 2 },
+        { name: 'Garlic Naan', qty: 4 },
+        { name: 'Jeera Rice', qty: 1 }
+      ];
+      printService.sendKOT({
+        hotelId: req.user.hotel_id,
+        table: 'Table 1 (KOT Test)',
+        floor: 'Main Hall',
+        waiter: req.user.name || 'Owner',
+        items: sampleItems,
+        notes: 'Test KOT Ticket'
+      });
+      return res.json({ success: true, message: 'Test KOT ticket sent to kitchen printer' });
+    } else {
+      const sampleItems = [
+        { name: 'Butter Chicken', price: 280.00, qty: 1 },
+        { name: 'Butter Naan', price: 40.00, qty: 3 },
+        { name: 'Paneer Tikka', price: 220.00, qty: 1 },
+        { name: 'Cold Coffee', price: 70.00, qty: 2 }
+      ];
+      const subtotal = sampleItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
+      const gstPct = Number(hotel.gst_percentage || 5);
+      const gst = (subtotal * gstPct) / 100;
+      const finalAmount = subtotal + gst;
+
+      printService.sendFinalBill({
+        hotelId: req.user.hotel_id,
+        billId: 9999,
+        table: 'Table 1 (Test Print)',
+        subtotal,
+        gst,
+        finalAmount,
+        discountPercentage: 0,
+        items: sampleItems,
+        hotelName: hotel.name || 'Sample Hotel',
+        hotelPhone: hotel.phone || '9999999999',
+        hotelLocation: hotel.location || 'Sample Location',
+        upiId: hotel.upi_id || '',
+        isPaid: false,
+        gst_percentage: gstPct
+      });
+      return res.json({ success: true, message: 'Test billing receipt sent to cashier printer' });
+    }
+  } catch (err) {
+    console.error('[TEST PRINT ERROR]:', err);
+    res.status(500).json({ message: 'Failed to dispatch test print', error: err.message });
+  }
+});
+
 // Get list of connected printers on the Windows host machine
 router.get('/installed-printers', auth, (req, res) => {
   if (process.platform === 'win32') {
@@ -162,6 +230,41 @@ router.get('/installed-printers', auth, (req, res) => {
     res.json(['Mock Thermal Printer 1', 'Mock KOT Printer 2']);
   }
 });
+
+// Get list of actual Bluetooth devices (paired/discovered) on host machine
+router.get('/bluetooth-devices', auth, (req, res) => {
+  if (process.platform === 'win32') {
+    const cmd = `powershell -Command "Get-PnpDevice -Class 'Bluetooth' | Where-Object { $_.Status -eq 'OK' -and $_.FriendlyName -notlike '*Adapter*' -and $_.FriendlyName -notlike '*Enumerator*' -and $_.FriendlyName -notlike '*Transport*' -and $_.FriendlyName -notlike '*Service*' -and $_.FriendlyName -notlike '*Protocol*' -and $_.FriendlyName -notlike '*Generic*' } | Select-Object FriendlyName, InstanceId | ConvertTo-Json"`;
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error('Failed to get bluetooth devices:', err);
+        return res.json([]);
+      }
+      try {
+        const raw = stdout.trim();
+        if (!raw) return res.json([]);
+        const data = JSON.parse(raw);
+        const list = Array.isArray(data) ? data : (data ? [data] : []);
+        const formatted = list.map(item => {
+          const name = item.FriendlyName;
+          if (!name) return null;
+          const match = item.InstanceId ? item.InstanceId.match(/DEV_([A-F0-9]{12})/) : null;
+          const mac = match ? match[1].match(/.{1,2}/g).join(':') : '';
+          return mac ? `${name} (${mac})` : name;
+        }).filter(Boolean);
+
+        const unique = [...new Set(formatted)];
+        res.json(unique);
+      } catch (parseErr) {
+        console.error('Failed to parse bluetooth devices:', parseErr);
+        res.json([]);
+      }
+    });
+  } else {
+    res.json(['POS-58 (00:11:22:33:44:55)', 'ZEB-DUKE (AA:BB:CC:DD:EE:FF)', 'SmartWatch-Mega9 (11:22:33:44:55:66)']);
+  }
+});
+
 
 // Manual backup trigger
 router.post('/backup', auth, async (req, res) => {
@@ -463,5 +566,115 @@ router.post('/email-report/test', auth, async (req, res) => {
   }
 });
 
+// Test Physical Thermal Printer (Billing Receipt or KOT Ticket)
+router.post('/test-print', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  try {
+    const { type, printerSize } = req.body;
+    const hotelId = req.user.hotel_id || 1;
+    const printService = require('../services/printService');
+
+    if (type === 'KOT') {
+      printService.sendKOT({
+        hotelId,
+        table: 'Test Table 01',
+        floor: 'Ground Floor',
+        waiter: 'Test Waiter',
+        items: [
+          { name: 'Paneer Butter Masala', qty: 2 },
+          { name: 'Butter Naan', qty: 4 },
+          { name: 'Jeera Rice', qty: 1 }
+        ],
+        notes: 'Sample Test KOT Ticket'
+      });
+      return res.json({ success: true, message: 'Sample KOT test print spooled successfully' });
+    } else {
+      printService.sendFinalBill({
+        hotelId,
+        billId: 9999,
+        table: 'Test Table 01',
+        subtotal: 450,
+        gst: 22.50,
+        finalAmount: 472.50,
+        discountPercentage: 0,
+        items: [
+          { name: 'Paneer Butter Masala', price: 220, quantity: 2 },
+          { name: 'Butter Naan', price: 40, quantity: 4 },
+          { name: 'Jeera Rice', price: 150, quantity: 1 }
+        ],
+        hotelName: 'BestBill Sample Restaurant',
+        hotelPhone: '9876543210',
+        hotelLocation: 'Main Street, City Center',
+        upiId: 'sample@upi',
+        isPaid: true,
+        printerSize: printerSize || '80mm',
+        gst_percentage: 5
+      });
+      return res.json({ success: true, message: 'Sample Billing Receipt test print spooled successfully' });
+    }
+  } catch (err) {
+    console.error('[TEST PRINT ERROR]', err);
+    res.status(500).json({ message: 'Failed to trigger test print', error: err.message });
+  }
+});
+
+// --- CLEAR TEST DATA ---
+router.delete('/clear-test-data', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+  
+  const { targetDate } = req.body;
+  if (!targetDate) return res.status(400).json({ message: 'Target date is required' });
+
+  try {
+    await db.query('BEGIN');
+    
+    // Clear Orders (cascades to bills, order_items, order_chats)
+    // Join with tables and rooms to ensure the orders belong to this hotel
+    // Clear Orders (and manually cascade to bills, order_items, order_chats)
+    // We check if either the order OR its bill was created on the target date.
+    // This catches orders that were left open overnight and billed the next morning.
+    const orderIdsRes = await db.query(`
+      SELECT DISTINCT o.id FROM orders o
+      LEFT JOIN tables t ON o.table_id = t.id
+      LEFT JOIN rooms r ON o.room_id = r.id
+      LEFT JOIN bills b ON b.order_id = o.id
+      WHERE (date(o.created_at) = $1 OR date(b.created_at) = $1)
+        AND (t.hotel_id = $2 OR r.hotel_id = $2)
+    `, [targetDate, req.user.hotel_id]);
+
+    const orderIds = orderIdsRes.rows.map(row => row.id);
+    if (orderIds.length > 0) {
+      const idsList = orderIds.join(',');
+      await db.query(`DELETE FROM bills WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM order_items WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM order_chats WHERE order_id IN (${idsList})`);
+      await db.query(`DELETE FROM orders WHERE id IN (${idsList})`);
+    }
+
+    // Clear Cancelled Orders
+    await db.query(`DELETE FROM cancelled_orders WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    // Clear Expenses (expense_date is an ISO UTC string, so it needs 'localtime' to match local days)
+    await db.query(`DELETE FROM expenses WHERE date(expense_date, 'localtime') = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    // Clear Credits (created_at is already stored as local time string by SQLite)
+    await db.query(`DELETE FROM credits WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    await db.query(`DELETE FROM credit_payments WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    
+    // Clear Inventory transactions (invoice_date is ISO UTC string)
+    await db.query(`DELETE FROM purchase_entries WHERE date(invoice_date, 'localtime') = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+    // stock_transactions created_at is local time string
+    await db.query(`DELETE FROM stock_transactions WHERE date(created_at) = $1 AND hotel_id = $2`, [targetDate, req.user.hotel_id]);
+
+    await db.query('COMMIT');
+    res.json({ message: 'Test data cleared successfully for ' + targetDate });
+  } catch (err) {
+    await db.query('ROLLBACK');
+    console.error('Error clearing test data:', err);
+    res.status(500).json({ message: 'Error clearing test data' });
+  }
+});
+
 module.exports = router;
+
 

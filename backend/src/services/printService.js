@@ -116,10 +116,10 @@ class PrintService {
       gst: Number(gst),
       finalAmount: Number(finalAmount),
       discountPercentage: Number(discountPercentage || 0),
-      items: items.map(item => ({
+      items: items.filter(item => Number(item.quantity !== undefined ? item.quantity : (item.qty !== undefined ? item.qty : 0)) > 0).map(item => ({
         name: item.name,
         price: Number(item.price),
-        qty: Number(item.quantity || item.qty || 1),
+        qty: Number(item.quantity !== undefined ? item.quantity : (item.qty !== undefined ? item.qty : 1)),
         rasterBase64: item.rasterBase64
       })),
       hotelName: hotelName || '',

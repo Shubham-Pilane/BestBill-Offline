@@ -411,7 +411,7 @@ router.delete('/:roomId/order/items/:itemId', auth, async (req, res) => {
 // Generate Room Bill
 router.post('/:roomId/bill', auth, async (req, res) => {
     const { roomId } = req.params;
-    const { discount_percentage } = req.body;
+    const { discount_percentage, selected_discount_item_ids, include_room_charge_in_discount } = req.body;
     
     const client = await db.getClient();
     try {
@@ -431,7 +431,7 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       const orderId = activeOrderRes.rows[0].id;
       
       const orderItemsQuery = await client.query(`
-        SELECT oi.quantity, mi.name, mi.price
+        SELECT oi.id, oi.menu_item_id, oi.quantity, mi.name, mi.price
         FROM order_items oi
         JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE oi.order_id = $1
@@ -447,7 +447,26 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       const gst = subtotal * (gstRate / 100);
       const initialTotal = subtotal + gst;
       const discount = parseFloat(discount_percentage) || 0;
-      const finalAmount = initialTotal - (initialTotal * (discount / 100));
+
+      let discountAmount = 0;
+      if (discount > 0) {
+        let selectedSubtotal = 0;
+        if (Array.isArray(selected_discount_item_ids)) {
+          const selectedFoodSubtotal = orderItems.reduce((sum, item) => {
+            if (selected_discount_item_ids.includes(item.id) || selected_discount_item_ids.includes(item.menu_item_id)) {
+              return sum + (parseFloat(item.price) * parseInt(item.quantity));
+            }
+            return sum;
+          }, 0);
+          selectedSubtotal = selectedFoodSubtotal + (include_room_charge_in_discount !== false ? roomCharge : 0);
+        } else {
+          selectedSubtotal = subtotal;
+        }
+        const selectedTotal = selectedSubtotal * (1 + gstRate / 100);
+        discountAmount = selectedTotal * (discount / 100);
+      }
+
+      const finalAmount = Math.max(0, initialTotal - discountAmount);
  
       // Deduct stock from inventory
       await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
@@ -464,6 +483,7 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       
       const responsePayload = {
         ...billRes.rows[0],
+        discount_amount: discountAmount,
         subtotal: subtotal,
         final_amount: finalAmount,
         room_charge: roomCharge,

@@ -378,12 +378,12 @@ function getBrandingRasterBuffer(is58mm = true) {
     };
 
     const textStr = "POWERED BY BESTBILL";
-    const charWidth = 6;
+    const charWidth = 7;
     const charHeight = 7;
     const scale = 2; 
 
     // Draw Vector Lightning Bolt Icon
-    const boltSize = 20;
+    const boltSize = 22;
     const textWidth = (textStr.length * charWidth * scale);
     const totalWidth = boltSize + 10 + textWidth;
     const startX = Math.floor((printerWidthDots - totalWidth) / 2);
@@ -403,7 +403,7 @@ function getBrandingRasterBuffer(is58mm = true) {
       }
     }
 
-    // Render Text Glyphs
+    // Render BOLD Text Glyphs (extra pixel stroke sx < scale + 1)
     let currentX = startX + boltSize + 10;
     for (let c = 0; c < textStr.length; c++) {
       const char = textStr[c];
@@ -413,7 +413,7 @@ function getBrandingRasterBuffer(is58mm = true) {
         for (let row = 0; row < charHeight; row++) {
           if (colVal & (1 << row)) {
             for (let sy = 0; sy < scale; sy++) {
-              for (let sx = 0; sx < scale; sx++) {
+              for (let sx = 0; sx < scale + 1; sx++) {
                 setPixel(currentX + (col * scale) + sx, startY + (row * scale) + sy);
               }
             }
@@ -474,6 +474,9 @@ function formatBill(data) {
     builder.bold(false);
 
     (data.items || []).forEach(i => {
+      const qty = Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0));
+      if (qty <= 0) return;
+      
       if (i.rasterBase64) {
         builder.bufferList.push(Buffer.from(i.rasterBase64, 'base64'));
         builder.bufferList.push(Buffer.from([0x0A]));
@@ -491,8 +494,6 @@ function formatBill(data) {
           console.error('[DEVANAGARI BILL RENDER ERROR]', e);
         }
       }
-      
-      const qty = i.quantity || i.qty || 1;
       const nameStr = toTitleCase(String(i.name));
       const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
       let remainingStr = nameStr.substring(ACTUAL_ITEM_LEN);
@@ -525,9 +526,11 @@ function formatBill(data) {
     }
     
     if (data.discountPercentage > 0) {
-      const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
-      builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
-      addedSubItems = true;
+      const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+      if (discAmt > 0) {
+        builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+        addedSubItems = true;
+      }
     }
     
     if (addedSubItems) {
@@ -700,6 +703,9 @@ function formatBill(data) {
   }
   
   (data.items || []).forEach(i => {
+    const qty = Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0));
+    if (qty <= 0) return;
+    
     if (i.rasterBase64) {
       builder.bufferList.push(Buffer.from(i.rasterBase64, 'base64'));
       builder.bufferList.push(Buffer.from([0x0A]));
@@ -717,7 +723,6 @@ function formatBill(data) {
         console.error('[DEVANAGARI BILL RENDER ERROR]', e);
       }
     }
-    const qty = i.quantity || i.qty || 1;
     const nameStr = toTitleCase(String(i.name));
     const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
     let remainingStr = nameStr.substring(ACTUAL_ITEM_LEN);
@@ -751,10 +756,12 @@ function formatBill(data) {
   }
   
   if (data.discountPercentage > 0) {
-    const discAmt = (subtotalVal + gstVal) * (data.discountPercentage / 100);
-    const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
-    builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
-    addedSubItems = true;
+    const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+    if (discAmt > 0) {
+      const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
+      builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
   }
   
   if (addedSubItems) {
