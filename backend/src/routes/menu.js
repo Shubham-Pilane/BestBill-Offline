@@ -48,12 +48,12 @@ router.post('/categories', auth, async (req, res) => {
 
 // Update category
 router.put('/categories/:id', auth, async (req, res) => {
-  const { name } = req.body;
+  const { name, marathi_name } = req.body;
   const { id } = req.params;
   try {
     const updated = await db.query(
-      'UPDATE categories SET name = $1 WHERE id = $2 AND hotel_id = $3 RETURNING *',
-      [name, id, req.user.hotel_id]
+      'UPDATE categories SET name = $1, marathi_name = $2 WHERE id = $3 AND hotel_id = $4 RETURNING *',
+      [name, marathi_name || null, id, req.user.hotel_id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -84,24 +84,18 @@ router.get('/items', auth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
     const category_id = req.query.category_id || 'all';
-    const targetLang = req.query.lang || 'en';
-
-    const langCondition = targetLang === 'mr' 
-      ? "mi.lang = 'mr'" 
-      : "(mi.lang = 'en' OR mi.lang IS NULL OR mi.lang = '')";
-
     let queryStr = `
-      SELECT mi.*, c.name as category_name 
+      SELECT mi.*, c.name as category_name, c.marathi_name as category_marathi_name
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0 AND ${langCondition}
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
     `;
     const params = [req.user.hotel_id];
 
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      params.push(searchParam, searchParam);
-      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
+      params.push(searchParam, searchParam, searchParam);
+      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 2} OR LOWER(mi.marathi_name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
     }
 
     if (category_id && category_id !== 'all') {
@@ -121,13 +115,13 @@ router.get('/items', auth, async (req, res) => {
       SELECT COUNT(*) AS count
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0 AND ${langCondition}
+      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
     `;
     const countParams = [req.user.hotel_id];
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      countParams.push(searchParam, searchParam);
-      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
+      countParams.push(searchParam, searchParam, searchParam);
+      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 2} OR LOWER(mi.marathi_name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
     }
     if (category_id && category_id !== 'all') {
       countParams.push(parseInt(category_id));
@@ -158,16 +152,15 @@ router.get('/items', auth, async (req, res) => {
 
 // Create menu item
 router.post('/items', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available, lang } = req.body;
+  const { name, price, category_id, description, is_available, marathi_name } = req.body;
   const hotelId = req.user.hotel_id;
-  const itemLang = lang || 'en';
   try {
     const lowercaseName = name.trim().toLowerCase();
     
     // Create the hotel-specific menu item directly
     const newItem = await db.query(
-      'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available, lang) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [hotelId, category_id, lowercaseName, price, description, is_available ?? true, itemLang]
+      'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true]
     );
     res.status(201).json(newItem.rows[0]);
   } catch (err) {
@@ -178,15 +171,14 @@ router.post('/items', auth, async (req, res) => {
 
 // Update menu item
 router.put('/items/:id', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available, lang } = req.body;
+  const { name, price, category_id, description, is_available, marathi_name } = req.body;
   const { id } = req.params;
-  const itemLang = lang || 'en';
   try {
     const lowercaseName = name.trim().toLowerCase();
     
     const updated = await db.query(
-      'UPDATE menu_items SET name = $1, price = $2, category_id = $3, description = $4, is_available = $5, lang = $6 WHERE id = $7 RETURNING *',
-      [lowercaseName, price, category_id, description, is_available, itemLang, id]
+      'UPDATE menu_items SET name = $1, marathi_name = $2, price = $3, category_id = $4, description = $5, is_available = $6 WHERE id = $7 RETURNING *',
+      [lowercaseName, marathi_name || null, price, category_id, description, is_available, id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -213,9 +205,8 @@ router.delete('/items/:id', auth, async (req, res) => {
 
 // Bulk import menu items
 router.post('/items/bulk', auth, async (req, res) => {
-  const { items, lang } = req.body;
+  const { items } = req.body;
   const hotelId = req.user.hotel_id;
-  const itemLang = lang || 'en';
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'No items provided' });
@@ -229,9 +220,8 @@ router.post('/items/bulk', auth, async (req, res) => {
       categoriesMap.set(c.name.toLowerCase().trim(), c);
     });
 
-    // 2. Get existing menu items for the target language
-    const langCond = itemLang === 'mr' ? "lang = 'mr'" : "(lang = 'en' OR lang IS NULL OR lang = '')";
-    const existingItemsResult = await db.query(`SELECT * FROM menu_items WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
+    // 2. Get existing menu items
+    const existingItemsResult = await db.query(`SELECT * FROM menu_items WHERE hotel_id = $1`, [hotelId]);
     const existingItemsMap = new Map();
     existingItemsResult.rows.forEach(item => {
       existingItemsMap.set(item.name.toLowerCase().trim(), item);
@@ -244,6 +234,7 @@ router.post('/items/bulk', auth, async (req, res) => {
       if (!item.name || !item.price || !item.category) continue;
       
       const catName = item.category.trim();
+      const marathiCatName = item.marathi_category ? item.marathi_category.trim() : null;
       const catKey = catName.toLowerCase();
       let categoryId;
 
@@ -256,14 +247,20 @@ router.post('/items/bulk', auth, async (req, res) => {
           await db.query('UPDATE categories SET is_deleted = 0 WHERE id = $1', [categoryId]);
           existingCat.is_deleted = 0;
         }
+        
+        // Update marathi_name if provided
+        if (marathiCatName && existingCat.marathi_name !== marathiCatName) {
+          await db.query('UPDATE categories SET marathi_name = $1 WHERE id = $2', [marathiCatName, categoryId]);
+          existingCat.marathi_name = marathiCatName;
+        }
       } else {
         // Create category if it doesn't exist
         const newCat = await db.query(
-          'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING id',
-          [hotelId, catName]
+          'INSERT INTO categories (hotel_id, name, marathi_name) VALUES ($1, $2, $3) RETURNING id',
+          [hotelId, catName, marathiCatName]
         );
         categoryId = newCat.rows[0].id;
-        categoriesMap.set(catKey, { id: categoryId, name: catName, is_deleted: 0 });
+        categoriesMap.set(catKey, { id: categoryId, name: catName, marathi_name: marathiCatName, is_deleted: 0 });
       }
 
       const lowercaseName = item.name.trim().toLowerCase();
@@ -271,22 +268,26 @@ router.post('/items/bulk', auth, async (req, res) => {
       if (existingItemsMap.has(lowercaseName)) {
         const existingItem = existingItemsMap.get(lowercaseName);
         const newPrice = parseFloat(item.price);
+        const newMarathiName = item.marathi_name || null;
+        
         const hasPriceChanged = parseFloat(existingItem.price) !== newPrice;
         const hasCategoryChanged = existingItem.category_id !== categoryId;
+        const hasMarathiNameChanged = existingItem.marathi_name !== newMarathiName;
         const wasDeleted = existingItem.is_deleted === 1;
 
-        if (hasPriceChanged || hasCategoryChanged || wasDeleted) {
+        if (hasPriceChanged || hasCategoryChanged || hasMarathiNameChanged || wasDeleted) {
           await db.query(
-            'UPDATE menu_items SET category_id = $1, price = $2, description = $3, is_deleted = 0, is_available = true, lang = $4 WHERE id = $5',
-            [categoryId, newPrice, item.description || existingItem.description || '', itemLang, existingItem.id]
+            'UPDATE menu_items SET category_id = $1, marathi_name = $2, price = $3, description = $4, is_deleted = 0, is_available = true WHERE id = $5',
+            [categoryId, newMarathiName, newPrice, item.description || existingItem.description || '', existingItem.id]
           );
           updatedCount++;
         }
       } else {
         // Insert new item
+        const newMarathiName = item.marathi_name || null;
         await db.query(
-          'INSERT INTO menu_items (hotel_id, category_id, name, price, description, is_available, lang) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [hotelId, categoryId, lowercaseName, parseFloat(item.price), item.description || '', true, itemLang]
+          'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true]
         );
         createdCount++;
       }
@@ -303,41 +304,30 @@ router.post('/items/bulk', auth, async (req, res) => {
   }
 });
 
-// Purge all menu items and categories for specific language
+// Purge all menu items and categories
 router.delete('/purge-all', auth, async (req, res) => {
   const hotelId = req.user.hotel_id;
-  const targetLang = req.query.lang || 'en';
-  const langCond = targetLang === 'mr' ? "lang = 'mr'" : "(lang = 'en' OR lang IS NULL OR lang = '')";
   try {
     // Try hard deleting menu items matching language first
     try {
-      await db.query(`DELETE FROM menu_items WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
+      await db.query(`DELETE FROM menu_items WHERE hotel_id = $1`, [hotelId]);
     } catch (err) {
       // Soft delete if referenced in active orders / bills
-      await db.query(`UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1 AND ${langCond}`, [hotelId]);
+      await db.query(`UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1`, [hotelId]);
     }
 
-    res.json({ message: `${targetLang === 'mr' ? 'Marathi' : 'English'} menu cleared successfully` });
+    // Try hard deleting categories
+    try {
+      await db.query(`DELETE FROM categories WHERE hotel_id = $1`, [hotelId]);
+    } catch (err) {
+      // Soft delete if referenced
+      await db.query(`UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1`, [hotelId]);
+    }
+
+    res.json({ message: `Menu cleared successfully` });
   } catch (err) {
     console.error('[PURGE ALL ERROR]', err);
     res.status(500).json({ message: 'Failed to purge menu' });
-  }
-});
-
-// Swap languages for menu items
-router.post('/swap-languages', auth, async (req, res) => {
-  const hotelId = req.user.hotel_id;
-  try {
-    // mr -> temp
-    await db.query(`UPDATE menu_items SET lang = 'temp' WHERE hotel_id = $1 AND lang = 'mr'`, [hotelId]);
-    // en/null -> mr
-    await db.query(`UPDATE menu_items SET lang = 'mr' WHERE hotel_id = $1 AND (lang = 'en' OR lang IS NULL OR lang = '')`, [hotelId]);
-    // temp -> en
-    await db.query(`UPDATE menu_items SET lang = 'en' WHERE hotel_id = $1 AND lang = 'temp'`, [hotelId]);
-    res.json({ message: 'Languages swapped successfully' });
-  } catch (err) {
-    console.error('[SWAP LANGUAGES ERROR]', err);
-    res.status(500).json({ message: 'Failed to swap languages' });
   }
 });
 

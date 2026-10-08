@@ -474,6 +474,24 @@ function formatBill(data) {
     builder.bold(false);
 
     (data.items || []).forEach(i => {
+      if (i.rasterBase64) {
+        builder.bufferList.push(Buffer.from(i.rasterBase64, 'base64'));
+        builder.bufferList.push(Buffer.from([0x0A]));
+        return;
+      }
+      if (containsDevanagari(i.name)) {
+        try {
+          const rasterBuf = renderItemRowToRaster(i, { paperSize: is58mm ? '58mm' : '80mm' });
+          if (rasterBuf && rasterBuf.length > 0) {
+            builder.bufferList.push(rasterBuf);
+            builder.bufferList.push(Buffer.from([0x0A]));
+            return;
+          }
+        } catch (e) {
+          console.error('[DEVANAGARI BILL RENDER ERROR]', e);
+        }
+      }
+      
       const qty = i.quantity || i.qty || 1;
       const nameStr = toTitleCase(String(i.name));
       const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);

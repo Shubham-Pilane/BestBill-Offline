@@ -738,13 +738,20 @@ const Profile = () => {
                     <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                                {t('profile_select_language', 'Select Language')}
+                                App Display Language
                             </label>
                             <select 
-                                value={language} 
-                                onChange={(e) => {
-                                    setLanguage(e.target.value);
-                                    toast.success(e.target.value === 'mr' ? 'अ‍ॅपची भाषा मराठी सेट केली आहे!' : 'Application language set to English!');
+                                value={user?.app_language || language} 
+                                onChange={async (e) => {
+                                    const val = e.target.value;
+                                    setLanguage(val === 'hinglish' ? 'en' : val);
+                                    toast.success('App language updated!');
+                                    try {
+                                        const res = await api.put('/profile', { app_language: val });
+                                        updateUser(res.data.user);
+                                    } catch (err) {
+                                        toast.error('Failed to save language setting');
+                                    }
                                 }}
                                 style={{
                                     width: '100%',
@@ -760,13 +767,17 @@ const Profile = () => {
                                     cursor: 'pointer'
                                 }}
                             >
-                                <option value="en">English (English)</option>
-                                <option value="mr">Marathi (मराठी)</option>
+                                <option value="en">English Only (Default)</option>
+                                <option value="mr">Marathi Only (मराठी)</option>
+                                <option value="hinglish">Hinglish (Smart Hybrid Mode)</option>
                             </select>
                             <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                                {language === 'mr' ? 'भाषा बदलल्याने संपूर्ण अ‍ॅपची भाषा मराठी होईल.' : 'Selecting a language updates the user interface text across the entire application.'}
+                                {user?.app_language === 'hinglish' ? 'Hinglish Mode: Dashboard shows both names. You can configure KOT & Bill print languages separately below.' : 
+                                 user?.app_language === 'mr' ? 'Marathi Mode: All dashboard items and prints will be in Marathi.' : 
+                                 'English Mode: All dashboard items and prints will be in English.'}
                             </p>
                         </div>
+                        
                     </div>
                 )}
             </div>
@@ -1082,6 +1093,28 @@ const Profile = () => {
                                             )}
                                             <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>Receipt column alignment is auto-calculated based on selected paper width</span>
                                         </div>
+                                        {user?.app_language === 'hinglish' && (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                              <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>FINAL BILL PRINT LANGUAGE</label>
+                                              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                  <select 
+                                                      value={user?.print_lang_bill || 'en'} 
+                                                      onChange={async (e) => {
+                                                          try {
+                                                              const res = await api.put('/profile', { print_lang_bill: e.target.value });
+                                                              updateUser(res.data.user);
+                                                              toast.success('Bill Print language updated!');
+                                                          } catch (err) { toast.error('Failed to update'); }
+                                                      }}
+                                                      style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                  >
+                                                      <option value="en">English</option>
+                                                      <option value="mr">Marathi</option>
+                                                  </select>
+                                                  <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                              </div>
+                                          </div>
+                                        )}
                                     </div>
  
                                     {/* Kitchen Printer Form */}
@@ -1229,6 +1262,28 @@ const Profile = () => {
                                             )}
                                             <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 500 }}>KOT column alignment is auto-calculated based on selected paper width</span>
                                         </div>
+                                        {user?.app_language === 'hinglish' && (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                              <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>KOT PRINT LANGUAGE</label>
+                                              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                  <select 
+                                                      value={user?.print_lang_kot || 'en'} 
+                                                      onChange={async (e) => {
+                                                          try {
+                                                              const res = await api.put('/profile', { print_lang_kot: e.target.value });
+                                                              updateUser(res.data.user);
+                                                              toast.success('KOT Print language updated!');
+                                                          } catch (err) { toast.error('Failed to update'); }
+                                                      }}
+                                                      style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
+                                                  >
+                                                      <option value="en">English</option>
+                                                      <option value="mr">Marathi</option>
+                                                  </select>
+                                                  <ChevronDown size={18} style={{ position: 'absolute', right: '14px', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                                              </div>
+                                          </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>

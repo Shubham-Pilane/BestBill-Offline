@@ -83,7 +83,7 @@ router.get('/:tableId/order', auth, async (req, res) => {
 
     const order = orderResult.rows[0];
     const itemsQuery = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, mi.name, mi.price
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, mi.name, mi.marathi_name, mi.price
       FROM order_items oi
       JOIN menu_items mi ON oi.menu_item_id = mi.id
       WHERE oi.order_id = $1 AND oi.quantity > 0
@@ -104,16 +104,17 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
   const { waiter, notes } = req.body;
   console.log(`[KOT DEBUG] Request received for tableId: ${tableId}, user:`, req.user);
   try {
-    const [hotelRes, tableRes, orderRes] = await Promise.all([
+    const [hotelRes, tableRes, orderRes, userRes] = await Promise.all([
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name, mi.marathi_name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
-      `, [tableId])
+      `, [tableId]),
+      db.query('SELECT app_language, print_lang_kot FROM users WHERE id = $1', [req.user.id])
     ]);
 
     console.log('[KOT DEBUG] hotelRes rows:', hotelRes.rows);
@@ -125,11 +126,17 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       return res.status(404).json({ message: 'No active order to print' });
     }
 
+    let printLangKot = (userRes && userRes.rows.length > 0) ? userRes.rows[0].print_lang_kot : 'en';
+    const appLang = (userRes && userRes.rows.length > 0) ? userRes.rows[0].app_language : 'en';
+    
+    if (appLang === 'en') printLangKot = 'en';
+    if (appLang === 'mr') printLangKot = 'mr';
+
     // Filter items to calculate incremental items to print
     const printItems = orderRes.rows
       .filter(item => item.quantity > (item.printed_quantity || 0))
       .map(item => ({
-        name: item.name,
+        name: printLangKot === 'mr' ? (item.marathi_name || item.name) : item.name,
         quantity: item.quantity - (item.printed_quantity || 0)
       }));
 
@@ -167,7 +174,8 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       floor: tableRes.rows[0]?.floor || '',
       waiter: finalWaiter,
       items: printItems,
-      notes: notes || ''
+      notes: notes || '',
+      lang: printLangKot
     });
     return res.json({ success: true, message: 'KOT printed successfully' });
   } catch (err) {
@@ -218,7 +226,7 @@ router.post('/:tableId/order', auth, async (req, res) => {
     }
 
     const query2 = `
-      SELECT oi.*, mi.name, mi.price 
+      SELECT oi.*, mi.name, mi.marathi_name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
@@ -249,7 +257,7 @@ router.put('/:tableId/order/items/:itemId', auth, async (req, res) => {
     notifyUpdate(req.user.hotel_id, 'table-update');
 
     const query2 = `
-      SELECT oi.*, mi.name, mi.price 
+      SELECT oi.*, mi.name, mi.marathi_name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
@@ -275,7 +283,7 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
       if (orderCheck.rows.length === 0) return res.json({ items: [], order_deleted: true });
       
       const currentItems = await db.query(`
-        SELECT oi.*, mi.name, mi.price FROM order_items oi 
+        SELECT oi.*, mi.name, mi.marathi_name, mi.price FROM order_items oi 
         JOIN menu_items mi ON oi.menu_item_id = mi.id 
         WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
       `, [orderCheck.rows[0].id]);
@@ -356,7 +364,7 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
     }
 
     const updatedItems = await db.query(`
-      SELECT oi.*, mi.name, mi.price FROM order_items oi 
+      SELECT oi.*, mi.name, mi.marathi_name, mi.price FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
     `, [orderId]);
@@ -457,7 +465,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       client.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       client.query(`
-        SELECT o.id as order_id, oi.quantity, mi.name, mi.price
+        SELECT o.id as order_id, oi.quantity, mi.name, mi.marathi_name, mi.price
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id

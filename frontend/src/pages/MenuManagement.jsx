@@ -18,6 +18,7 @@ const MenuManagement = () => {
 
   const [editingCatId, setEditingCatId] = useState(null);
   const [editCatName, setEditCatName] = useState('');
+  const [editCatMarathiName, setEditCatMarathiName] = useState('');
 
   const [editingItemId, setEditingItemId] = useState(null);
   const [editItemData, setEditItemData] = useState({});
@@ -33,15 +34,11 @@ const MenuManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
-  useEffect(() => {
-    setMenuLang(language || 'en');
-  }, [language]);
-
-  const fetchData = async (page = 1, search = '', targetLang = menuLang) => {
+  const fetchData = async (page = 1, search = '') => {
     try {
       const [catRes, itemsRes] = await Promise.all([
         api.get('/menu/categories'),
-        api.get(`/menu/items?page=${page}&limit=10&search=${encodeURIComponent(search)}&lang=${targetLang}`)
+        api.get(`/menu/items?page=${page}&limit=10&search=${encodeURIComponent(search)}`)
       ]);
       setCategories(Array.isArray(catRes.data) ? catRes.data : []);
       const itemsData = itemsRes.data;
@@ -64,8 +61,8 @@ const MenuManagement = () => {
   };
 
   useEffect(() => {
-    fetchData(currentPage, searchTerm, menuLang);
-  }, [currentPage, searchTerm, menuLang]);
+    fetchData(currentPage, searchTerm);
+  }, [currentPage, searchTerm]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -79,8 +76,32 @@ const MenuManagement = () => {
       const importedItems = [];
       
       let startIdx = 0;
+      let catIdx = 0;
+      let nameIdx = 1;
+      let priceIdx = 2;
+      let marathiNameIdx = 3;
+      let marathiCatIdx = -1;
+
       if (lines.length > 0 && (lines[0].toLowerCase().includes('category') || lines[0].toLowerCase().includes('price') || lines[0].toLowerCase().includes('name'))) {
         startIdx = 1;
+        const headerLine = lines[0].toLowerCase();
+        const delimiter = headerLine.includes('\t') ? '\t' : headerLine.includes(';') ? ';' : ',';
+        const headers = headerLine.split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
+        
+        catIdx = headers.indexOf('category');
+        nameIdx = headers.indexOf('name');
+        priceIdx = headers.indexOf('price');
+        
+        marathiNameIdx = headers.indexOf('marathi_name');
+        if (marathiNameIdx === -1) marathiNameIdx = headers.indexOf('marathi name');
+        
+        marathiCatIdx = headers.indexOf('marathi_category');
+        if (marathiCatIdx === -1) marathiCatIdx = headers.indexOf('marathi category');
+        
+        if (catIdx === -1) catIdx = 0;
+        if (nameIdx === -1) nameIdx = 1;
+        if (priceIdx === -1) priceIdx = 2;
+        if (marathiNameIdx === -1) marathiNameIdx = 3;
       }
 
       for (let i = startIdx; i < lines.length; i++) {
@@ -90,13 +111,14 @@ const MenuManagement = () => {
         const delimiter = line.includes('\t') ? '\t' : line.includes(';') ? ';' : ',';
         const parts = line.split(delimiter).map(p => p.trim().replace(/^["']|["']$/g, ''));
         
-        if (parts.length >= 3) {
-          const category = parts[0];
-          const name = parts[1];
-          const price = parseFloat(parts[2]);
-          if (category && name && !isNaN(price)) {
-            importedItems.push({ category, name, price });
-          }
+        const category = parts[catIdx];
+        const name = parts[nameIdx];
+        const price = parseFloat(parts[priceIdx]);
+        const marathi_name = parts[marathiNameIdx] || '';
+        const marathi_category = marathiCatIdx !== -1 ? (parts[marathiCatIdx] || '') : '';
+        
+        if (category && name && !isNaN(price)) {
+          importedItems.push({ category, name, price, marathi_name, marathi_category });
         }
       }
 
@@ -106,12 +128,11 @@ const MenuManagement = () => {
         return;
       }
 
-      const targetLangName = menuLang === 'mr' ? 'Marathi' : 'English';
-      const loadingToast = toast.loading(`Importing ${importedItems.length} items into ${targetLangName} menu...`);
+      const loadingToast = toast.loading(`Importing ${importedItems.length} items into menu...`);
       try {
-        const res = await api.post('/menu/items/bulk', { items: importedItems, lang: menuLang });
-        toast.success(res.data.message || `Successfully imported ${importedItems.length} ${targetLangName} menu items!`, { id: loadingToast });
-        fetchData(1, '', menuLang);
+        const res = await api.post('/menu/items/bulk', { items: importedItems });
+        toast.success(res.data.message || `Successfully imported ${importedItems.length} menu items!`, { id: loadingToast });
+        fetchData(1, '');
         setCurrentPage(1);
       } catch (err) {
         toast.error('Failed to import menu CSV', { id: loadingToast });
@@ -154,7 +175,7 @@ const MenuManagement = () => {
 
   const saveCategoryUpdate = async (id) => {
     try {
-      await api.put(`/menu/categories/${id}`, { name: editCatName });
+      await api.put(`/menu/categories/${id}`, { name: editCatName, marathi_name: editCatMarathiName });
       setEditingCatId(null);
       fetchData(currentPage, searchTerm, menuLang);
       toast.success('Category updated');
@@ -167,12 +188,12 @@ const MenuManagement = () => {
     e.preventDefault();
     if (!newItem.category_id) return toast.error('Please assign a category');
     try {
-      await api.post('/menu/items', { ...newItem, lang: menuLang });
-      setNewItem({ name: '', price: '', category_id: '', description: '' });
-      fetchData(1, '', menuLang);
+      await api.post('/menu/items', { ...newItem });
+      setNewItem({ name: '', marathi_name: '', price: '', category_id: '', description: '' });
+      fetchData(1, '');
       setCurrentPage(1);
       setSearchTerm('');
-      toast.success(`Menu item added to ${menuLang === 'mr' ? 'Marathi' : 'English'} menu!`);
+      toast.success(`Menu item added successfully!`);
     } catch (err) {
       toast.error('Could not create item');
     }
@@ -186,7 +207,7 @@ const MenuManagement = () => {
       onConfirm: async () => {
         try {
           const res = await api.delete(`/menu/items/${id}`);
-          fetchData(currentPage, searchTerm, menuLang);
+          fetchData(currentPage, searchTerm);
           toast.success(res.data?.message || 'Item deleted');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
@@ -203,9 +224,9 @@ const MenuManagement = () => {
 
   const saveItemUpdate = async (id) => {
     try {
-      await api.put(`/menu/items/${id}`, { ...editItemData, lang: menuLang });
+      await api.put(`/menu/items/${id}`, { ...editItemData });
       setEditingItemId(null);
-      fetchData(currentPage, searchTerm, menuLang);
+      fetchData(currentPage, searchTerm);
       toast.success('Item details updated');
     } catch (err) {
       toast.error('Update failed');
@@ -213,19 +234,18 @@ const MenuManagement = () => {
   };
 
   const deleteAllMenu = () => {
-    const targetLangName = menuLang === 'mr' ? 'Marathi' : 'English';
     setConfirmModal({
       isOpen: true,
-      title: `Delete Entire ${targetLangName} Menu?`,
-      message: `This will permanently delete all menu items in the ${targetLangName} menu. Active tables will lose item references. This action is irreversible!`,
+      title: `Delete Entire Menu?`,
+      message: `This will permanently delete all menu items. Active tables will lose item references. This action is irreversible!`,
       onConfirm: async () => {
-        const loadingToast = toast.loading(`Deleting ${targetLangName} menu items...`);
+        const loadingToast = toast.loading(`Deleting menu items...`);
         try {
-          await api.delete(`/menu/purge-all?lang=${menuLang}`);
-          fetchData(1, '', menuLang);
+          await api.delete(`/menu/purge-all`);
+          fetchData(1, '');
           setCurrentPage(1);
           setSearchTerm('');
-          toast.success(`${targetLangName} menu items successfully deleted`, { id: loadingToast });
+          toast.success(`Menu items successfully deleted`, { id: loadingToast });
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
         } catch (err) {
           toast.error(err.response?.data?.message || 'Delete failed', { id: loadingToast });
@@ -281,99 +301,15 @@ const MenuManagement = () => {
   return (
     <div style={{ width: '100%', maxWidth: '1400px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Dual Language Menu Tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', backgroundColor: 'var(--bg-card)', padding: '12px 18px', borderRadius: '20px', border: '1px solid var(--border-rgba-05)' }}>
-        <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('active_menu_lang', 'Active Menu Language:')}</span>
-        <button
-          type="button"
-          onClick={() => setMenuLang('en')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '12px',
-            border: menuLang === 'en' ? '2px solid #0ea5e9' : '1px solid var(--bg-border)',
-            backgroundColor: menuLang === 'en' ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-            color: menuLang === 'en' ? '#0ea5e9' : 'var(--text-secondary)',
-            fontWeight: 850,
-            fontSize: '14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s'
-          }}
-        >
-          {t('english_menu', 'English Menu')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMenuLang('mr')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '12px',
-            border: menuLang === 'mr' ? '2px solid #10b981' : '1px solid var(--bg-border)',
-            backgroundColor: menuLang === 'mr' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-            color: menuLang === 'mr' ? '#10b981' : 'var(--text-secondary)',
-            fontWeight: 850,
-            fontSize: '14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s'
-          }}
-        >
-          {t('marathi_menu', 'Marathi Menu')}
-        </button>
-        <div style={{ flex: 1 }}></div>
-        <button
-          type="button"
-          onClick={() => {
-            setConfirmModal({
-              isOpen: true,
-              title: 'Swap Menus?',
-              message: 'Are you sure you want to swap the English and Marathi menu items? This will move all English items to the Marathi tab and vice-versa.',
-              onConfirm: async () => {
-                const loadingToast = toast.loading('Swapping menus...');
-                try {
-                  await api.post('/menu/swap-languages');
-                  fetchData(1, '', menuLang);
-                  toast.success('Menus swapped successfully!', { id: loadingToast });
-                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                } catch (err) {
-                  toast.error('Failed to swap menus', { id: loadingToast });
-                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                }
-              }
-            });
-          }}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '12px',
-            border: '1px solid var(--border-rgba-05)',
-            backgroundColor: 'var(--bg-base)',
-            color: 'var(--text-secondary)',
-            fontWeight: 800,
-            fontSize: '13px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}
-        >
-          <RefreshCcw size={16} /> Swap Menus 🔄
-        </button>
-      </div>
+
 
       <div className="responsive-grid-12" style={{ width: '100%' }}>
       
       {/* Category Management Column */}
-      <div style={{ gridColumn: isGroupsCardExpanded ? 'span 4' : 'span 12', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div style={{ gridColumn: 'span 4', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '24px 32px', border: '1px solid var(--border-rgba-05)' }}>
-          {/* Collapsible Header */}
-          <div 
-            onClick={() => setIsGroupsCardExpanded(!isGroupsCardExpanded)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
-          >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(99, 102, 241, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Layers size={22} style={{ color: '#818cf8', margin: 'auto' }} />
@@ -385,16 +321,11 @@ const MenuManagement = () => {
                 </span>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '12px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#818cf8', fontWeight: 800, fontSize: '13px' }}>
-              {isGroupsCardExpanded ? t('collapse', 'Collapse') : t('expand_manage', 'Expand & Manage')}
-              {isGroupsCardExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </div>
           </div>
 
-          {/* Expanded Content */}
-          {isGroupsCardExpanded && (
-            <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <form onSubmit={addCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Content */}
+          <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <form onSubmit={addCategory} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t('category_name', 'New Category Title')}</label>
                   <div style={{ position: 'relative' }}>
@@ -422,15 +353,27 @@ const MenuManagement = () => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <Tag size={16} style={{ color: '#818cf8' }} />
                         {editingCatId === cat.id ? (
-                          <input
-                            autoFocus
-                            value={editCatName}
-                            onChange={(e) => setEditCatName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && saveCategoryUpdate(cat.id)}
-                            style={{ background: 'var(--bg-card)', border: '1px solid #38bdf8', outline: 'none', color: '#38bdf8', fontWeight: 900, textTransform: 'uppercase', padding: '4px 8px', borderRadius: '6px', fontSize: '13px' }}
-                          />
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <input
+                              autoFocus
+                              placeholder="English Category"
+                              value={editCatName}
+                              onChange={(e) => setEditCatName(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && saveCategoryUpdate(cat.id)}
+                              style={{ background: 'var(--bg-card)', border: '1px solid #38bdf8', outline: 'none', color: '#38bdf8', fontWeight: 900, textTransform: 'uppercase', padding: '4px 8px', borderRadius: '6px', fontSize: '13px', width: '140px' }}
+                            />
+                            <input
+                              placeholder="Marathi Category"
+                              value={editCatMarathiName}
+                              onChange={(e) => setEditCatMarathiName(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && saveCategoryUpdate(cat.id)}
+                              style={{ background: 'var(--bg-card)', border: '1px solid #38bdf8', outline: 'none', color: '#38bdf8', fontWeight: 900, padding: '4px 8px', borderRadius: '6px', fontSize: '13px', width: '140px' }}
+                            />
+                          </div>
                         ) : (
-                          <span style={{ textTransform: 'uppercase', fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>{cat.name}</span>
+                          <span style={{ textTransform: 'uppercase', fontWeight: 800, fontSize: '14px', color: 'var(--text-primary)' }}>
+                            {language === 'mr' ? (cat.marathi_name || cat.name) : cat.name}
+                          </span>
                         )}
                       </div>
 
@@ -438,7 +381,7 @@ const MenuManagement = () => {
                         {editingCatId === cat.id ? (
                           <button onClick={() => saveCategoryUpdate(cat.id)} style={{ color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', cursor: 'pointer', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Check size={18} strokeWidth={3} /></button>
                         ) : (
-                          <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); }} style={{ color: 'var(--text-primary)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', cursor: 'pointer', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Edit2 size={18} /></button>
+                          <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); setEditCatMarathiName(cat.marathi_name || ''); }} style={{ color: 'var(--text-primary)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', cursor: 'pointer', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Edit2 size={18} /></button>
                         )}
                         <button onClick={() => deleteCategory(cat.id)} style={{ color: '#f43f5e', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', cursor: 'pointer', padding: '10px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Trash2 size={18} /></button>
                       </div>
@@ -447,34 +390,34 @@ const MenuManagement = () => {
                 })}
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
 
       {/* Item Management Column */}
-      <div style={{ gridColumn: isGroupsCardExpanded ? 'span 8' : 'span 12', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-rgba-05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Utensils size={22} style={{ color: '#10b981' }} />
               </div>
-              <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{menuLang === 'mr' ? t('create_marathi_menu', 'मराठी मेनू तयार करा') : t('add_to_live_menu', 'Add To Live Menu')}</h2>
+              <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{t('add_to_live_menu', 'Add To Live Menu')}</h2>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-              <label style={{ backgroundColor: menuLang === 'mr' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(14, 165, 233, 0.1)', color: menuLang === 'mr' ? '#10b981' : '#0ea5e9', border: menuLang === 'mr' ? '1px solid rgba(16, 185, 129, 0.2)' : '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: menuLang === 'mr' ? '210px' : '180px', justifyContent: 'center', margin: 0 }}>
-                <UploadCloud size={18} /> {menuLang === 'mr' ? t('import_marathi_csv', 'मराठी मेनू CSV अपलोड करा') : t('import_english_csv', 'Import English CSV')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center', margin: 0 }}>
+                <UploadCloud size={18} /> {t('import_csv', 'Import Menu CSV')}
                 <input type="file" accept=".csv, text/csv, application/vnd.ms-excel, text/plain, text/comma-separated-values" style={{ display: 'none' }} onChange={handleFileUpload} ref={fileInputRef} />
               </label>
-              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: menuLang === 'mr' ? '210px' : '180px', justifyContent: 'center' }}>
-                <Trash2 size={18} /> {menuLang === 'mr' ? t('delete_marathi_menu', 'मराठी मेनू डिलीट करा') : t('delete_english_menu', 'Delete English Menu')}
+              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center' }}>
+                <Trash2 size={18} /> {t('delete_menu', 'Delete Entire Menu')}
               </button>
             </div>
           </div>
+        </div>
 
           <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
-              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')} (English)</label>
               <input
                 type="text"
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
@@ -483,7 +426,16 @@ const MenuManagement = () => {
                 required
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Marathi Name (Optional)</label>
+              <input
+                type="text"
+                style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
+                value={newItem.marathi_name || ''}
+                onChange={(e) => setNewItem({...newItem, marathi_name: e.target.value})}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_price', 'Price (₹)')}</label>
               <div style={{ position: 'relative' }}>
                 <IndianRupee style={{ position: 'absolute', top: '15px', left: '16px', color: 'var(--text-muted)' }} size={16} />
@@ -522,7 +474,6 @@ const MenuManagement = () => {
               <Plus size={22} strokeWidth={4} /> {t('add_item', 'Publish To Menu')}
             </button>
           </form>
-        </div>
 
         {/* Master Menu View with Edit Capability */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -560,11 +511,19 @@ const MenuManagement = () => {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flex: 1, minWidth: '250px', flexWrap: 'wrap' }}>
                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: '120px' }}>
-                      <span style={{ fontSize: '9px', color: '#10b981', fontWeight: 950, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '6px', width: 'fit-content', marginBottom: '4px' }}>{item.category_name}</span>
+                      <span style={{ fontSize: '9px', color: '#10b981', fontWeight: 950, textTransform: 'uppercase', letterSpacing: '0.1em', backgroundColor: 'rgba(16, 185, 129, 0.08)', padding: '2px 8px', borderRadius: '6px', width: 'fit-content', marginBottom: '4px' }}>
+                        {language === 'mr' ? (item.category_marathi_name || item.category_name) : item.category_name}
+                      </span>
                       {editingItemId === item.id ? (
-                        <input value={editItemData.name} onChange={(e) => setEditItemData({...editItemData, name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '15px', fontWeight: 900, width: '200px' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <input value={editItemData.name} placeholder="English Name" onChange={(e) => setEditItemData({...editItemData, name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '15px', fontWeight: 900, width: '200px' }} />
+                          <input value={editItemData.marathi_name || ''} placeholder="Marathi Name" onChange={(e) => setEditItemData({...editItemData, marathi_name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, width: '200px' }} />
+                        </div>
                       ) : (
-                        <h4 style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <h4 style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
+                          {item.marathi_name && <span style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>{item.marathi_name}</span>}
+                        </div>
                       )}
                    </div>
                    
@@ -632,6 +591,7 @@ const MenuManagement = () => {
           {renderPagination('#38bdf8')}
         </div>
       </div>
+      </div>
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}
@@ -640,7 +600,6 @@ const MenuManagement = () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
       />
-    </div>
     </div>
   );
 };

@@ -9,7 +9,7 @@ router.get('/history', auth, async (req, res) => {
     const result = await db.query(`
       SELECT b.*, t.table_number, o.created_at as order_time,
              (
-                SELECT json_group_array(json_object('name', mi.name, 'quantity', oi.quantity, 'price', mi.price))
+                SELECT json_group_array(json_object('name', mi.name, 'marathi_name', mi.marathi_name, 'quantity', oi.quantity, 'price', mi.price))
                 FROM order_items oi
                 JOIN menu_items mi ON oi.menu_item_id = mi.id
                 WHERE oi.order_id = b.order_id
@@ -48,7 +48,7 @@ router.get('/:id', auth, async (req, res) => {
     if (bill.rows.length === 0) return res.status(404).json({ message: 'Bill not found' });
     
     const items = await db.query(`
-      SELECT oi.quantity, mi.name, mi.price 
+      SELECT oi.quantity, mi.name, mi.marathi_name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1`,
@@ -105,12 +105,18 @@ router.post('/:id/print', auth, async (req, res) => {
 
     // Fetch items
     const items = await db.query(`
-      SELECT oi.quantity, mi.name, mi.price 
+      SELECT oi.quantity, mi.name, mi.marathi_name, mi.price 
       FROM order_items oi 
       JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1`,
       [billData.order_id]
     );
+
+    const userQuery = await db.query('SELECT app_language, print_lang_bill FROM users WHERE id = $1', [req.user.id]);
+    let printLangBill = userQuery.rows[0]?.print_lang_bill || 'en';
+    const appLang = userQuery.rows[0]?.app_language || 'en';
+    if (appLang === 'en') printLangBill = 'en';
+    if (appLang === 'mr') printLangBill = 'mr';
 
     // Resolve table name
     let tableName = 'Parcel';
@@ -129,7 +135,7 @@ router.post('/:id/print', auth, async (req, res) => {
 
     // Include room charge if applicable
     let printItems = items.rows.map(item => ({
-      name: item.name,
+      name: printLangBill === 'mr' ? (item.marathi_name || item.name) : item.name,
       price: Number(item.price),
       quantity: Number(item.quantity)
     }));
@@ -173,7 +179,8 @@ router.post('/:id/print', auth, async (req, res) => {
       booking_days: bookingDays,
       guestName: guestName,
       checkInDate: checkInDate,
-      printerSize: billData.printer_size || '80mm'
+      printerSize: billData.printer_size || '80mm',
+      lang: printLangBill
     };
 
     printService.emitPrintJob(req.user.hotel_id, payload);

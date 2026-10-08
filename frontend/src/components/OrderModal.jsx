@@ -6,6 +6,32 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import SwapModal from './SwapModal';
+
+const categoryMarathiMap = {
+  "SIDE BY SIDE": "साइड बाय साइड",
+  "CHINESE SOUP VEG": "व्हेज चायनीज सूप",
+  "CHINESE SOUP NON-VEG": "नॉन-व्हेज चायनीज सूप",
+  "CHINESE STARTER VEG": "व्हेज चायनीज स्टार्टर",
+  "CHINESE RICE / NOODLES NON-VEG": "नॉन-व्हेज चायनीज राईस / नूडल्स",
+  "CHINESE RICE / VEG NOODLES": "व्हेज चायनीज राईस / नूडल्स",
+  "TANDOORI KHAS NON-VEG": "नॉन-व्हेज तंदूरी खास",
+  "MUTTON MATKA": "मटण मटका",
+  "MUTTON HANDI": "मटण हांडी",
+  "CHICKEN MATKA": "चिकन मटका",
+  "CHICKEN HANDI": "चिकन हांडी",
+  "SPECIAL FISH FRY": "स्पेशल फिश फ्राय",
+  "INDIAN VEG MAIN COURSE": "व्हेज मेन कोर्स",
+  "EXTRA": "एक्स्ट्रा",
+  "VEG MAIN COURSE": "व्हेज मेन कोर्स",
+  "INDIAN BREADS": "इंडियन ब्रेड्स",
+  "ICE CREAM SINGLE / DOUBLE SCOOP": "आईस्क्रीम सिंगल / डबल स्कूप"
+};
+
+const translateCategory = (name) => {
+  if (!name) return '';
+  return categoryMarathiMap[name.toUpperCase()] || name;
+};
+
 const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floors: passedFloors }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -116,8 +142,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const fetchAllMenu = async () => {
     try {
-      const appLang = localStorage.getItem('app_language') || 'en';
-      const res = await api.get(`/menu/items?lang=${appLang}`);
+      const res = await api.get(`/menu/items`);
       setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
@@ -163,11 +188,18 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
       const query = searchQuery.toLowerCase().replace(/\s/g, '');
       filtered = filtered.filter(i => {
         const name = i.name.toLowerCase();
+        const marathiName = (i.marathi_name || '').toLowerCase();
         const categoryName = (i.category_name || '').toLowerCase();
-        if (name.includes(searchQuery.toLowerCase()) || categoryName.includes(searchQuery.toLowerCase())) return true;
+        if (name.includes(searchQuery.toLowerCase()) || marathiName.includes(searchQuery.toLowerCase()) || categoryName.includes(searchQuery.toLowerCase())) return true;
         
         let patternIdx = 0;
         for (let char of name) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+        
+        patternIdx = 0;
+        for (let char of marathiName) {
           if (char === query[patternIdx]) patternIdx++;
           if (patternIdx === query.length) return true;
         }
@@ -512,9 +544,13 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
           <div className="order-modal-menu" style={{ flex: 1, borderRight: '1px solid var(--border-rgba-05)', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
             <div className="order-modal-top-bar" style={{ padding: '16px 24px', display: 'flex', gap: '16px', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderBottom: '1px solid var(--border-rgba-05)', flexWrap: 'wrap' }}>
               <div className="category-bar" style={{ display: 'flex', gap: '10px', overflowX: 'auto', flex: 1, minWidth: 0 }}>
-                <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>ALL ITEMS</button>
+                <button onClick={() => { setSelectedCategory('all'); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === 'all' ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                   {user?.app_language === 'mr' ? 'सर्व पदार्थ' : 'ALL ITEMS'}
+                </button>
                 {categories.filter(cat => allItems.some(item => String(item.category_id) === String(cat.id))).map(cat => (
-                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>{cat.name.toUpperCase()}</button>
+                  <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setCurrentPage(1); }} style={{padding: '10px 20px', borderRadius: '12px', border: 'none', fontWeight: 900, cursor: 'pointer', backgroundColor: selectedCategory === cat.id ? '#0ea5e9' : 'var(--bg-border)', color: 'var(--text-primary)', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                     {user?.app_language === 'mr' ? ((cat.marathi_name || cat.name).toUpperCase()) : cat.name.toUpperCase()}
+                  </button>
                 ))}
               </div>
 
@@ -543,7 +579,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                       <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{padding: '14px 20px', cursor: 'pointer', borderBottom: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: '0.2s' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <Plus size={14} color="#0ea5e9" />
-                          <span>{s.name}</span>
+                          <span>{user?.app_language === 'mr' ? (s.marathi_name || s.name) : s.name}</span>
                         </div>
                         <span style={{ color: '#10b981' }}>₹{s.price}</span>
                       </div>
@@ -606,9 +642,16 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                   e.currentTarget.style.transform = 'translateX(0)';
                 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase' }}>{item.name}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 800, backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>{item.category_name?.toUpperCase()}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <span style={{fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
+                         {user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
+                      </span>
+                      {user?.app_language === 'hinglish' && item.marathi_name && (
+                         <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 800 }}>{item.marathi_name}</span>
+                      )}
+                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 800, backgroundColor: 'rgba(100, 116, 139, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+                         {user?.app_language === 'mr' ? translateCategory(item.category_name) : item.category_name?.toUpperCase()}
+                      </span>
                     </div>
                     <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>{item.description || 'Standard culinary selection'}</p>
                   </div>
@@ -671,7 +714,14 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
               {orderItems.map(item => (
                 <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px' }}>
                   <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                    <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                    <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                       {user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
+                    </div>
+                    {user?.app_language === 'hinglish' && item.marathi_name && (
+                        <div style={{color: 'var(--text-muted)', fontWeight: 700, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                           {item.marathi_name}
+                        </div>
+                    )}
                     {editingPriceId === item.id ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
                          <span style={{ color: '#10b981', fontSize: '12px' }}>₹</span>
@@ -826,7 +876,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                    </div>
                    {billData.items.map((i, idx) => (
                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: 'white' }}>
-                        <span>{i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.app_language === 'mr' ? (i.marathi_name || i.name) : i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
                       </div>
                    ))}
                 </div>

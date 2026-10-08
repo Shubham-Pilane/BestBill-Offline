@@ -39,6 +39,7 @@ const syncSchema = async () => {
                 id SERIAL PRIMARY KEY,
                 hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
                 name VARCHAR(100) NOT NULL,
+                marathi_name VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_deleted BOOLEAN DEFAULT false
             )`,
@@ -277,6 +278,10 @@ const syncSchema = async () => {
 
         // 3. Schema Evolution (Column Checks)
         const migrations = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS app_language VARCHAR(20) DEFAULT 'en'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS print_lang_kot VARCHAR(20) DEFAULT 'en'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS print_lang_bill VARCHAR(20) DEFAULT 'en'",
+            "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS marathi_name VARCHAR(255)",
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS printed_quantity INTEGER DEFAULT 0",
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS max_quantity INTEGER DEFAULT 0",
             "UPDATE order_items SET max_quantity = quantity WHERE max_quantity IS NULL OR max_quantity = 0",

@@ -23,7 +23,7 @@ router.get('/', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
     const result = await db.query(
-      'SELECT u.id, u.name, u.email, u.role, COALESCE(h.id, h2.id) as hotel_id, COALESCE(h.name, h2.name) as hotel_name, COALESCE(h.upi_id, h2.upi_id) as upi_id, COALESCE(h.printer_size, h2.printer_size) as printer_size FROM users u LEFT JOIN hotels h ON u.hotel_id = h.id LEFT JOIN hotels h2 ON h2.owner_id = u.id WHERE u.id = $1 LIMIT 1',
+      'SELECT u.id, u.name, u.email, u.role, u.app_language, u.print_lang_kot, u.print_lang_bill, COALESCE(h.id, h2.id) as hotel_id, COALESCE(h.name, h2.name) as hotel_name, COALESCE(h.upi_id, h2.upi_id) as upi_id, COALESCE(h.printer_size, h2.printer_size) as printer_size FROM users u LEFT JOIN hotels h ON u.hotel_id = h.id LEFT JOIN hotels h2 ON h2.owner_id = u.id WHERE u.id = $1 LIMIT 1',
       [userId]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
@@ -36,7 +36,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Update Profile
 router.put('/', authenticateToken, async (req, res) => {
-  const { name, email, password, upi_id } = req.body;
+  const { name, email, password, upi_id, app_language, print_lang_kot, print_lang_bill } = req.body;
   const userId = req.user.id;
   const hotelId = req.user.hotel_id;
 
@@ -48,15 +48,15 @@ router.put('/', authenticateToken, async (req, res) => {
     }
 
     // Update user info
-    let userQuery = 'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email)';
-    const userParams = [name, email];
+    let userQuery = 'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), app_language = COALESCE($3, app_language), print_lang_kot = COALESCE($4, print_lang_kot), print_lang_bill = COALESCE($5, print_lang_bill)';
+    const userParams = [name, email, app_language, print_lang_kot, print_lang_bill];
 
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
-      userQuery += ', password = $3 WHERE id = $4';
+      userQuery += ', password = $6 WHERE id = $7';
       userParams.push(hashedPassword, userId);
     } else {
-      userQuery += ' WHERE id = $3';
+      userQuery += ' WHERE id = $6';
       userParams.push(userId);
     }
 
@@ -68,7 +68,7 @@ router.put('/', authenticateToken, async (req, res) => {
     }
     
     const updated = await db.query(
-      'SELECT u.name, u.email, u.role, h.id as hotel_id, h.name as hotel_name, h.upi_id, h.printer_size, h.subscription_valid_until FROM users u LEFT JOIN hotels h ON u.id = h.owner_id WHERE u.id = $1',
+      'SELECT u.name, u.email, u.role, u.app_language, u.print_lang_kot, u.print_lang_bill, h.id as hotel_id, h.name as hotel_name, h.upi_id, h.printer_size, h.subscription_valid_until FROM users u LEFT JOIN hotels h ON u.id = h.owner_id WHERE u.id = $1',
       [userId]
     );
     
