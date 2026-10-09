@@ -20,6 +20,7 @@ const BillingHistory = () => {
     const [customerPhone, setCustomerPhone] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
+    const [allItems, setAllItems] = useState([]);
 
     const [activeView, setActiveView] = useState('history'); // 'history' or 'analytics'
     const [analyticsFilter, setAnalyticsFilter] = useState('Today'); // 'Today', 'Month', 'Year', 'Custom'
@@ -83,6 +84,10 @@ const BillingHistory = () => {
                 return { ...b, parsedItems };
             });
             setBills(parsedData);
+            
+            // Fetch all items for translation
+            const itemsRes = await api.get('/menu/items');
+            setAllItems(Array.isArray(itemsRes.data) ? itemsRes.data : []);
         } catch (err) {
             toast.error('Failed to load transaction history');
         } finally {
@@ -711,7 +716,7 @@ const BillingHistory = () => {
                                         ) : (
                                             itemSales.map((item, i) => (
                                                 <tr key={i}>
-                                                    <td style={tdStyle}>{item.name}</td>
+                                                    <td style={tdStyle}>{user?.app_language === 'mr' ? (allItems.find(a => a.name === item.name)?.marathi_name || item.name) : item.name}</td>
                                                     <td style={tdStyle}>{item.quantity}</td>
                                                     <td style={{...tdStyle, color: '#10b981', fontWeight: 800}}>₹{item.revenue.toFixed(2)}</td>
                                                 </tr>
@@ -761,7 +766,7 @@ const BillingHistory = () => {
                         ) : (
                             (selectedBill.items || []).map((i, idx) => (
                                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: selectedBill.is_paid ? 'white' : 'var(--text-primary)' }}>
-                                <span>{i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                                <span>{user?.app_language === 'mr' ? (allItems.find(item => item.name === i.name)?.marathi_name || i.name) : i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
                                 </div>
                             ))
                         )}

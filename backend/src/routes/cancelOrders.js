@@ -138,11 +138,15 @@ router.post('/:id/print', auth, async (req, res) => {
             return res.status(404).json({ message: 'Cancelled order not found' });
         }
 
+        const { translatedItems } = req.body || {};
+        
         const cancelledOrder = dataRes.rows[0];
-        let items = [];
-        try {
-            items = JSON.parse(cancelledOrder.items_json);
-        } catch (e) {}
+        let items = translatedItems || [];
+        if (!items || items.length === 0) {
+            try {
+                items = JSON.parse(cancelledOrder.items_json);
+            } catch (e) {}
+        }
 
         const printed = printService.sendCancelOrder({
             hotelId: req.user.hotel_id,

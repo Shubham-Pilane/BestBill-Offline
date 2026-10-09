@@ -53,6 +53,8 @@ async function processQueue() {
         await executePrint('kitchen', currentJob.payload);
       } else if (currentJob.type === 'FINAL_BILL') {
         await executePrint('billing', currentJob.payload);
+      } else if (currentJob.type === 'CANCEL_ORDER') {
+        await executePrint('billing', currentJob.payload);
       }
       success = true;
       logger.info(`Job [${currentJob.type}] printed successfully on attempt ${attempt}`);

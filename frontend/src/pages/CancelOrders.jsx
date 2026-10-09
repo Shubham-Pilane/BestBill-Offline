@@ -26,6 +26,7 @@ const CancelOrders = () => {
     const [totalCount, setTotalCount] = useState(0);
     const [cancelledOrders, setCancelledOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [allItems, setAllItems] = useState([]);
 
     // Modal state
     const [showDetailModal, setShowDetailModal] = useState(false);
@@ -53,6 +54,9 @@ const CancelOrders = () => {
             setCancelledOrders(parsedRows);
             setTotalCount(res.data.totalCount || 0);
             setTotalPages(res.data.totalPages || 1);
+
+            const itemsRes = await api.get('/menu/items');
+            setAllItems(Array.isArray(itemsRes.data) ? itemsRes.data : []);
         } catch (err) {
             toast.error('Failed to load cancelled orders');
         } finally {
@@ -64,11 +68,17 @@ const CancelOrders = () => {
         fetchCancelledOrders();
     }, [currentPage]);
 
-    const handlePrintCancelOrder = async (id) => {
-        setPrintingId(id);
+    const handlePrintCancelOrder = async (orderId) => {
+        setPrintingId(orderId);
         const t = toast.loading('Sending Cancel Order slip to printer...');
         try {
-            await api.post(`/cancel-orders/${id}/print`);
+            const targetOrder = cancelledOrders.find(o => o.id === orderId);
+            const translatedItems = (targetOrder?.parsedItems || []).map(item => ({
+                ...item,
+                name: user?.app_language === 'mr' ? (allItems.find(a => a.name === item.name)?.marathi_name || item.name) : item.name
+            }));
+            
+            await api.post(`/cancel-orders/${orderId}/print`, { translatedItems });
             toast.success('Cancel Order slip spooled to printer!', { id: t, icon: '🖨️' });
         } catch (err) {
             toast.error('Failed to print Cancel Order slip', { id: t });
@@ -380,7 +390,7 @@ const CancelOrders = () => {
                                                     const price = parseFloat(item.price || 0);
                                                     return (
                                                         <tr key={idx} style={{ borderBottom: '1px solid var(--border-rgba-05)' }}>
-                                                            <td style={{ padding: '12px 16px', fontWeight: 800, color: 'var(--text-primary)' }}>{item.name}</td>
+                                                            <td style={{ padding: '12px 16px', fontWeight: 800, color: 'var(--text-primary)' }}>{user?.app_language === 'mr' ? (allItems.find(a => a.name === item.name)?.marathi_name || item.name) : item.name}</td>
                                                             <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 800, color: 'var(--text-primary)' }}>{qty}</td>
                                                             <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--text-muted)' }}>₹{price.toFixed(2)}</td>
                                                             <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 900, color: 'var(--text-primary)' }}>₹{(price * qty).toFixed(2)}</td>

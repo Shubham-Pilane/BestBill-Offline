@@ -957,7 +957,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                     {t('send_to_kitchen', 'SEND TO KITCHEN')}
                   </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {t('cancel_order', 'CANCEL ORDER')}
                     </button>
                   )}
@@ -971,7 +971,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                     {t('settle_transaction', 'SETTLE TRANSACTION')}
                   </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {t('cancel_order', 'CANCEL ORDER')}
                     </button>
                   )}
@@ -982,7 +982,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                     {t('settle_transaction', 'SETTLE TRANSACTION')}
                   </button>
                   {isCancelEnabled && (
-                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#16a34a', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <button disabled={orderItems.length === 0} onClick={() => setShowCancelConfirmModal(true)} style={{ padding: '10px 6px', borderRadius: '10px', backgroundColor: '#ef4444', color: 'white', border: 'none', fontWeight: 900, fontSize: '11px', cursor: 'pointer', opacity: orderItems.length === 0 ? 0.3 : 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {t('cancel_order', 'CANCEL ORDER')}
                     </button>
                   )}

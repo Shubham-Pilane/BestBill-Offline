@@ -845,35 +845,75 @@ function formatCancelOrder(data) {
   builder.line('=', LINE_WIDTH);
 
   const orderNumStr = String(data.orderNumber || data.id || 'N/A');
-  builder.alignLeft().bold(true).text(mg + `Order No : ${orderNumStr}`).bold(false);
-  builder.text(mg + `Table    : ${data.table || 'N/A'} ${data.floor ? '(' + data.floor + ')' : ''}`);
-  builder.text(mg + `By       : ${data.cancelledBy || 'Staff'}`);
+  builder.alignLeft().bold(true).text(mg + padText(`TABLE NO: ${data.table || 'N/A'}`, LINE_WIDTH - 15) + padText(`ORD NO: #${orderNumStr}`, 15, 'right')).bold(false);
   
   const cDate = data.cancelDate ? new Date(data.cancelDate) : new Date();
-  builder.text(mg + `Date/Time: ${cDate.toLocaleDateString()} ${cDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
-  builder.text(mg + `KOT      : ${data.kotStatus || 'Not Printed'}`);
-  builder.text(mg + `Billing  : ${data.billingStatus || 'Not Settled'}`);
-
+  builder.text(mg + `DATE: ${cDate.toLocaleDateString()} ${cDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+  builder.text(mg + `By: ${data.cancelledBy || 'Staff'}`);
   if (data.cancellationReason) {
-    builder.text(mg + `Reason   : ${data.cancellationReason}`);
+    builder.text(mg + `Reason: ${data.cancellationReason}`);
   }
 
   builder.line('-', LINE_WIDTH);
-  builder.bold(true).text(mg + padText('Item Name', LINE_WIDTH - 12) + padText('Qty', 4, 'right') + padText('Amount', 8, 'right')).bold(false);
+
+  const PRC_LEN = is58mm ? 6 : 8;
+  const QTY_LEN = is58mm ? 3 : 4;
+  const TOT_LEN = is58mm ? 7 : 8;
+  const ACTUAL_ITEM_LEN = LINE_WIDTH - (PRC_LEN + QTY_LEN + TOT_LEN + 3);
+
+  const isMarathi = data.items && data.items.some(i => containsDevanagari(i.name));
+  const paperOpt = { paperSize: is58mm ? '58mm' : '80mm' };
+
+  if (isMarathi) {
+    const headerBuf = renderTableHeaderToRaster({ ...paperOpt, isKOT: false });
+    if (headerBuf.length > 0) {
+      builder.bufferList.push(headerBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.bold(true).text(
+        mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
+        padText('PRICE', PRC_LEN, 'right') + ' ' + 
+        padText('QTY', QTY_LEN, 'right') + ' ' + 
+        padText('TOTAL', TOT_LEN, 'right')
+      ).bold(false);
+    }
+  } else {
+    builder.bold(true).text(
+      mg + padText('ITEM', ACTUAL_ITEM_LEN) + ' ' +
+      padText('PRICE', PRC_LEN, 'right') + ' ' + 
+      padText('QTY', QTY_LEN, 'right') + ' ' + 
+      padText('TOTAL', TOT_LEN, 'right')
+    ).bold(false);
+  }
+
   builder.line('-', LINE_WIDTH);
 
   (data.items || []).forEach(i => {
     const qty = i.quantity || i.qty || 1;
     const price = parseFloat(i.price || 0);
     const amt = price * qty;
+    
+    if (containsDevanagari(i.name)) {
+      try {
+        const rasterBuf = renderItemRowToRaster({ ...i, qty, amt, price }, { paperSize: is58mm ? '58mm' : '80mm' });
+        if (rasterBuf && rasterBuf.length > 0) {
+          builder.bufferList.push(rasterBuf);
+          builder.bufferList.push(Buffer.from([0x0A]));
+          return;
+        }
+      } catch (e) {
+        console.error('[DEVANAGARI CANCEL ORDER RENDER ERROR]', e);
+      }
+    }
+
     const nameStr = toTitleCase(String(i.name || 'Item'));
-    const itemMaxLen = LINE_WIDTH - 13;
-    const firstChunk = nameStr.substring(0, itemMaxLen);
+    const firstChunk = nameStr.substring(0, ACTUAL_ITEM_LEN);
     
     builder.text(
-      mg + padText(firstChunk, itemMaxLen) + ' ' +
-      padText(qty, 4, 'right') + ' ' +
-      padText(Math.round(amt), 7, 'right')
+      mg + padText(firstChunk, ACTUAL_ITEM_LEN) + ' ' +
+      padText(Math.round(price), PRC_LEN, 'right') + ' ' +
+      padText(qty, QTY_LEN, 'right') + ' ' +
+      padText(Math.round(amt), TOT_LEN, 'right')
     );
   });
 
