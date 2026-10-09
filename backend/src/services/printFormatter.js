@@ -919,7 +919,20 @@ function formatCancelOrder(data) {
 
   builder.line('-', LINE_WIDTH);
   const totalVal = parseFloat(data.totalAmount || 0);
-  builder.bold(true).text(mg + padText(`CANCELLED TOTAL: Rs ${Math.round(totalVal)}`, LINE_WIDTH, 'right')).bold(false);
+  const totalText = isMarathi ? `रद्द एकूण रक्कम: ₹ ${Math.round(totalVal)}` : `CANCEL TOTAL: Rs ${Math.round(totalVal)}`;
+  
+  if (isMarathi) {
+    const totalBuf = renderTextLineToRaster(totalText, { ...paperOpt, align: 'right', bold: true });
+    if (totalBuf.length > 0) {
+      builder.bufferList.push(totalBuf);
+      builder.bufferList.push(Buffer.from([0x0A]));
+    } else {
+      builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+    }
+  } else {
+    builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
+  }
+  
   builder.line('=', LINE_WIDTH);
 
   // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")

@@ -576,7 +576,7 @@ export const translations = {
     "nav_inventory": "इन्व्हेंटरी व्यवस्थापन",
     "nav_credit_management": "उधारी व्यवस्थापन",
     "nav_expense": "खर्च व्यवस्थापन",
-    "nav_cancel_orders": "ऑर्डर्स रद्द करा",
+    "nav_cancel_orders": "रद्द ऑर्डर्स इतिहास",
     "nav_guest_orders": "गेस्ट ऑर्डर्स",
     "nav_profile_settings": "प्रोफाइल सेटिंग्ज",
     "nav_customer_care": "कस्टमर केअर",
