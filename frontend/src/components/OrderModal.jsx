@@ -1408,7 +1408,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
               <button 
                 type="button" 
                 onClick={handleConfirmClearTable}
-                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#16a34a', color: 'white', fontWeight: 900, cursor: 'pointer' }}
+                style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', backgroundColor: '#ef4444', color: 'white', fontWeight: 900, cursor: 'pointer' }}
               >
                 Confirm Cancel
               </button>
