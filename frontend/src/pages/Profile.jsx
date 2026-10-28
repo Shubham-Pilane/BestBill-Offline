@@ -952,10 +952,13 @@ const Profile = () => {
                 ...user, 
                 hotel_name: res.data.name, 
                 hotel_address: res.data.address,
+                hotel_location: res.data.address,
+                hotel_phone: res.data.phone,
                 upi_id: res.data.upi_id, 
                 gst_percentage: res.data.gst_percentage,
                 printer_size: res.data.printer_size,
-                billing_method: res.data.billing_method
+                billing_method: res.data.billing_method,
+                fssai_number: res.data.fssai_number
             });
             toast.success('Hotel configuration persisted!', { id: t });
         } catch (err) {
@@ -1157,12 +1160,12 @@ const Profile = () => {
                                             />
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>FSSAI NUMBER</label>
+                                            <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>FSSI NO</label>
                                             <input 
                                                 type="text"
                                                 maxLength={14}
                                                 value={hotelData.fssai_number} 
-                                                onChange={e => setHotelData({ ...hotelData, fssai_number: e.target.value.replace(/[^0-9]/g, '').slice(0, 14) })} 
+                                                onChange={e => setHotelData({ ...hotelData, fssai_number: e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10) })} 
                                                 style={{width: '100%', padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500, outline: 'none' }} 
                                             />
                                         </div>

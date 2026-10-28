@@ -536,7 +536,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     const finalVal = parseFloat(billData.final_amount);
     const discountAmt = billData.discount_amount !== undefined ? parseFloat(billData.discount_amount) : (preVal - finalVal);
     
-    let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} RECEIPT ---*\n\n`;
+    let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} RECEIPT ---*\n`;
+    if (user?.hotel_location) msg += `${user.hotel_location}\n`;
+    if (user?.hotel_phone) msg += `Phone: ${user.hotel_phone}\n`;
+    if (user?.fssai_number) msg += `FSSI No: ${user.fssai_number}\n`;
+    msg += `\n`;
     msg += `Table No: ${table.table_numberByFloor || table.table_number}\n`;
     msg += `Bill No: #${billData.id}\n`;
     msg += `Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
@@ -544,7 +548,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     (billData.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
     msg += `\n*------------------------*\n`;
     msg += `*Subtotal:* ₹${subVal.toFixed(2)}\n`;
-    msg += `*GST (${billData.gst_percentage}%):* ₹${taxVal.toFixed(2)}\n`;
+    if (parseFloat(billData.gst_percentage) > 0 && taxVal > 0) msg += `*GST (${billData.gst_percentage}%):* ₹${taxVal.toFixed(2)}\n`;
     if (discountAmt > 0) msg += `*Discount (${billData.discount_percentage}%):* -₹${discountAmt.toFixed(2)}\n`;
     msg += `*GRAND TOTAL: ₹${finalVal.toFixed(2)}*\n`;
     msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;

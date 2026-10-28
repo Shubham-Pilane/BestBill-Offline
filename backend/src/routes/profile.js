@@ -23,7 +23,7 @@ router.get('/', authenticateToken, async (req, res) => {
   const userId = req.user.id;
   try {
     const result = await db.query(
-      'SELECT u.id, u.name, u.email, u.role, u.app_language, u.print_lang_kot, u.print_lang_bill, COALESCE(h.id, h2.id) as hotel_id, COALESCE(h.name, h2.name) as hotel_name, COALESCE(h.upi_id, h2.upi_id) as upi_id, COALESCE(h.printer_size, h2.printer_size) as printer_size FROM users u LEFT JOIN hotels h ON u.hotel_id = h.id LEFT JOIN hotels h2 ON h2.owner_id = u.id WHERE u.id = $1 LIMIT 1',
+      'SELECT u.id, u.name, u.email, u.role, u.app_language, u.print_lang_kot, u.print_lang_bill, COALESCE(h.id, h2.id) as hotel_id, COALESCE(h.name, h2.name) as hotel_name, COALESCE(h.upi_id, h2.upi_id) as upi_id, COALESCE(h.printer_size, h2.printer_size) as printer_size, COALESCE(h.fssai_number, h2.fssai_number) as fssai_number, COALESCE(h.location, h2.location) as hotel_location, COALESCE(h.phone, h2.phone) as hotel_phone, COALESCE(h.gst_percentage, h2.gst_percentage) as gst_percentage FROM users u LEFT JOIN hotels h ON u.hotel_id = h.id LEFT JOIN hotels h2 ON h2.owner_id = u.id WHERE u.id = $1 LIMIT 1',
       [userId]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });

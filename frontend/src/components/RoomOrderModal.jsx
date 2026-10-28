@@ -354,7 +354,11 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
   const shareViaWhatsApp = () => {
     if (!customerPhone) return toast.error('Enter guest phone number');
-    let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} ---*\n\n`;
+    let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} ---*\n`;
+    if (user?.hotel_location) msg += `${user.hotel_location}\n`;
+    if (user?.hotel_phone) msg += `Phone: ${user.hotel_phone}\n`;
+    if (user?.fssai_number) msg += `FSSI No: ${user.fssai_number}\n`;
+    msg += `\n`;
     msg += `Room: ${room.room_number}\nGuest: ${room.guest_name}\nBill No: #${billData.id}\n`;
     msg += `\n*Items:*\n• Room Charge: ₹${billData.room_charge}\n`;
     (billData.items || []).forEach(i => msg += `• ${i.name} x ${i.quantity} = ₹${(i.price * i.quantity).toFixed(2)}\n`);

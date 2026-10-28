@@ -167,7 +167,7 @@ export const createBillPDFDocDefinition = (billData, hotelInfo = {}) => {
               address ? { text: address, fontSize: 9, color: '#64748b' } : {},
               phone ? { text: `Phone: ${phone}${email ? ` | Email: ${email}` : ''}`, fontSize: 9, color: '#64748b' } : {},
               (gstNo || fssaiNo) ? {
-                text: `${gstNo ? `GSTIN: ${gstNo} ` : ''}${fssaiNo ? `FSSAI: ${fssaiNo}` : ''}`,
+                text: `${gstNo ? `GSTIN: ${gstNo} ` : ''}${fssaiNo ? `FSSI No: ${fssaiNo}` : ''}`,
                 fontSize: 9,
                 bold: true,
                 color: '#334155',

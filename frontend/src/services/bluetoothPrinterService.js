@@ -454,7 +454,7 @@ export async function formatBill(data, printerSize = '58mm') {
     wordWrap(data.hotelLocation, LINE_WIDTH).forEach(l => builder.text(l));
   }
   if (data.hotelPhone) builder.text(`Phone: ${data.hotelPhone}`);
-  if (data.hotelFssai) builder.text(`FSSAI: ${data.hotelFssai}`);
+  if (data.hotelFssai) builder.text(`FSSI No: ${data.hotelFssai}`);
 
   const billNoStr = data.billId || data.orderNumber || data.order_number || data.id || 'N/A';
   builder.line('=', LINE_WIDTH)

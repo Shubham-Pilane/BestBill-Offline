@@ -1,0 +1,85 @@
+Category,Marathi_Category,Name,Price,Marathi_Name
+BHOJ,भोज,SOY BHAJI,100,सोयाभाजी
+BHOJ,भोज,METHI TADKA,140,मेथी तडका
+BHOJ,भोज,MUG DAL BHAJI,100,मुग डाळ भाजी
+BHOJ,भोज,DAL TADKA,100,दाल तडका
+BHOJ,भोज,ALOO MATAR,140,आलू मटर
+BHOJ,भोज,BHENDI GRAVY,100,भेंडी ग्रेव्ही
+BHOJ,भोज,BHENDI MASALA,120,भेंडी मसाला
+BHOJ,भोज,MATAR MASALA,140,मटर मसाला
+BHOJ,भोज,LASUN METHI,130,लसूण मेथी
+BHOJ,भोज,HIRAVA MASALA,140,हिरवा मसाला
+BHOJ,भोज,MIRCHI MASALA,140,मिरची मसाला
+BHOJ,भोज,VEG KOLHAPURI,180,वेज कोलापुरी
+BHOJ,भोज,PANEER MASALA,180,पनीर मसाला
+BHOJ,भोज,SHAHI MASALA,160,शाही मसाला
+BHOJ,भोज,PANEER BHURTA,190,पनीर भटा
+BHOJ,भोज,PANEER HANDI,300,पनीर हंडी
+BHOJ,भोज,MATAR PANEER,180,मटर पनीर
+BHOJ,भोज,BUTTER PANEER MASALA,230,बटर पनीर मसाला
+BHOJ,भोज,KAJU CURRY,200,काजू करी
+BHOJ,भोज,KAJU MASALA,180,काजू मसाला
+BHOJ,भोज,MIRCHI THECHA,120,मिरची ठेचा
+BHOJ,भोज,VANGI MASALA,120,वांगी मसाला
+BHOJ,भोज,VANGI BHARLI,140,वांगी भरली
+BHOJ,भोज,VANGI CURRY,130,वांगी करी
+CHINESE,चायनिज,SOYABEAN BHINDI,100,सोयाबीन भिंडी
+CHINESE,चायनिज,PANEER BHINDI,200,पनीर भिंडी
+CHINESE,चायनिज,CHANA BHINDI,120,चना भिंडी
+CHINESE,चायनिज,VEG MANCHURIAN,160,वेज म्युंचुरियन
+CHINESE,चायनिज,VEG 65,180,वेज 65
+SNACKS,स्नॅक्स,ZUNKA ROST,140,झुणका रोस्ट
+SNACKS,स्नॅक्स,CHANA ROST,140,चना रोस्ट
+SNACKS,स्नॅक्स,CHANA FRY,120,चना फ्राय
+SNACKS,स्नॅक्स,LASUN BHAJI,120,लसूण भाजी
+SNACKS,स्नॅक्स,ALU VADI FRY,60,अळू वडी फ्राय
+RICE,राईस,SIMPLE RICE HALF,40,सिंपल राईस हाफ
+RICE,राईस,SIMPLE RICE FULL,60,सिंपल राईस फुल
+RICE,राईस,JEERA RICE HALF,40,जिरा राईस हाफ
+RICE,राईस,JEERA RICE FULL,80,जिरा राईस फुल
+RICE,राईस,DAL KHICHDI,130,दाल खिचडी
+RICE,राईस,BUTTER DAL KHICHDI,140,बटर दाल खिचडी
+RICE,राईस,VEG BIRYANI,160,वेज बिरयाणी
+RICE,राईस,MASALA RICE,130,मसाला राईस
+PAPAD,पापड,UDID PAPAD ROST,40,उडीद पापड रोस्ट
+PAPAD,पापड,NACHNI PAPAD ROST,40,नाचणी पापड रोस्ट
+PAPAD,पापड,UDID MASALA PAPAD,40,उडीद मसाला पापड
+PAPAD,पापड,NACHNI MASALA PAPAD,40,नाचणी मसाला पापड
+PAPAD,पापड,UDID PAPAD FRY,60,उडीद पापड फ्राय
+PAPAD,पापड,NACHNI PAPAD FRY,60,नाचणी पापड फ्राय
+CHAPATI,चपाती,TAWA CHAPATI,12,तवा चपाती
+CHAPATI,चपाती,BUTTER CHAPATI,15,बटर चपाती
+CHAPATI,चपाती,BAJARI BHAKRI,20,बाजरी भाकरी
+CHAPATI,चपाती,BUTTER BHAKRI,25,बटर भाकरी
+COLD DRINKS,कोल्डड्रिंक्स,SPRITE,20,स्प्राईट
+COLD DRINKS,कोल्डड्रिंक्स,SODA,20,सोडा
+COLD DRINKS,कोल्डड्रिंक्स,PEPSI,20,पेप्सी
+COLD DRINKS,कोल्डड्रिंक्स,THUMS UP,20,थम्सअप
+COLD DRINKS,कोल्डड्रिंक्स,BISLERI,20,बिसलरी
+NON VEG STARTERS,नॉन वेज स्टार्टर,CHICKEN CHILLI,300,चिकन चिली
+NON VEG STARTERS,नॉन वेज स्टार्टर,CHICKEN LOLLIPOP,160,चिकन लॉलीपॉप
+NON VEG STARTERS,नॉन वेज स्टार्टर,CHICKEN DRUMSTICK,180,चिकन ड्रमस्टिक
+NON VEG STARTERS,नॉन वेज स्टार्टर,ANDA CHILLI,160,अंडा चिली
+CHICKEN,चिकन,CHICKEN HANDI HALF,200,चिकन हंडी हाफ
+CHICKEN,चिकन,CHICKEN HANDI FULL,400,चिकन हंडी फुल
+CHICKEN,चिकन,CHICKEN MASALA,180,चिकन मसाला
+CHICKEN,चिकन,CHICKEN FRY,180,चिकन फ्राय
+CHICKEN,चिकन,CHICKEN CURRY,180,चिकन करी
+CHICKEN,चिकन,CHICKEN ROST,160,चिकन रोस्ट
+CHICKEN,चिकन,CHICKEN BIRYANI,200,चिकन बिरयाणी
+MUTTON,मटन,MUTTON HANDI HALF,300,मटन हंडी हाफ
+MUTTON,मटन,MUTTON HANDI FULL,600,मटन हंडी फुल
+MUTTON,मटन,MUTTON MASALA,280,मटन मसाला
+MUTTON,मटन,MUTTON FRY,220,मटन फ्राय
+MUTTON,मटन,MUTTON ROST,200,मटन रोस्ट
+MUTTON,मटन,MUTTON BIRYANI,250,मटन बिरयाणी
+EGG,अंडा,ANDA BHURJI,60,अंडा भुर्जी
+EGG,अंडा,ANDA BHURJI BHAJI,70,अंडा भुर्जी भाजी
+EGG,अंडा,ANDA OMLETTE,90,अंडा ऑमलेट
+EGG,अंडा,ANDA HALF FRY,30,अंडा हाफ फ्राय
+EGG,अंडा,ANDA CURRY,100,अंडा करी
+EGG,अंडा,ANDA MASALA,100,अंडा मसाला
+EGG,अंडा,ANDA BIRYANI,150,अंडा बिरयाणी
+BULK ORDERS,तयार करून देणे,MUTTON AND CHICKEN 1 KG,350,मटन व चिकन १ किलो
+BULK ORDERS,तयार करून देणे,CHICKEN BIRYANI 1 KG,450,चिकन बिरयाणी १ किलो
+BULK ORDERS,तयार करून देणे,MUTTON ROST 1 KG,200,मटन रोस्ट १ किलो

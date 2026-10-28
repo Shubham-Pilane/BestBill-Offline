@@ -577,7 +577,7 @@ function formatBill(data) {
     builder.text('Email: ' + data.hotelEmail);
   }
   if (data.hotelFssai) {
-    builder.text('FSSAI No: ' + data.hotelFssai);
+    builder.text('FSSI No: ' + data.hotelFssai);
   }
   
   builder.alignLeft();

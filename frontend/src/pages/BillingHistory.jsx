@@ -280,7 +280,7 @@ const BillingHistory = () => {
                 { text: (user?.hotel_name || 'BESTBILL').toUpperCase(), style: 'header', alignment: 'center' },
                 { text: user?.hotel_location || 'Address not available', alignment: 'center', margin: [0, 0, 0, 5] },
                 { text: `Mobile: ${user?.hotel_phone || 'N/A'}`, alignment: 'center' },
-                user?.fssai_number ? { text: `FSSAI: ${user.fssai_number}`, alignment: 'center' } : {},
+                user?.fssai_number ? { text: `FSSI No: ${user.fssai_number}`, alignment: 'center' } : {},
                 { text: `${analyticsFilter} Sales Report`, style: 'subheader', alignment: 'center', margin: [0, 15, 0, 10] },
             ],
             styles: {
