@@ -337,7 +337,7 @@ export const shareBillPDFViaWhatsApp = (billData, hotelInfo = {}, customerPhone 
         `*------------------------*\n` +
         `*Subtotal:* ₹${formatAmount(subtotalVal)}` +
         `${discountText}\n` +
-        `*GST (${gstPercent}%):* ₹${formatAmount(gstVal)}\n` +
+        (gstPercent > 0 && gstVal > 0 ? `*GST (${gstPercent}%):* ₹${formatAmount(gstVal)}\n` : '') +
         `*GRAND TOTAL:* ₹${formatAmount(totalVal)}\n\n` +
         `*Thank You! Visit Again!*`;
 
