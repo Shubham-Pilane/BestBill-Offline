@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { Receipt, History, IndianRupee, Calendar, Search, Ban, CheckCircle, Phone, Printer, MessageCircle, BarChart2, Download, ArrowLeft, ArrowUp, ArrowDown } from 'lucide-react';
+import { Receipt, History, IndianRupee, Calendar, Search, Ban, CheckCircle, Phone, Printer, MessageCircle, BarChart2, Download, ArrowLeft, ArrowUp, ArrowDown, Edit2 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
+import EditBillModal from '../components/EditBillModal';
 import pdfMake from 'pdfmake/build/pdfmake';
 import pdfFonts from 'pdfmake/build/vfs_fonts';
 
@@ -17,6 +18,7 @@ const BillingHistory = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedBill, setSelectedBill] = useState(null);
+    const [editingBill, setEditingBill] = useState(null);
     const [customerPhone, setCustomerPhone] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
@@ -232,6 +234,22 @@ const BillingHistory = () => {
              setSelectedBill(res.data);
         } catch (err) {
              toast.error('Failed to load bill details');
+        }
+    };
+
+    const handleEditBillClick = async (billId) => {
+        try {
+             const res = await api.get(`/bills/${billId}`);
+             setEditingBill(res.data);
+        } catch (err) {
+             toast.error('Failed to load bill for editing');
+        }
+    };
+
+    const handleBillUpdated = (updatedBill) => {
+        fetchHistory();
+        if (updatedBill && selectedBill && Number(selectedBill.id) === Number(updatedBill.id)) {
+            setSelectedBill(updatedBill);
         }
     };
 
@@ -490,9 +508,14 @@ const BillingHistory = () => {
                                                 )}
                                             </td>
                                             <td style={tdStyle}>
-                                                <button onClick={() => handleBillClick(bill.id)} style={{ padding: '6px 12px', backgroundColor: 'var(--bg-border)', border: 'none', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 700, fontSize: '12px' }}>
-                                                    View Details
-                                                </button>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+                                                    <button onClick={() => handleBillClick(bill.id)} style={{ padding: '6px 12px', backgroundColor: 'var(--bg-border)', border: 'none', borderRadius: '6px', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 700, fontSize: '12px', whiteSpace: 'nowrap' }}>
+                                                        View Details
+                                                    </button>
+                                                    <button onClick={() => handleEditBillClick(bill.id)} style={{ padding: '6px 12px', backgroundColor: 'rgba(14, 165, 233, 0.14)', border: '1px solid rgba(14, 165, 233, 0.45)', borderRadius: '6px', color: '#0ea5e9', cursor: 'pointer', fontWeight: 800, fontSize: '12px', display: 'inline-flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                                                        <Edit2 size={13} /> Edit Bill
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -766,7 +789,7 @@ const BillingHistory = () => {
                         ) : (
                             (selectedBill.items || []).map((i, idx) => (
                                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px', fontSize: '15px', fontWeight: 800, marginBottom: '8px', color: selectedBill.is_paid ? 'white' : 'var(--text-primary)' }}>
-                                <span>{user?.app_language === 'mr' ? (allItems.find(item => item.name === i.name)?.marathi_name || i.name) : i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                                <span>{user?.app_language === 'mr' ? (allItems.find(item => item.name === i.name)?.marathi_name || i.name) : i.name}</span><span style={{ textAlign: 'right' }}>₹{Number.isInteger(Number(i.price)) ? Number(i.price) : Number(i.price).toFixed(2)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
                                 </div>
                             ))
                         )}
@@ -775,6 +798,12 @@ const BillingHistory = () => {
                         <div style={{ borderTop: '1px dashed var(--text-muted)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', color: selectedBill.is_paid ? 'white' : 'var(--text-muted)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>SUBTOTAL</span><span>₹{parseFloat(selectedBill.subtotal || 0).toFixed(2)}</span></div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>GST</span><span>₹{parseFloat(selectedBill.gst || 0).toFixed(2)}</span></div>
+                        {parseFloat(selectedBill.discount_percentage || 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}>
+                                <span>DISCOUNT ({selectedBill.discount_percentage}%)</span>
+                                <span>-₹{(selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : Math.max(0, (parseFloat(selectedBill.subtotal || 0) + parseFloat(selectedBill.gst || 0)) - parseFloat(selectedBill.final_amount || 0))).toFixed(2)}</span>
+                            </div>
+                        )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: selectedBill.is_paid ? 'white' : '#10b981', borderTop: '4px double var(--text-muted)', marginTop: '12px', paddingTop: '12px' }}><span>TOTAL</span><span>₹{parseFloat(selectedBill.final_amount).toFixed(2)}</span></div>
                         </div>
 
@@ -785,7 +814,7 @@ const BillingHistory = () => {
                         </div>
                     </div>
 
-                    <div style={{ width: '380px', padding: '48px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                    <div style={{ width: '380px', padding: '48px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                         <div style={{textAlign: 'center', backgroundColor: 'white', padding: '24px', borderRadius: '32px', display: 'inline-block', margin: '0 auto' }}>
                         <QRCodeCanvas id="history-qr-canvas" value={`upi://pay?pa=${user?.upi_id || ''}&pn=${encodeURIComponent(selectedBill.hotel_name || user?.hotel_name || 'BESTBILL')}&am=${selectedBill.final_amount}&cu=INR`} size={180} />
                         </div>
@@ -799,6 +828,10 @@ const BillingHistory = () => {
                             />
                         </div>
 
+                        <button onClick={() => setEditingBill(selectedBill)} style={{ width: '100%', padding: '16px', borderRadius: '16px', backgroundColor: 'rgba(14, 165, 233, 0.14)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.45)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '900', fontSize: '14px' }}>
+                            <Edit2 size={18} /> Edit Bill
+                        </button>
+
                         <div style={{ display: 'flex', gap: '12px' }}>
                             <button onClick={printBill} style={{flex: 1, padding: '16px', borderRadius: '16px', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', border: '1px solid var(--bg-border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: '800', fontSize: '14px' }}>
                                 <Printer size={18} /> Print
@@ -811,6 +844,15 @@ const BillingHistory = () => {
                     </div>
                 </div>
                 </div>
+            )}
+
+            {/* Edit Bill Modal */}
+            {editingBill && (
+                <EditBillModal
+                    bill={editingBill}
+                    onClose={() => setEditingBill(null)}
+                    onBillUpdated={handleBillUpdated}
+                />
             )}
         </div>
     );

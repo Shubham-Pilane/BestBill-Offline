@@ -87,15 +87,15 @@ async function getReportData(startDate, endDate) {
   // 5. Item Sales summary (uses order_items which is retained for 3 days)
   const itemSummaryRes = await db.query(
     `SELECT 
-       mi.name as item_name, 
+       COALESCE(oi.custom_name, mi.name, 'Other') as item_name, 
        SUM(oi.quantity) as qty, 
-       SUM(oi.quantity * mi.price) as amount
+       SUM(oi.quantity * COALESCE(oi.custom_price, mi.price, 0)) as amount
      FROM order_items oi
-     JOIN menu_items mi ON oi.menu_item_id = mi.id
+     LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
      JOIN orders o ON oi.order_id = o.id
      JOIN bills b ON b.order_id = o.id
-     WHERE date(b.created_at) >= date($1) AND date(b.created_at) <= date($2)
-     GROUP BY mi.name
+     WHERE date(b.created_at) >= date($1) AND date(b.created_at) <= date($2) AND oi.quantity > 0
+     GROUP BY COALESCE(oi.custom_name, mi.name, 'Other')
      ORDER BY qty DESC`,
     [startDate, endDate]
   );
