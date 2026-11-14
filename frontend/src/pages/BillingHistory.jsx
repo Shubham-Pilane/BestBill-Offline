@@ -271,7 +271,10 @@ const BillingHistory = () => {
         }
         const subVal = parseFloat(selectedBill.subtotal || 0);
         const taxVal = parseFloat(selectedBill.gst || 0);
-        const preVal = subVal + taxVal;
+        const cgstVal = parseFloat(selectedBill.cgst || 0);
+        const sgstVal = parseFloat(selectedBill.sgst || 0);
+        const roundOffVal = parseFloat(selectedBill.round_off || 0);
+        const preVal = subVal + taxVal + cgstVal + sgstVal;
         
         let msg = `*--- ${user?.hotel_name?.toUpperCase() || 'BESTBILL'} RECEIPT ---*\n\n`;
         msg += `Table No: ${selectedBill.table_number}\n`;
@@ -281,9 +284,12 @@ const BillingHistory = () => {
         (selectedBill.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
         msg += `\n*------------------------*\n`;
         msg += `*Subtotal:* ₹${subVal.toFixed(2)}\n`;
-        msg += `*GST (${selectedBill.gst_percentage || 0}%):* ₹${taxVal.toFixed(2)}\n`;
-        const discAmt = selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : (preVal - parseFloat(selectedBill.final_amount));
+        if (taxVal > 0) msg += `*GST (${selectedBill.gst_percentage || selectedBill.effective_gst_percentage || 0}%):* ₹${taxVal.toFixed(2)}\n`;
+        if (cgstVal > 0) msg += `*CGST (${selectedBill.cgst_percentage || selectedBill.effective_cgst_percentage || 0}%):* ₹${cgstVal.toFixed(2)}\n`;
+        if (sgstVal > 0) msg += `*SGST (${selectedBill.sgst_percentage || selectedBill.effective_sgst_percentage || 0}%):* ₹${sgstVal.toFixed(2)}\n`;
+        const discAmt = selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : (preVal - (parseFloat(selectedBill.final_amount) - roundOffVal));
         if (discAmt > 0) msg += `*Discount (${selectedBill.discount_percentage}%):* -₹${discAmt.toFixed(2)}\n`;
+        if (roundOffVal > 0) msg += `*Round Off:* +₹${roundOffVal.toFixed(2)}\n`;
         msg += `*GRAND TOTAL: ₹${parseFloat(selectedBill.final_amount).toFixed(2)}*\n`;
         msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;
         
@@ -797,11 +803,25 @@ const BillingHistory = () => {
 
                         <div style={{ borderTop: '1px dashed var(--text-muted)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', color: selectedBill.is_paid ? 'white' : 'var(--text-muted)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>SUBTOTAL</span><span>₹{parseFloat(selectedBill.subtotal || 0).toFixed(2)}</span></div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>GST</span><span>₹{parseFloat(selectedBill.gst || 0).toFixed(2)}</span></div>
+                        {parseFloat(selectedBill.gst || 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>GST {selectedBill.gst_percentage ? `(${selectedBill.gst_percentage}%)` : ''}</span><span>₹{parseFloat(selectedBill.gst).toFixed(2)}</span></div>
+                        )}
+                        {parseFloat(selectedBill.cgst || 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>CGST {selectedBill.cgst_percentage ? `(${selectedBill.cgst_percentage}%)` : ''}</span><span>₹{parseFloat(selectedBill.cgst).toFixed(2)}</span></div>
+                        )}
+                        {parseFloat(selectedBill.sgst || 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}><span>SGST {selectedBill.sgst_percentage ? `(${selectedBill.sgst_percentage}%)` : ''}</span><span>₹{parseFloat(selectedBill.sgst).toFixed(2)}</span></div>
+                        )}
                         {parseFloat(selectedBill.discount_percentage || 0) > 0 && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800 }}>
                                 <span>DISCOUNT ({selectedBill.discount_percentage}%)</span>
-                                <span>-₹{(selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : Math.max(0, (parseFloat(selectedBill.subtotal || 0) + parseFloat(selectedBill.gst || 0)) - parseFloat(selectedBill.final_amount || 0))).toFixed(2)}</span>
+                                <span>-₹{(selectedBill.discount_amount !== undefined ? parseFloat(selectedBill.discount_amount) : Math.max(0, (parseFloat(selectedBill.subtotal || 0) + parseFloat(selectedBill.gst || 0) + parseFloat(selectedBill.cgst || 0) + parseFloat(selectedBill.sgst || 0)) - (parseFloat(selectedBill.final_amount || 0) - parseFloat(selectedBill.round_off || 0)))).toFixed(2)}</span>
+                            </div>
+                        )}
+                        {parseFloat(selectedBill.round_off || 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 800, color: '#38bdf8' }}>
+                                <span>ROUND OFF</span>
+                                <span>+₹{parseFloat(selectedBill.round_off).toFixed(2)}</span>
                             </div>
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: selectedBill.is_paid ? 'white' : '#10b981', borderTop: '4px double var(--text-muted)', marginTop: '12px', paddingTop: '12px' }}><span>TOTAL</span><span>₹{parseFloat(selectedBill.final_amount).toFixed(2)}</span></div>

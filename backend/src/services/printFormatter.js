@@ -517,20 +517,43 @@ function formatBill(data) {
     
     const subtotalVal = parseFloat(data.subtotal || 0);
     const gstVal = parseFloat(data.gst || 0);
+    const cgstVal = parseFloat(data.cgst || 0);
+    const sgstVal = parseFloat(data.sgst || 0);
+    const roundOffVal = parseFloat(data.roundOff !== undefined ? data.roundOff : (data.round_off || 0));
     const finalAmount = parseFloat(data.finalAmount || data.total || 0);
     
     let addedSubItems = false;
+    if (subtotalVal > 0 && (gstVal > 0 || cgstVal > 0 || sgstVal > 0 || data.discountPercentage > 0 || roundOffVal > 0)) {
+      builder.text(mg + padText(`Subtotal:`, LINE_WIDTH - TOT_LEN, 'right') + padText(subtotalVal.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
+
     if (gstVal > 0) {
-      builder.text(mg + padText(`GST (${data.gst_percentage || 5}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
+      builder.text(mg + padText(`GST (${data.gst_percentage || 0}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(gstVal.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
+
+    if (cgstVal > 0) {
+      builder.text(mg + padText(`CGST (${data.cgst_percentage || 0}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(cgstVal.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
+    }
+
+    if (sgstVal > 0) {
+      builder.text(mg + padText(`SGST (${data.sgst_percentage || 0}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText(sgstVal.toFixed(2), TOT_LEN, 'right'));
       addedSubItems = true;
     }
     
     if (data.discountPercentage > 0) {
-      const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+      const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal));
       if (discAmt > 0) {
-        builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+        builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
         addedSubItems = true;
       }
+    }
+
+    if (roundOffVal > 0) {
+      builder.text(mg + padText(`Round Off:`, LINE_WIDTH - TOT_LEN, 'right') + padText('+' + roundOffVal.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
     }
     
     if (addedSubItems) {
@@ -746,22 +769,49 @@ function formatBill(data) {
   
   const subtotalVal = parseFloat(data.subtotal || 0);
   const gstVal = parseFloat(data.gst || 0);
+  const cgstVal = parseFloat(data.cgst || 0);
+  const sgstVal = parseFloat(data.sgst || 0);
+  const roundOffVal = parseFloat(data.roundOff !== undefined ? data.roundOff : (data.round_off || 0));
   const finalAmount = parseFloat(data.finalAmount || data.total || 0);
   
   let addedSubItems = false;
+  if (subtotalVal > 0 && (gstVal > 0 || cgstVal > 0 || sgstVal > 0 || data.discountPercentage > 0 || roundOffVal > 0)) {
+    const subtotalLabel = isMarathi ? `उपएकूण:` : `Subtotal:`;
+    builder.text(mg + padText(subtotalLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(subtotalVal.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
+  }
+
   if (gstVal > 0) {
-    const gstLabel = isMarathi ? `जीएसटी (${data.gst_percentage || 5}%):` : `GST (${data.gst_percentage || 5}%):`;
-    builder.text(mg + padText(gstLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(Math.round(gstVal), TOT_LEN, 'right'));
+    const gstLabel = isMarathi ? `जीएसटी (${data.gst_percentage || 0}%):` : `GST (${data.gst_percentage || 0}%):`;
+    builder.text(mg + padText(gstLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(gstVal.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
+  }
+
+  if (cgstVal > 0) {
+    const cgstLabel = isMarathi ? `सीजीएसटी (${data.cgst_percentage || 0}%):` : `CGST (${data.cgst_percentage || 0}%):`;
+    builder.text(mg + padText(cgstLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(cgstVal.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
+  }
+
+  if (sgstVal > 0) {
+    const sgstLabel = isMarathi ? `एसजीएसटी (${data.sgst_percentage || 0}%):` : `SGST (${data.sgst_percentage || 0}%):`;
+    builder.text(mg + padText(sgstLabel, LINE_WIDTH - TOT_LEN, 'right') + padText(sgstVal.toFixed(2), TOT_LEN, 'right'));
     addedSubItems = true;
   }
   
   if (data.discountPercentage > 0) {
-    const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal) - finalAmount);
+    const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal));
     if (discAmt > 0) {
       const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
-      builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + Math.round(discAmt), TOT_LEN, 'right'));
+      builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
       addedSubItems = true;
     }
+  }
+
+  if (roundOffVal > 0) {
+    const roundOffLabel = isMarathi ? `राउंड ऑफ:` : `Round Off:`;
+    builder.text(mg + padText(roundOffLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('+' + roundOffVal.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
   }
   
   if (addedSubItems) {

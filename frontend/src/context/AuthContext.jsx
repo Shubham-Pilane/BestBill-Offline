@@ -25,6 +25,8 @@ export const AuthProvider = ({ children }) => {
               hotel_phone: res.data.user.hotel_phone || parsed.hotel_phone,
               upi_id: res.data.user.upi_id || parsed.upi_id,
               gst_percentage: res.data.user.gst_percentage ?? parsed.gst_percentage,
+              cgst_percentage: res.data.user.cgst_percentage ?? parsed.cgst_percentage ?? 0,
+              sgst_percentage: res.data.user.sgst_percentage ?? parsed.sgst_percentage ?? 0,
               fssai_number: res.data.user.fssai_number || parsed.fssai_number,
               licenseWarning: subRes.data.warning,
               offlineDays: subRes.data.offlineDays
@@ -41,6 +43,8 @@ export const AuthProvider = ({ children }) => {
               hotel_phone: res.data.user.hotel_phone || parsed.hotel_phone,
               upi_id: res.data.user.upi_id || parsed.upi_id,
               gst_percentage: res.data.user.gst_percentage ?? parsed.gst_percentage,
+              cgst_percentage: res.data.user.cgst_percentage ?? parsed.cgst_percentage ?? 0,
+              sgst_percentage: res.data.user.sgst_percentage ?? parsed.sgst_percentage ?? 0,
               fssai_number: res.data.user.fssai_number || parsed.fssai_number,
             };
             localStorage.setItem('user', JSON.stringify(freshUser));

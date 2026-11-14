@@ -520,16 +520,39 @@ export async function formatBill(data, printerSize = '58mm') {
 
   const labelLen = LINE_WIDTH - amtLen - 1;
   
+  const subtotalVal = Number(data.subtotal || 0);
+  if (subtotalVal > 0) {
+    builder.text(padText('Subtotal:', labelLen) + ' ' + padText(formatAmount(subtotalVal), amtLen, 'right'));
+  }
+
   const gstPct = Number(data.gst_percentage) || 0;
   const gstAmt = Number(data.gst) || 0;
   if (gstPct > 0 || gstAmt > 0) {
     builder.text(padText(`GST (${gstPct}%):`, labelLen) + ' ' + padText(formatAmount(gstAmt), amtLen, 'right'));
   }
 
+  const cgstPct = Number(data.cgst_percentage) || 0;
+  const cgstAmt = Number(data.cgst) || 0;
+  if (cgstPct > 0 || cgstAmt > 0) {
+    builder.text(padText(`CGST (${cgstPct}%):`, labelLen) + ' ' + padText(formatAmount(cgstAmt), amtLen, 'right'));
+  }
+
+  const sgstPct = Number(data.sgst_percentage) || 0;
+  const sgstAmt = Number(data.sgst) || 0;
+  if (sgstPct > 0 || sgstAmt > 0) {
+    builder.text(padText(`SGST (${sgstPct}%):`, labelLen) + ' ' + padText(formatAmount(sgstAmt), amtLen, 'right'));
+  }
+
+  const roundOffVal = Number(data.roundOff !== undefined ? data.roundOff : (data.round_off || 0));
+
   if (data.discountPercentage > 0) {
-    const preVal = Number(data.subtotal || 0) + Number(data.gst || 0);
-    const discAmt = preVal * (data.discountPercentage / 100);
+    const preVal = Number(data.subtotal || 0) + Number(data.gst || 0) + Number(data.cgst || 0) + Number(data.sgst || 0);
+    const discAmt = data.discountAmount !== undefined ? Number(data.discountAmount) : (preVal * (data.discountPercentage / 100));
     builder.text(padText(`Discount (${data.discountPercentage}%):`, labelLen) + ' ' + padText(`-${formatAmount(discAmt)}`, amtLen, 'right'));
+  }
+
+  if (roundOffVal > 0) {
+    builder.text(padText('Round Off:', labelLen) + ' ' + padText(`+${formatAmount(roundOffVal)}`, amtLen, 'right'));
   }
 
   const finalAmountToDisplay = data.finalAmount !== undefined && data.finalAmount !== null

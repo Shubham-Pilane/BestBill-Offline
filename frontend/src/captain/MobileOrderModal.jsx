@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -95,6 +95,25 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const handleDeletePartner = (partnerName) => {
     setPartnerToDelete(partnerName);
   };
+
+  const mobileCalculations = useMemo(() => {
+    const totalSub = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const gstRate = parseFloat(user?.gst_percentage || 0);
+    const cgstRate = parseFloat(user?.cgst_percentage || 0);
+    const sgstRate = parseFloat(user?.sgst_percentage || 0);
+    const gstAmt = Number(((totalSub * gstRate) / 100).toFixed(2));
+    const cgstAmt = Number(((totalSub * cgstRate) / 100).toFixed(2));
+    const sgstAmt = Number(((totalSub * sgstRate) / 100).toFixed(2));
+    const preDisc = totalSub + gstAmt + cgstAmt + sgstAmt;
+    const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
+    const discAmt = Number((preDisc * (discPct / 100)).toFixed(2));
+    const unrounded = Math.max(0, Number((preDisc - discAmt).toFixed(2)));
+    const grandTotal = Math.ceil(unrounded);
+    let roundOff = Number((grandTotal - unrounded).toFixed(2));
+    if (roundOff < 0.001 || roundOff >= 1) roundOff = 0;
+
+    return { totalSub, gstRate, cgstRate, sgstRate, gstAmt, cgstAmt, sgstAmt, discPct, discAmt, unrounded, roundOff, grandTotal };
+  }, [orderItems, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage, discount]);
 
   const isOnlineCounter = String(table?.table_number || table?.id || '').toLowerCase().includes('online');
   const isTokenCounter = String(table?.table_number || table?.id || '').toLowerCase().includes('token');
@@ -985,7 +1004,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                     {orderItems.reduce((acc, i) => acc + i.quantity, 0)} {orderItems.reduce((acc, i) => acc + i.quantity, 0) === 1 ? 'Item' : 'Items'} Added
                   </span>
                   <span style={{ fontSize: '18px', fontWeight: 1000, color: '#ffffff' }}>
-                    ₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}
+                    ₹{mobileCalculations.grandTotal.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -1241,10 +1260,24 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '15px' }}>₹{orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0).toFixed(2)}</span>
                 </div>
                 
-                {Boolean(user?.gst_percentage) && (
+                {mobileCalculations.gstRate > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700 }}>GST ({user.gst_percentage}%)</span>
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '15px' }}>₹{(orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (user.gst_percentage / 100)).toFixed(2)}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700 }}>GST ({mobileCalculations.gstRate}%)</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '15px' }}>₹{mobileCalculations.gstAmt.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {mobileCalculations.cgstRate > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700 }}>CGST ({mobileCalculations.cgstRate}%)</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '15px' }}>₹{mobileCalculations.cgstAmt.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {mobileCalculations.sgstRate > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700 }}>SGST ({mobileCalculations.sgstRate}%)</span>
+                    <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '15px' }}>₹{mobileCalculations.sgstAmt.toFixed(2)}</span>
                   </div>
                 )}
 
@@ -1258,11 +1291,18 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   />
                 </div>
 
+                {mobileCalculations.roundOff > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#38bdf8', fontSize: '13px', fontWeight: 700 }}>Round Off</span>
+                    <span style={{ color: '#38bdf8', fontWeight: 900, fontSize: '15px' }}>+₹{mobileCalculations.roundOff.toFixed(2)}</span>
+                  </div>
+                )}
+
                 <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }}></div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>Grand Total</span>
-                  <span style={{ color: 'var(--text-primary)', fontSize: '22px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                  <span style={{ color: 'var(--text-primary)', fontSize: '22px', fontWeight: 1000 }}>₹{mobileCalculations.grandTotal.toFixed(2)}</span>
                 </div>
 
                   <button 
@@ -1367,9 +1407,23 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 </div>
  
                 <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px', color: billData.is_paid ? 'rgba(255,255,255,0.8)' : 'var(--text-secondary)' }}>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>SUBTOTAL</span><span>₹{parseFloat(billData.subtotal).toFixed(2)}</span></div>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>GST</span><span>₹{parseFloat(billData.gst).toFixed(2)}</span></div>
-                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '32px', fontWeight: 1000, color: '#10b981', borderTop: '2px double var(--border-color)', marginTop: '10px', paddingTop: '10px' }}><span>TOTAL</span><span>₹{parseFloat(billData.final_amount).toFixed(2)}</span></div>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>SUBTOTAL</span><span>₹{parseFloat(billData.subtotal || 0).toFixed(2)}</span></div>
+                   {parseFloat(billData.gst || 0) > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>GST {billData.gst_percentage ? `(${billData.gst_percentage}%)` : ''}</span><span>₹{parseFloat(billData.gst).toFixed(2)}</span></div>
+                   )}
+                   {parseFloat(billData.cgst || 0) > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>CGST {billData.cgst_percentage ? `(${billData.cgst_percentage}%)` : ''}</span><span>₹{parseFloat(billData.cgst).toFixed(2)}</span></div>
+                   )}
+                   {parseFloat(billData.sgst || 0) > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>SGST {billData.sgst_percentage ? `(${billData.sgst_percentage}%)` : ''}</span><span>₹{parseFloat(billData.sgst).toFixed(2)}</span></div>
+                   )}
+                   {parseFloat(billData.discount_amount || 0) > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#f87171' }}><span>DISCOUNT {billData.discount_percentage ? `(${billData.discount_percentage}%)` : ''}</span><span>-₹{parseFloat(billData.discount_amount).toFixed(2)}</span></div>
+                   )}
+                   {parseFloat(billData.round_off || 0) > 0 && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}><span>ROUND OFF</span><span>+₹{parseFloat(billData.round_off).toFixed(2)}</span></div>
+                   )}
+                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '32px', fontWeight: 1000, color: '#10b981', borderTop: '2px double var(--border-color)', marginTop: '10px', paddingTop: '10px' }}><span>TOTAL</span><span>₹{parseFloat(billData.final_amount || 0).toFixed(2)}</span></div>
                 </div>
 
                  {!billData.is_paid && (

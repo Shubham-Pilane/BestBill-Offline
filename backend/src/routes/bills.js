@@ -32,18 +32,38 @@ router.get('/history', auth, async (req, res) => {
   }
 });
 
-// Helper to compute effective GST rate for an existing bill
-function resolveEffectiveGstRate(billRow) {
+// Helper to compute effective tax rates for an existing bill
+function resolveEffectiveTaxRates(billRow) {
   const hotelGstRate = Number(billRow.gst_percentage || 0);
+  const hotelCgstRate = Number(billRow.cgst_percentage || 0);
+  const hotelSgstRate = Number(billRow.sgst_percentage || 0);
   const oldTotalAmt = Number(billRow.total_amount || 0);
   const oldGst = Number(billRow.gst || 0);
+  const oldCgst = Number(billRow.cgst || 0);
+  const oldSgst = Number(billRow.sgst || 0);
+
+  let gstRate = hotelGstRate;
   if (oldTotalAmt > 0 && oldGst === 0) {
-    return 0;
+    gstRate = 0;
+  } else if (oldGst > 0 && oldTotalAmt > 0 && hotelGstRate === 0) {
+    gstRate = Number(((oldGst / oldTotalAmt) * 100).toFixed(2));
   }
-  if (oldGst > 0 && oldTotalAmt > 0 && hotelGstRate === 0) {
-    return Number(((oldGst / oldTotalAmt) * 100).toFixed(2));
+
+  let cgstRate = hotelCgstRate;
+  if (oldTotalAmt > 0 && oldCgst === 0) {
+    cgstRate = 0;
+  } else if (oldCgst > 0 && oldTotalAmt > 0 && hotelCgstRate === 0) {
+    cgstRate = Number(((oldCgst / oldTotalAmt) * 100).toFixed(2));
   }
-  return hotelGstRate;
+
+  let sgstRate = hotelSgstRate;
+  if (oldTotalAmt > 0 && oldSgst === 0) {
+    sgstRate = 0;
+  } else if (oldSgst > 0 && oldTotalAmt > 0 && hotelSgstRate === 0) {
+    sgstRate = Number(((oldSgst / oldTotalAmt) * 100).toFixed(2));
+  }
+
+  return { gstRate, cgstRate, sgstRate };
 }
 
 // Helper to fetch full bill payload by ID
@@ -51,7 +71,7 @@ async function getFullBillById(billId, hotelId, queryRunner = db) {
   const bill = await queryRunner.query(`
     SELECT b.*, COALESCE(t.table_number, 'Room ' || r.room_number, 'Parcel') as table_number, o.created_at as order_time,
            o.room_id, o.table_id, r.total_cost as room_cost,
-           h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage
+           h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.cgst_percentage, h.sgst_percentage
     FROM bills b 
     JOIN orders o ON b.order_id = o.id 
     LEFT JOIN tables t ON o.table_id = t.id 
@@ -79,8 +99,9 @@ async function getFullBillById(billId, hotelId, queryRunner = db) {
   const subtotal = items.rows.length > 0
     ? Number((itemsSubtotal + roomCharge).toFixed(2))
     : Number(billRow.total_amount || 0);
-  const effectiveGstRate = resolveEffectiveGstRate(billRow);
-  const discountAmount = Math.max(0, Number(((subtotal + Number(billRow.gst || 0)) - Number(billRow.final_amount || 0)).toFixed(2)));
+  const { gstRate, cgstRate, sgstRate } = resolveEffectiveTaxRates(billRow);
+  const roundOffVal = Number(billRow.round_off || 0);
+  const discountAmount = Math.max(0, Number(((subtotal + Number(billRow.gst || 0) + Number(billRow.cgst || 0) + Number(billRow.sgst || 0)) - (Number(billRow.final_amount || 0) - roundOffVal)).toFixed(2)));
 
   return {
     ...billRow,
@@ -88,7 +109,9 @@ async function getFullBillById(billId, hotelId, queryRunner = db) {
     items: items.rows,
     subtotal,
     discount_amount: discountAmount,
-    effective_gst_percentage: effectiveGstRate
+    effective_gst_percentage: gstRate,
+    effective_cgst_percentage: cgstRate,
+    effective_sgst_percentage: sgstRate
   };
 }
 
@@ -129,7 +152,8 @@ router.put('/:id', auth, async (req, res) => {
     await client.query('BEGIN');
 
     const billRes = await client.query(`
-      SELECT b.*, o.id as resolved_order_id, o.room_id, o.table_id, r.total_cost as room_cost, h.gst_percentage
+      SELECT b.*, o.id as resolved_order_id, o.room_id, o.table_id, r.total_cost as room_cost, 
+             h.gst_percentage, h.cgst_percentage, h.sgst_percentage
       FROM bills b
       JOIN orders o ON b.order_id = o.id
       LEFT JOIN tables t ON o.table_id = t.id
@@ -223,20 +247,27 @@ router.put('/:id', auth, async (req, res) => {
 
     const foodSubtotal = dedupedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const subtotal = Number((foodSubtotal + roomCharge).toFixed(2));
-    const effectiveGstRate = resolveEffectiveGstRate(billRow);
-    const gst = Number((subtotal * (effectiveGstRate / 100)).toFixed(2));
-    const initialTotal = subtotal + gst;
+    const { gstRate, cgstRate, sgstRate } = resolveEffectiveTaxRates(billRow);
+    const gst = Number(((subtotal * gstRate) / 100).toFixed(2));
+    const cgst = Number(((subtotal * cgstRate) / 100).toFixed(2));
+    const sgst = Number(((subtotal * sgstRate) / 100).toFixed(2));
+    const initialTotal = subtotal + gst + cgst + sgst;
     const discountPct = discount_percentage !== undefined
       ? Math.max(0, Math.min(100, parseFloat(discount_percentage) || 0))
       : Number(billRow.discount_percentage || 0);
     const discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
-    const finalAmount = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
+    const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
+    const finalAmount = Math.ceil(unroundedTotal);
+    let roundOff = Number((finalAmount - unroundedTotal).toFixed(2));
+    if (roundOff < 0.001 || roundOff >= 1) {
+      roundOff = 0;
+    }
 
     await client.query(
       `UPDATE bills
-       SET total_amount = $1, gst = $2, final_amount = $3, discount_percentage = $4
-       WHERE id = $5`,
-      [subtotal, gst, finalAmount, discountPct, id]
+       SET total_amount = $1, gst = $2, cgst = $3, sgst = $4, round_off = $5, final_amount = $6, discount_percentage = $7
+       WHERE id = $8`,
+      [subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, id]
     );
 
     // Keep linked credit record synchronized with updated bill total
@@ -290,7 +321,8 @@ router.post('/:id/print', auth, async (req, res) => {
     const bill = await db.query(`
       SELECT b.*, o.room_id, o.table_id,
              r.guest_name, r.check_in_date, r.booking_days, r.total_cost as room_cost,
-             h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, h.gst_percentage, h.upi_id, h.printer_size, h.fssai_number, h.email as hotel_email
+             h.name as hotel_name, h.phone as hotel_phone, h.location as hotel_location, 
+             h.gst_percentage, h.cgst_percentage, h.sgst_percentage, h.upi_id, h.printer_size, h.fssai_number, h.email as hotel_email
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
       LEFT JOIN tables t ON o.table_id = t.id 
@@ -365,6 +397,9 @@ router.post('/:id/print', auth, async (req, res) => {
       table: String(tableName),
       subtotal: Number(billData.total_amount),
       gst: Number(billData.gst),
+      cgst: Number(billData.cgst || 0),
+      sgst: Number(billData.sgst || 0),
+      roundOff: Number(billData.round_off || 0),
       finalAmount: Number(billData.final_amount),
       discountPercentage: Number(billData.discount_percentage || 0),
       items: printItems,
@@ -374,6 +409,8 @@ router.post('/:id/print', auth, async (req, res) => {
       hotelEmail: billData.hotel_email,
       hotelFssai: billData.fssai_number,
       gst_percentage: Number(billData.gst_percentage || 0),
+      cgst_percentage: Number(billData.cgst_percentage || 0),
+      sgst_percentage: Number(billData.sgst_percentage || 0),
       upiId: showUPI ? (billData.upi_id || '') : '',
       isPaid: isPaid,
       room_charge: roomCharge,

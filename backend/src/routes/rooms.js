@@ -418,7 +418,7 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       await client.query('BEGIN');
 
       const [hotelRes, roomRes, activeOrderRes] = await Promise.all([
-        client.query('SELECT name, phone, location, gst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
+        client.query('SELECT name, phone, location, gst_percentage, cgst_percentage, sgst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
         client.query('SELECT * FROM rooms WHERE id = $1', [roomId]),
         client.query("SELECT id FROM orders WHERE room_id = $1 AND status = 'active' ORDER BY id DESC LIMIT 1", [roomId])
       ]);
@@ -439,13 +439,17 @@ router.post('/:roomId/bill', auth, async (req, res) => {
 
       const orderItems = orderItemsQuery.rows;
       const gstRate = parseFloat(hotelRes.rows[0].gst_percentage || 0);
+      const cgstRate = parseFloat(hotelRes.rows[0].cgst_percentage || 0);
+      const sgstRate = parseFloat(hotelRes.rows[0].sgst_percentage || 0);
       const room = roomRes.rows[0];
       const roomCharge = parseFloat(room.total_cost || 0);
   
       const foodSubtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.price) * parseInt(item.quantity)), 0);
       const subtotal = foodSubtotal + roomCharge;
-      const gst = subtotal * (gstRate / 100);
-      const initialTotal = subtotal + gst;
+      const gst = Number(((subtotal * gstRate) / 100).toFixed(2));
+      const cgst = Number(((subtotal * cgstRate) / 100).toFixed(2));
+      const sgst = Number(((subtotal * sgstRate) / 100).toFixed(2));
+      const initialTotal = subtotal + gst + cgst + sgst;
       const discount = parseFloat(discount_percentage) || 0;
 
       let discountAmount = 0;
@@ -462,19 +466,26 @@ router.post('/:roomId/bill', auth, async (req, res) => {
         } else {
           selectedSubtotal = subtotal;
         }
-        const selectedTotal = selectedSubtotal * (1 + gstRate / 100);
-        discountAmount = selectedTotal * (discount / 100);
+        const selectedTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
+        discountAmount = Number((selectedTotal * (discount / 100)).toFixed(2));
+      } else {
+        discountAmount = Number((initialTotal * (discount / 100)).toFixed(2));
       }
 
-      const finalAmount = Math.max(0, initialTotal - discountAmount);
+      const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
+      const finalAmount = Math.ceil(unroundedTotal);
+      let roundOff = Number((finalAmount - unroundedTotal).toFixed(2));
+      if (roundOff < 0.001 || roundOff >= 1) {
+        roundOff = 0;
+      }
  
       // Deduct stock from inventory
       await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
   
       const billRes = await client.query(
-        `INSERT INTO bills (order_id, total_amount, gst, final_amount, discount_percentage) 
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [orderId, subtotal, gst, finalAmount, discount]
+        `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discount]
       );
  
       await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
@@ -486,10 +497,16 @@ router.post('/:roomId/bill', auth, async (req, res) => {
         discount_amount: discountAmount,
         subtotal: subtotal,
         final_amount: finalAmount,
+        total_amount: finalAmount,
         room_charge: roomCharge,
         guest_name: room.guest_name,
         room_number: room.room_number,
         gst_percentage: gstRate,
+        cgst_percentage: cgstRate,
+        sgst_percentage: sgstRate,
+        cgst: cgst,
+        sgst: sgst,
+        round_off: roundOff,
         items: orderItems, 
         hotel_name: hotelRes.rows[0].name,
         hotel_phone: hotelRes.rows[0].phone,

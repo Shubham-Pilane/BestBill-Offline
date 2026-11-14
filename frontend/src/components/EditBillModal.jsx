@@ -138,14 +138,43 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
     const gstRate = bill?.effective_gst_percentage !== undefined
       ? Number(bill.effective_gst_percentage)
       : Number(bill?.gst_percentage || user?.gst_percentage || 0);
-    const gstAmount = Number((subtotal * (gstRate / 100)).toFixed(2));
-    const initialTotal = subtotal + gstAmount;
+    const cgstRate = bill?.effective_cgst_percentage !== undefined
+      ? Number(bill.effective_cgst_percentage)
+      : Number(bill?.cgst_percentage || user?.cgst_percentage || 0);
+    const sgstRate = bill?.effective_sgst_percentage !== undefined
+      ? Number(bill.effective_sgst_percentage)
+      : Number(bill?.sgst_percentage || user?.sgst_percentage || 0);
+
+    const gstAmount = Number(((subtotal * gstRate) / 100).toFixed(2));
+    const cgstAmount = Number(((subtotal * cgstRate) / 100).toFixed(2));
+    const sgstAmount = Number(((subtotal * sgstRate) / 100).toFixed(2));
+    const initialTotal = subtotal + gstAmount + cgstAmount + sgstAmount;
     const discountPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
     const discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
-    const grandTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
+    const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
+    const grandTotal = Math.ceil(unroundedTotal);
+    let roundOff = Number((grandTotal - unroundedTotal).toFixed(2));
+    if (roundOff < 0.001 || roundOff >= 1) {
+      roundOff = 0;
+    }
 
-    return { roomCharge, foodSubtotal, subtotal, gstRate, gstAmount, discountPct, discountAmount, grandTotal };
-  }, [editItems, discount, bill, user?.gst_percentage]);
+    return { 
+      roomCharge, 
+      foodSubtotal, 
+      subtotal, 
+      gstRate, 
+      gstAmount, 
+      cgstRate, 
+      cgstAmount, 
+      sgstRate, 
+      sgstAmount, 
+      discountPct, 
+      discountAmount, 
+      unroundedTotal,
+      roundOff,
+      grandTotal 
+    };
+  }, [editItems, discount, bill, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage]);
 
   const getDisplayName = (item) => {
     if (isMarathi) {
@@ -1174,6 +1203,24 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
                   </div>
                 )}
 
+                {totals.cgstRate > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: 'var(--text-secondary)' }}>
+                    <span>
+                      {t('cgst', 'CGST')} ({totals.cgstRate}%)
+                    </span>
+                    <span style={{ color: 'var(--text-primary)' }}>₹{totals.cgstAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {totals.sgstRate > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: 'var(--text-secondary)' }}>
+                    <span>
+                      {t('sgst', 'SGST')} ({totals.sgstRate}%)
+                    </span>
+                    <span style={{ color: 'var(--text-primary)' }}>₹{totals.sgstAmount.toFixed(2)}</span>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 800, color: 'var(--text-secondary)' }}>
                   <span>{t('loyalty_discount', 'Discount (%)')}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1205,6 +1252,13 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
                     />
                   </div>
                 </div>
+
+                {totals.roundOff > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                    <span>{t('round_off', 'Round Off')}</span>
+                    <span>+₹{totals.roundOff.toFixed(2)}</span>
+                  </div>
+                )}
 
                 <div style={{ height: '1px', backgroundColor: 'var(--bg-border)', margin: '2px 0' }} />
 

@@ -27,6 +27,8 @@ const Profile = () => {
         address: user?.hotel_address || '',
         upi_id: user?.upi_id || '',
         gst_percentage: user?.gst_percentage || 0,
+        cgst_percentage: user?.cgst_percentage || 0,
+        sgst_percentage: user?.sgst_percentage || 0,
         billing_method: user?.billing_method || 'qz',
         logo_url: '',
         fssai_number: '',
@@ -762,15 +764,27 @@ const Profile = () => {
                     { name: 'Cold Coffee', price: 70.00, qty: 2 }
                 ];
                 const subtotal = sampleItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-                const gstPct = hotelData.gst_percentage !== undefined ? Number(hotelData.gst_percentage) : 5;
+                const gstPct = hotelData.gst_percentage !== undefined ? Number(hotelData.gst_percentage) : 0;
+                const cgstPct = hotelData.cgst_percentage !== undefined ? Number(hotelData.cgst_percentage) : 0;
+                const sgstPct = hotelData.sgst_percentage !== undefined ? Number(hotelData.sgst_percentage) : 0;
                 const gst = (subtotal * gstPct) / 100;
-                const finalAmount = subtotal + gst;
+                const cgst = (subtotal * cgstPct) / 100;
+                const sgst = (subtotal * sgstPct) / 100;
+                const unrounded = subtotal + gst + cgst + sgst;
+                const finalAmount = Math.ceil(unrounded);
+                let roundOff = Number((finalAmount - unrounded).toFixed(2));
+                if (roundOff < 0.001 || roundOff >= 1) roundOff = 0;
 
                 const testPayload = {
                     type: 'FINAL_BILL',
                     billId: 9999,
                     table: 'Table 1 (Test Print)',
-                    subtotal, gst, finalAmount,
+                    subtotal, 
+                    gst, 
+                    cgst, 
+                    sgst, 
+                    roundOff,
+                    finalAmount,
                     discountPercentage: 0,
                     items: sampleItems,
                     hotelName: hotelData.name || 'Sample Hotel',
@@ -778,7 +792,9 @@ const Profile = () => {
                     hotelLocation: hotelData.address || 'Sample Location',
                     upiId: hotelData.upi_id || '',
                     isPaid: false,
-                    gst_percentage: gstPct
+                    gst_percentage: gstPct,
+                    cgst_percentage: cgstPct,
+                    sgst_percentage: sgstPct
                 };
 
                 const size = printerConfig.billing.paperSize || '80mm';
@@ -875,6 +891,8 @@ const Profile = () => {
                 address: data.location || '',
                 upi_id: data.upi_id || '',
                 gst_percentage: data.gst_percentage || 0,
+                cgst_percentage: data.cgst_percentage || 0,
+                sgst_percentage: data.sgst_percentage || 0,
                 billing_method: data.billing_method || 'qz',
                 logo_url: data.logo_url || '',
                 fssai_number: data.fssai_number || '',
@@ -956,6 +974,8 @@ const Profile = () => {
                 hotel_phone: res.data.phone,
                 upi_id: res.data.upi_id, 
                 gst_percentage: res.data.gst_percentage,
+                cgst_percentage: res.data.cgst_percentage,
+                sgst_percentage: res.data.sgst_percentage,
                 printer_size: res.data.printer_size,
                 billing_method: res.data.billing_method,
                 fssai_number: res.data.fssai_number
@@ -1107,14 +1127,22 @@ const Profile = () => {
                     {showHotelProfile && (
                         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '12px', padding: '20px', border: '1px solid var(--border-rgba-05)' }}>
                             <form onSubmit={handleHotelSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: '16px' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>HOTEL LEGAL NAME</label>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>{t('profile_hotel_legal_name', 'HOTEL LEGAL NAME')}</label>
                                         <input value={hotelData.name} onChange={e => setHotelData({...hotelData, name: e.target.value})} style={{padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 500 }} />
                                     </div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>GST %</label>
-                                        <input type="number" value={hotelData.gst_percentage} onChange={e => setHotelData({...hotelData, gst_percentage: e.target.value})} style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#10b981', fontWeight: 600 }} />
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>{t('profile_gst_pct', 'GST %')}</label>
+                                        <input type="number" step="any" min="0" value={hotelData.gst_percentage} onChange={e => setHotelData({...hotelData, gst_percentage: e.target.value})} style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#10b981', fontWeight: 600 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>{t('profile_cgst_pct', 'CGST %')}</label>
+                                        <input type="number" step="any" min="0" value={hotelData.cgst_percentage} onChange={e => setHotelData({...hotelData, cgst_percentage: e.target.value})} style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#38bdf8', fontWeight: 600 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>{t('profile_sgst_pct', 'SGST %')}</label>
+                                        <input type="number" step="any" min="0" value={hotelData.sgst_percentage} onChange={e => setHotelData({...hotelData, sgst_percentage: e.target.value})} style={{ padding: '10px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: '#a855f7', fontWeight: 600 }} />
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

@@ -41,14 +41,15 @@ async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken,
   let newCode = '';
   let attempts = 0;
 
-  while (!isUnique && attempts < 20) {
+  while (!isUnique && attempts < 30) {
     attempts++;
     newCode = generate5CharHotelCode();
     try {
+      // Query using global anon key to bypass user-specific RLS filtering and verify across ALL registered hotels
       const checkRes = await fetch(`${supabaseUrl}/rest/v1/hotels?hotel_code=eq.${newCode}&select=id`, {
         headers: {
           'apikey': supabaseKey,
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${supabaseKey}`
         }
       });
       const data = await checkRes.json().catch(() => []);
@@ -56,7 +57,8 @@ async function getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken,
         isUnique = true;
       }
     } catch (e) {
-      isUnique = true;
+      // On network failure during check, do not assume unique
+      isUnique = false;
     }
   }
 
@@ -294,7 +296,7 @@ async function performCloudSync() {
     };
 
     // Upsert hotel strictly by hotel_code (1 unique row per hotel store outlet)
-    await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=hotel_code`, {
+    let upsertRes = await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=hotel_code`, {
       method: 'POST',
       headers: {
         'apikey': supabaseKey,
@@ -303,7 +305,29 @@ async function performCloudSync() {
         'Prefer': 'resolution=merge-duplicates'
       },
       body: JSON.stringify(hotelPayload)
-    }).catch(err => console.log('[CLOUD SYNC] Hotel table hotel_code upsert:', err.message));
+    }).catch(err => {
+      console.log('[CLOUD SYNC] Hotel table hotel_code upsert notice:', err.message);
+      return null;
+    });
+
+    // If upsert failed due to collision on hotel_code, auto-generate a new globally unique code
+    if (upsertRes && !upsertRes.ok && upsertRes.status === 409) {
+      console.warn('[CLOUD SYNC] Conflict on hotel_code. Regenerating a fresh globally unique code...');
+      cfg.cloudSyncHotelCode = '';
+      configManager.saveConfig(cfg);
+      const regeneratedCode = await getOrCreateUniqueHotelCode(supabaseUrl, supabaseKey, accessToken, '');
+      hotelPayload.hotel_code = regeneratedCode;
+      await fetch(`${supabaseUrl}/rest/v1/hotels?on_conflict=hotel_code`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(hotelPayload)
+      }).catch(err => console.log('[CLOUD SYNC] Retry hotel_code upsert notice:', err.message));
+    }
 
     // 3. Upsert Analytics Snapshots in `analytics_snapshots` table for past 30 days
     const datesRes = await db.query(

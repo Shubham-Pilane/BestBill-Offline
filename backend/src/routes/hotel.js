@@ -16,13 +16,28 @@ router.get('/', auth, async (req, res) => {
 
 // Update hotel details (Owner only)
 router.put('/', auth, async (req, res) => {
-  const { name, address, upi_id, gst_percentage, printer_size, billing_method, fssai_number, email, phone, allow_negative_stock } = req.body;
+  const { name, address, upi_id, gst_percentage, cgst_percentage, sgst_percentage, printer_size, billing_method, fssai_number, email, phone, allow_negative_stock } = req.body;
   if (req.user.role !== 'owner') return res.status(403).json({ message: 'Only owners can modify hotel settings' });
   try {
     const allowNeg = allow_negative_stock === true || allow_negative_stock === 'true' || allow_negative_stock === 1 || allow_negative_stock === '1';
     await db.query(
-      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, printer_size = $5, billing_method = $6, fssai_number = $7, email = $8, phone = $9, allow_negative_stock = $10 WHERE id = $11 OR owner_id = $12',
-      [name, address, upi_id, gst_percentage || 0, printer_size || '80mm', billing_method || 'qz', fssai_number, email, phone, allowNeg, req.user.hotel_id || 1, req.user.id]
+      'UPDATE hotels SET name = $1, location = $2, upi_id = $3, gst_percentage = $4, cgst_percentage = $5, sgst_percentage = $6, printer_size = $7, billing_method = $8, fssai_number = $9, email = $10, phone = $11, allow_negative_stock = $12 WHERE id = $13 OR owner_id = $14',
+      [
+        name,
+        address,
+        upi_id,
+        gst_percentage !== undefined ? parseFloat(gst_percentage) || 0 : 0,
+        cgst_percentage !== undefined ? parseFloat(cgst_percentage) || 0 : 0,
+        sgst_percentage !== undefined ? parseFloat(sgst_percentage) || 0 : 0,
+        printer_size || '80mm',
+        billing_method || 'qz',
+        fssai_number,
+        email,
+        phone,
+        allowNeg,
+        req.user.hotel_id || 1,
+        req.user.id
+      ]
     );
 
     const updated = await db.query('SELECT * FROM hotels LIMIT 1');

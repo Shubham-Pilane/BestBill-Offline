@@ -87,6 +87,9 @@ const syncSchema = async () => {
                 order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
                 total_amount DECIMAL(10,2) DEFAULT 0,
                 gst DECIMAL(10,2) DEFAULT 0,
+                cgst DECIMAL(10,2) DEFAULT 0,
+                sgst DECIMAL(10,2) DEFAULT 0,
+                round_off DECIMAL(10,2) DEFAULT 0,
                 final_amount DECIMAL(10,2) DEFAULT 0,
                 discount_percentage DECIMAL(5,2) DEFAULT 0,
                 is_paid BOOLEAN DEFAULT false,
@@ -335,6 +338,11 @@ const syncSchema = async () => {
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS is_manual BOOLEAN DEFAULT false",
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_name VARCHAR(255)",
             "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_price DECIMAL(10,2)",
+            "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS cgst_percentage DECIMAL(5,2) DEFAULT 0",
+            "ALTER TABLE hotels ADD COLUMN IF NOT EXISTS sgst_percentage DECIMAL(5,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS cgst DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS sgst DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS round_off DECIMAL(10,2) DEFAULT 0",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

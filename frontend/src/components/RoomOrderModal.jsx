@@ -755,15 +755,24 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                               const foodSubtotal = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
                               const roomCharge = parseFloat(room.total_cost || 0);
                               const subtotalVal = foodSubtotal + roomCharge;
-                              const gstRate = user?.gst_percentage || 0;
-                              const totalBeforeDiscount = subtotalVal * (1 + gstRate / 100);
-                              if (!hasDiscountValue || discVal <= 0) {
-                                return totalBeforeDiscount.toFixed(2);
+                              const gstRate = parseFloat(user?.gst_percentage || 0);
+                              const cgstRate = parseFloat(user?.cgst_percentage || 0);
+                              const sgstRate = parseFloat(user?.sgst_percentage || 0);
+                              const gstAmt = (subtotalVal * gstRate) / 100;
+                              const cgstAmt = (subtotalVal * cgstRate) / 100;
+                              const sgstAmt = (subtotalVal * sgstRate) / 100;
+                              const preDiscount = subtotalVal + gstAmt + cgstAmt + sgstAmt;
+
+                              let discountAmount = 0;
+                              if (hasDiscountValue && discVal > 0) {
+                                const selectedFoodSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
+                                const selectedSubtotal = selectedFoodSubtotal + (includeRoomChargeInDiscount ? roomCharge : 0);
+                                discountAmount = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100) * (discVal / 100);
                               }
-                              const selectedFoodSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
-                              const selectedSubtotal = selectedFoodSubtotal + (includeRoomChargeInDiscount ? roomCharge : 0);
-                              const discountAmount = selectedSubtotal * (1 + gstRate / 100) * (discVal / 100);
-                              return Math.max(0, totalBeforeDiscount - discountAmount).toFixed(2);
+
+                              const unrounded = Math.max(0, preDiscount - discountAmount);
+                              const grandTotal = Math.ceil(unrounded);
+                              return grandTotal.toFixed(2);
                             })()}</span>
                          </div>
                       </div>
@@ -850,13 +859,37 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                     </div>
                     {parseFloat(billData?.gst || 0) > 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.8)' }}>
-                            <span>GST ({billData?.gst_percentage}%)</span>
+                            <span>GST {billData?.gst_percentage ? `(${billData.gst_percentage}%)` : ''}</span>
                             <span>₹{parseFloat(billData?.gst || 0).toFixed(2)}</span>
+                        </div>
+                    )}
+                    {parseFloat(billData?.cgst || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.8)' }}>
+                            <span>CGST {billData?.cgst_percentage ? `(${billData.cgst_percentage}%)` : ''}</span>
+                            <span>₹{parseFloat(billData?.cgst || 0).toFixed(2)}</span>
+                        </div>
+                    )}
+                    {parseFloat(billData?.sgst || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: 'rgba(255,255,255,0.8)' }}>
+                            <span>SGST {billData?.sgst_percentage ? `(${billData.sgst_percentage}%)` : ''}</span>
+                            <span>₹{parseFloat(billData?.sgst || 0).toFixed(2)}</span>
+                        </div>
+                    )}
+                    {parseFloat(billData?.discount_amount || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: '#f87171' }}>
+                            <span>DISCOUNT {billData?.discount_percentage ? `(${billData.discount_percentage}%)` : ''}</span>
+                            <span>-₹{parseFloat(billData?.discount_amount || 0).toFixed(2)}</span>
+                        </div>
+                    )}
+                    {parseFloat(billData?.round_off || 0) > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', fontWeight: 800, color: '#38bdf8' }}>
+                            <span>ROUND OFF</span>
+                            <span>+₹{parseFloat(billData?.round_off || 0).toFixed(2)}</span>
                         </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double var(--border-rgba-05)', marginTop: '12px', paddingTop: '12px' }}>
                         <span>TOTAL</span>
-                        <span>₹{parseFloat(billData?.final_amount || 0).toFixed(0)}</span>
+                        <span>₹{parseFloat(billData?.final_amount || 0).toFixed(2)}</span>
                     </div>
                  </div>
 

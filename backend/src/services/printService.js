@@ -105,7 +105,7 @@ class PrintService {
   /**
    * Generates and spools a FINAL_BILL payload.
    */
-  sendFinalBill({ hotelId, billId, table, subtotal, gst, finalAmount, discountPercentage, items, hotelName, hotelPhone, hotelLocation, upiId, isPaid, room_charge, booking_days, printerSize, gst_percentage }) {
+  sendFinalBill({ hotelId, billId, table, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPercentage, items, hotelName, hotelPhone, hotelLocation, upiId, isPaid, room_charge, booking_days, printerSize, gst_percentage, cgst_percentage, sgst_percentage }) {
     const payload = {
       type: 'FINAL_BILL',
       printer: 'billing',
@@ -114,6 +114,9 @@ class PrintService {
       table: String(table),
       subtotal: Number(subtotal),
       gst: Number(gst),
+      cgst: Number(cgst || 0),
+      sgst: Number(sgst || 0),
+      roundOff: Number(roundOff || 0),
       finalAmount: Number(finalAmount),
       discountPercentage: Number(discountPercentage || 0),
       items: items.filter(item => Number(item.quantity !== undefined ? item.quantity : (item.qty !== undefined ? item.qty : 0)) > 0).map(item => ({
@@ -130,7 +133,9 @@ class PrintService {
       room_charge: Number(room_charge || 0),
       booking_days: Number(booking_days || 1),
       printerSize: printerSize || '80mm',
-      gst_percentage: Number(gst_percentage || 0)
+      gst_percentage: Number(gst_percentage || 0),
+      cgst_percentage: Number(cgst_percentage || 0),
+      sgst_percentage: Number(sgst_percentage || 0)
     };
 
     return this.emitPrintJob(hotelId, payload);
