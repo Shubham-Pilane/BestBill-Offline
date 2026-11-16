@@ -388,7 +388,8 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
 
   const generateBill = async () => {
     try {
-      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discount });
+      const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
+      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discPct });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', {
@@ -1137,14 +1138,25 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                     <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>LOYALTY DISCOUNT (%)</span>
                     <input 
                        type="number" 
+                       min="0"
+                       max="100"
                        value={discount} 
-                       onChange={e => setDiscount(Math.max(0, Math.min(100, e.target.value)))} 
+                       placeholder="0"
+                       onFocus={e => e.target.select()}
+                       onChange={e => {
+                         const val = e.target.value;
+                         if (val === '') setDiscount('');
+                         else {
+                           const num = Math.max(0, Math.min(100, Number(val)));
+                           setDiscount(isNaN(num) ? '' : String(num));
+                         }
+                       }} 
                        style={{ width: '40px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '12px' }} 
                     />
                   </div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-primary)' }}>Final Due</span>
-                    <span style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - discount/100)).toFixed(2)}</span>
+                    <span style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - (parseFloat(discount) || 0)/100)).toFixed(2)}</span>
                   </div>
 
                   <button 
@@ -1285,8 +1297,19 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>DISCOUNT (%)</span>
                   <input 
                     type="number" 
+                    min="0"
+                    max="100"
                     value={discount} 
-                    onChange={e => setDiscount(e.target.value === '' ? '' : Math.max(0, Math.min(100, e.target.value)))} 
+                    placeholder="0"
+                    onFocus={e => e.target.select()}
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '') setDiscount('');
+                      else {
+                        const num = Math.max(0, Math.min(100, Number(val)));
+                        setDiscount(isNaN(num) ? '' : String(num));
+                      }
+                    }} 
                     style={{ width: '50px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '13px', borderRadius: '6px', padding: '2px 4px' }} 
                   />
                 </div>

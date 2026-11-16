@@ -19,7 +19,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [billData, setBillData] = useState(null);
   const [customerPhone, setCustomerPhone] = useState(room.guest_phone || '');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
-  const [discount, setDiscount] = useState(0);
+  const [discount, setDiscount] = useState('');
   const [uncheckedDiscountItemIds, setUncheckedDiscountItemIds] = useState(new Set());
   const [includeRoomChargeInDiscount, setIncludeRoomChargeInDiscount] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -255,8 +255,9 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const generateBill = async () => {
     try {
       const selectedItemIds = orderItems.filter(i => !uncheckedDiscountItemIds.has(i.id)).map(i => i.id);
+      const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
       const res = await api.post(`/rooms/${room.id}/bill`, { 
-        discount_percentage: discount,
+        discount_percentage: discPct,
         selected_discount_item_ids: selectedItemIds,
         include_room_charge_in_discount: includeRoomChargeInDiscount
       });
@@ -745,7 +746,23 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                       <div style={{ marginBottom: '16px' }}>
                          <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 900, marginBottom: '8px' }}>
                             <span>DISCOUNT (%)</span>
-                            <input type="number" value={discount} onFocus={e => e.target.select()} onChange={e => setDiscount(e.target.value)} style={{width: '50px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none' }} />
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="100"
+                              value={discount} 
+                              placeholder="0"
+                              onFocus={e => e.target.select()} 
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '') setDiscount('');
+                                else {
+                                  const num = Math.max(0, Math.min(100, Number(val)));
+                                  setDiscount(isNaN(num) ? '' : String(num));
+                                }
+                              }} 
+                              style={{width: '50px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none' }} 
+                            />
                          </div>
                          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
                             <span style={{ fontSize: '22px', fontWeight: 1000 }}>Total Due</span>

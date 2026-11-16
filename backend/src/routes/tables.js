@@ -541,7 +541,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       client.query('SELECT name, phone, location, gst_percentage, cgst_percentage, sgst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       client.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       client.query(`
-        SELECT o.id as order_id, oi.id as oi_id, oi.menu_item_id, oi.quantity,
+        SELECT o.id as order_id, oi.id, oi.id as oi_id, oi.menu_item_id, oi.quantity,
                COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
@@ -570,14 +570,21 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     let discountAmount = 0;
     if (discount > 0) {
       if (Array.isArray(selected_discount_item_ids)) {
-        const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
-          if (selected_discount_item_ids.includes(item.id) || (item.menu_item_id && selected_discount_item_ids.includes(item.menu_item_id))) {
-            return sum + (parseFloat(item.price) * parseInt(item.quantity));
-          }
-          return sum;
-        }, 0);
-        const selectedTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
-        discountAmount = Number((selectedTotal * (discount / 100)).toFixed(2));
+        if (selected_discount_item_ids.length > 0) {
+          const selectedSet = new Set(selected_discount_item_ids.map(id => String(id)));
+          const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
+            const idStr = String(item.id || item.oi_id || '');
+            const menuIdStr = item.menu_item_id ? String(item.menu_item_id) : '';
+            if (selectedSet.has(idStr) || (menuIdStr && selectedSet.has(menuIdStr))) {
+              return sum + (parseFloat(item.price) * parseInt(item.quantity));
+            }
+            return sum;
+          }, 0);
+          const selectedTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
+          discountAmount = Number((selectedTotal * (discount / 100)).toFixed(2));
+        } else {
+          discountAmount = 0;
+        }
       } else {
         discountAmount = Number((initialTotal * (discount / 100)).toFixed(2));
       }

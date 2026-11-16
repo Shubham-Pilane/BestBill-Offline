@@ -48,7 +48,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [selectedDeliveryPartner, setSelectedDeliveryPartner] = useState('');
-  const [discount, setDiscount] = useState(0);
+  const [discount, setDiscount] = useState('');
   const [uncheckedDiscountItemIds, setUncheckedDiscountItemIds] = useState(new Set());
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [allTables, setAllTables] = useState(passedTables || []);
@@ -81,9 +81,9 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [renameValue, setRenameValue] = useState('');
 
   const orderCalculations = useMemo(() => {
-    const discVal = parseFloat(discount) || 0;
+    const discVal = Math.max(0, Math.min(100, parseFloat(discount) || 0));
     const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
-    const totalSubtotal = orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const totalSubtotal = orderItems.reduce((acc, i) => acc + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
     const gstRate = parseFloat(user?.gst_percentage || 0);
     const cgstRate = parseFloat(user?.cgst_percentage || 0);
     const sgstRate = parseFloat(user?.sgst_percentage || 0);
@@ -94,7 +94,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
     let discountAmount = 0;
     if (hasDiscountValue && discVal > 0) {
-      const selectedSubtotal = orderItems.reduce((acc, i) => (!uncheckedDiscountItemIds.has(i.id) ? acc + (i.price * i.quantity) : acc), 0);
+      const selectedSubtotal = orderItems.reduce((acc, i) => {
+        const idStr = String(i.id !== undefined && i.id !== null ? i.id : (i.menu_item_id || ''));
+        const isExcluded = idStr && uncheckedDiscountItemIds.has(idStr);
+        return !isExcluded ? acc + (Number(i.price || 0) * Number(i.quantity || 1)) : acc;
+      }, 0);
       const selectedTaxFactor = 1 + (gstRate + cgstRate + sgstRate) / 100;
       discountAmount = Number((selectedSubtotal * selectedTaxFactor * (discVal / 100)).toFixed(2));
     }
@@ -410,9 +414,16 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const generateBill = async () => {
     try {
-      const selectedItemIds = orderItems.filter(i => !uncheckedDiscountItemIds.has(i.id)).map(i => i.id);
+      const selectedItemIds = orderItems
+        .filter(i => {
+          const idStr = String(i.id !== undefined && i.id !== null ? i.id : (i.menu_item_id || ''));
+          return !uncheckedDiscountItemIds.has(idStr);
+        })
+        .map(i => i.id !== undefined && i.id !== null ? i.id : i.menu_item_id);
+
+      const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
       const res = await api.post(`/tables/${table.id}/bill`, { 
-        discount_percentage: discount,
+        discount_percentage: discPct,
         selected_discount_item_ids: selectedItemIds
       });
       setBillData(res.data);
@@ -850,26 +861,28 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
               {(() => {
                 const discVal = parseFloat(discount) || 0;
                 const hasDiscountValue = discount !== '' && discount !== null && discount !== undefined && discVal > 0;
-                return orderItems.map(item => (
-                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', gap: '10px' }}>
+                return orderItems.map(item => {
+                  const itemIdStr = String(item.id !== undefined && item.id !== null ? item.id : (item.menu_item_id || ''));
+                  return (
+                  <div key={item.id || item.tempId || item.menu_item_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', gap: '10px' }}>
                     {hasDiscountValue && (
                       <input 
                         type="checkbox"
-                        checked={!uncheckedDiscountItemIds.has(item.id)}
+                        checked={!uncheckedDiscountItemIds.has(itemIdStr)}
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setUncheckedDiscountItemIds(prev => {
                             const next = new Set(prev);
                             if (checked) {
-                              next.delete(item.id);
+                              next.delete(itemIdStr);
                             } else {
-                              next.add(item.id);
+                              next.add(itemIdStr);
                             }
                             return next;
                           });
                         }}
                         style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: '#0ea5e9', flexShrink: 0 }}
-                        title={!uncheckedDiscountItemIds.has(item.id) ? "Discount applied to this item" : "Discount excluded from this item"}
+                        title={!uncheckedDiscountItemIds.has(itemIdStr) ? "Discount applied to this item" : "Discount excluded from this item"}
                       />
                     )}
                     <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
@@ -958,7 +971,8 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                       </button>
                     </div>
                   </div>
-                ));
+                );
+              });
               })()}
             </div>
             <div style={{ padding: '12px 16px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--bg-border)' }}>
@@ -967,8 +981,20 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                    <span>{t('loyalty_discount', 'Loyalty Discount (%)')}</span>
                    <input 
                       type="number" 
+                      min="0"
+                      max="100"
                       value={discount} 
-                      onChange={e => setDiscount(Math.max(0, Math.min(100, e.target.value)))} 
+                      placeholder="0"
+                      onFocus={e => e.target.select()}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setDiscount('');
+                        } else {
+                          const num = Math.max(0, Math.min(100, Number(val)));
+                          setDiscount(isNaN(num) ? '' : String(num));
+                        }
+                      }} 
                       style={{width: '45px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '12px' }} 
                    />
                  </div>

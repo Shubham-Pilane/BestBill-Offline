@@ -456,20 +456,25 @@ router.post('/:roomId/bill', auth, async (req, res) => {
       if (discount > 0) {
         let selectedSubtotal = 0;
         if (Array.isArray(selected_discount_item_ids)) {
-          const selectedFoodSubtotal = orderItems.reduce((sum, item) => {
-            if (selected_discount_item_ids.includes(item.id) || selected_discount_item_ids.includes(item.menu_item_id)) {
-              return sum + (parseFloat(item.price) * parseInt(item.quantity));
-            }
-            return sum;
-          }, 0);
-          selectedSubtotal = selectedFoodSubtotal + (include_room_charge_in_discount !== false ? roomCharge : 0);
+          if (selected_discount_item_ids.length > 0) {
+            const selectedSet = new Set(selected_discount_item_ids.map(id => String(id)));
+            const selectedFoodSubtotal = orderItems.reduce((sum, item) => {
+              const idStr = String(item.id || '');
+              const menuIdStr = item.menu_item_id ? String(item.menu_item_id) : '';
+              if (selectedSet.has(idStr) || (menuIdStr && selectedSet.has(menuIdStr))) {
+                return sum + (parseFloat(item.price) * parseInt(item.quantity));
+              }
+              return sum;
+            }, 0);
+            selectedSubtotal = selectedFoodSubtotal + (include_room_charge_in_discount !== false ? roomCharge : 0);
+          } else {
+            selectedSubtotal = include_room_charge_in_discount !== false ? roomCharge : 0;
+          }
         } else {
           selectedSubtotal = subtotal;
         }
         const selectedTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
         discountAmount = Number((selectedTotal * (discount / 100)).toFixed(2));
-      } else {
-        discountAmount = Number((initialTotal * (discount / 100)).toFixed(2));
       }
 
       const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
