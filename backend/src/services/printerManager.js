@@ -93,6 +93,96 @@ class PersistentBluetoothWorker {
       '$ports = @{}',
       '$resolvedComs = @{}',
       '',
+      '$code = @\'',
+      'using System;',
+      'using System.Runtime.InteropServices;',
+      'public class RawPrinter {',
+      '    [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Ansi)]',
+      '    public class DOCINFOA {',
+      '        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;',
+      '        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;',
+      '        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;',
+      '    }',
+      '    [DllImport("winspool.Drv", EntryPoint="OpenPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true)]',
+      '    public static extern bool OpenPrinter([MarshalAs(UnmanagedType.LPStr)] string szPrinter, out IntPtr hPrinter, IntPtr pd);',
+      '    [DllImport("winspool.Drv", EntryPoint="ClosePrinter", SetLastError=true, ExactSpelling=true)]',
+      '    public static extern bool ClosePrinter(IntPtr hPrinter);',
+      '    [DllImport("winspool.Drv", EntryPoint="StartDocPrinterA", SetLastError=true, CharSet=CharSet.Ansi, ExactSpelling=true)]',
+      '    public static extern uint StartDocPrinter(IntPtr hPrinter, int level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA di);',
+      '    [DllImport("winspool.Drv", EntryPoint="EndDocPrinter", SetLastError=true, ExactSpelling=true)]',
+      '    public static extern bool EndDocPrinter(IntPtr hPrinter);',
+      '    [DllImport("winspool.Drv", EntryPoint="StartPagePrinter", SetLastError=true, ExactSpelling=true)]',
+      '    public static extern bool StartPagePrinter(IntPtr hPrinter);',
+      '    [DllImport("winspool.Drv", EntryPoint="EndPagePrinter", SetLastError=true, ExactSpelling=true)]',
+      '    public static extern bool EndPagePrinter(IntPtr hPrinter);',
+      '    [DllImport("winspool.Drv", EntryPoint="WritePrinter", SetLastError=true, ExactSpelling=true)]',
+      '    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);',
+      '    public static bool PrintRaw(string printerName, byte[] bytes) {',
+      '        if (string.IsNullOrEmpty(printerName)) return false;',
+      '        IntPtr hPrinter;',
+      '        if (!OpenPrinter(printerName, out hPrinter, IntPtr.Zero)) return false;',
+      '        DOCINFOA di = new DOCINFOA();',
+      '        di.pDocName = "RAW Print Job";',
+      '        di.pDataType = "RAW";',
+      '        uint docId = StartDocPrinter(hPrinter, 1, di);',
+      '        if (docId == 0) { ClosePrinter(hPrinter); return false; }',
+      '        if (!StartPagePrinter(hPrinter)) { EndDocPrinter(hPrinter); ClosePrinter(hPrinter); return false; }',
+      '        IntPtr pUnmanagedBytes = Marshal.AllocCoTaskMem(bytes.Length);',
+      '        Marshal.Copy(bytes, 0, pUnmanagedBytes, bytes.Length);',
+      '        int dwWritten;',
+      '        bool success = WritePrinter(hPrinter, pUnmanagedBytes, bytes.Length, out dwWritten);',
+      '        Marshal.FreeCoTaskMem(pUnmanagedBytes);',
+      '        EndPagePrinter(hPrinter);',
+      '        EndDocPrinter(hPrinter);',
+      '        ClosePrinter(hPrinter);',
+      '        return success;',
+      '    }',
+      '}',
+      '\'@',
+      'try { Add-Type -TypeDefinition $code -ErrorAction Stop } catch {}',
+      '',
+      'function Print-SpoolerJob([string]$target, [string]$filePath) {',
+      '    if (-not $target -or $target.Trim() -eq "") {',
+      '        return "ERROR|No target printer specified"',
+      '    }',
+      '    if (-not (Test-Path $filePath)) {',
+      '        return "ERROR|Print file not found: $filePath"',
+      '    }',
+      '    $bytes = [System.IO.File]::ReadAllBytes($filePath)',
+      '    $cleanTarget = $target.Split(\'(\')[0].Trim()',
+      '    ',
+      '    # 1. Direct attempt with exact target name',
+      '    $res = [RawPrinter]::PrintRaw($target, $bytes)',
+      '    if ($res) { return "SUCCESS|$target" }',
+      '    ',
+      '    # 2. Try cleaned target name if different',
+      '    if ($cleanTarget -and $cleanTarget -ne $target) {',
+      '        $res = [RawPrinter]::PrintRaw($cleanTarget, $bytes)',
+      '        if ($res) { return "SUCCESS|$cleanTarget" }',
+      '    }',
+      '    ',
+      '    # 3. Match against installed printers',
+      '    try {',
+      '        $installed = Get-Printer -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name',
+      '        $matched = $installed | Where-Object { $_ -eq $cleanTarget -or $_ -like "*$cleanTarget*" -or $_ -like "*$target*" } | Select-Object -First 1',
+      '        if ($matched) {',
+      '            $res = [RawPrinter]::PrintRaw($matched, $bytes)',
+      '            if ($res) { return "SUCCESS|$matched" }',
+      '        }',
+      '    } catch {}',
+      '    ',
+      '    # 4. Fallback to Windows default printer',
+      '    try {',
+      '        $defaultPrinter = (Get-CimInstance -ClassName Win32_Printer -ErrorAction SilentlyContinue | Where-Object { $_.Default -eq $true }).Name',
+      '        if ($defaultPrinter) {',
+      '            $res = [RawPrinter]::PrintRaw($defaultPrinter, $bytes)',
+      '            if ($res) { return "SUCCESS|$defaultPrinter" }',
+      '        }',
+      '    } catch {}',
+      '    ',
+      '    return "ERROR|Failed to print to spooler device: $target"',
+      '}',
+      '',
       'function Get-SerialPort([string]$comName) {',
       '    if (-not $ports.ContainsKey($comName) -or -not $ports[$comName].IsOpen) {',
       '        try {',
@@ -243,9 +333,14 @@ class PersistentBluetoothWorker {
       '    $reqId = $parts[0]',
       '    $targetDevice = $parts[1]',
       '    $binPath = $parts[2]',
+      '    $jobType = if ($parts.Length -ge 4) { $parts[3] } else { "bluetooth" }',
       '    ',
       '    try {',
-      '        $res = Print-TargetJob -target $targetDevice -filePath $binPath',
+      '        if ($jobType -eq "spooler" -or $jobType -eq "usb") {',
+      '            $res = Print-SpoolerJob -target $targetDevice -filePath $binPath',
+      '        } else {',
+      '            $res = Print-TargetJob -target $targetDevice -filePath $binPath',
+      '        }',
       '        if ($res.StartsWith("SUCCESS|")) {',
       '            $pName = $res.Split(\'|\')[1]',
       '            Write-Host "WORKER_RESULT|$reqId|SUCCESS|$pName"',
@@ -303,7 +398,7 @@ class PersistentBluetoothWorker {
     }
   }
 
-  printJob(targetDevice, binPath) {
+  printJob(targetDevice, binPath, jobType = 'bluetooth') {
     return new Promise((resolve, reject) => {
       this.ensureStarted();
       if (!this.psProcess || !this.psProcess.stdin) {
@@ -317,7 +412,7 @@ class PersistentBluetoothWorker {
           delete this.pendingCallbacks[reqId];
           reject(new Error('Persistent worker print timeout'));
         }
-      }, 5000);
+      }, 8000);
 
       this.pendingCallbacks[reqId] = {
         resolve: (val) => { clearTimeout(timeout); resolve(val); },
@@ -325,7 +420,7 @@ class PersistentBluetoothWorker {
       };
 
       try {
-        this.psProcess.stdin.write(`${reqId}|${targetDevice}|${binPath}\n`);
+        this.psProcess.stdin.write(`${reqId}|${targetDevice}|${binPath}|${jobType}\n`);
       } catch (err) {
         clearTimeout(timeout);
         delete this.pendingCallbacks[reqId];
@@ -356,10 +451,22 @@ function cleanPrinterName(name) {
 function executePrint(printerKey, payload) {
   return new Promise(async (resolve, reject) => {
     const config = configManager.getConfig();
-    const printerConfig = config.printers?.[printerKey];
+    let effectivePrinterKey = printerKey;
+    let printerConfig = config.printers?.[printerKey];
 
     if (!printerConfig) {
       return reject(new Error(`No configuration found for printer: ${printerKey}`));
+    }
+
+    // Check if KOT is configured to use Same as Billing Printer
+    if (printerKey === 'kitchen' && (printerConfig.sameAsBilling || (!printerConfig.printerName && printerConfig.type === config.printers?.billing?.type))) {
+      logger.info(`Kitchen printer is configured as "Same as Billing Printer". Routing KOT to billing printer (${config.printers?.billing?.type} / ${config.printers?.billing?.printerName || config.printers?.billing?.ip}).`);
+      effectivePrinterKey = 'billing';
+      printerConfig = config.printers?.billing;
+    }
+
+    if (!printerConfig) {
+      return reject(new Error(`No configuration found for target printer: ${effectivePrinterKey}`));
     }
 
     if (printerConfig.type === 'network') {
@@ -367,28 +474,31 @@ function executePrint(printerKey, payload) {
       const ip = printerConfig.ip;
       const port = printerConfig.port || 9100;
 
-      logger.info(`Connecting to network printer ${printerKey} at ${ip}:${port}...`);
+      logger.info(`Connecting to network printer ${effectivePrinterKey} at ${ip}:${port}...`);
       
       client.setTimeout(5000);
 
       client.connect(port, ip, () => {
-        logger.info(`Connected to network printer ${printerKey}. Sending payload (${payload.length} bytes)...`);
+        logger.info(`Connected to network printer ${effectivePrinterKey}. Sending payload (${payload.length} bytes)...`);
         client.write(payload, () => {
           client.destroy();
-          printerStatus[printerKey] = 'online';
+          printerStatus[effectivePrinterKey] = 'online';
+          if (printerKey === 'kitchen') printerStatus.kitchen = 'online';
           resolve();
         });
       });
 
       client.on('error', (err) => {
         client.destroy();
-        printerStatus[printerKey] = 'offline';
+        printerStatus[effectivePrinterKey] = 'offline';
+        if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
         reject(err);
       });
 
       client.on('timeout', () => {
         client.destroy();
-        printerStatus[printerKey] = 'offline';
+        printerStatus[effectivePrinterKey] = 'offline';
+        if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
         reject(new Error('Connection timed out'));
       });
 
@@ -405,7 +515,8 @@ function executePrint(printerKey, payload) {
         }
       } catch (err) {
         logger.error(`Failed to create tmp directory: ${err.message}`);
-        printerStatus[printerKey] = 'offline';
+        printerStatus[effectivePrinterKey] = 'offline';
+        if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
         return reject(err);
       }
 
@@ -415,11 +526,12 @@ function executePrint(printerKey, payload) {
       fs.writeFile(binPath, payload, async (err) => {
         if (err) {
           logger.error(`Failed to write print payload to temp file: ${err.message}`);
-          printerStatus[printerKey] = 'offline';
+          printerStatus[effectivePrinterKey] = 'offline';
+          if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
           return reject(err);
         }
 
-        // Helper for Windows Spooler Printing (USB / Local Printers)
+        // Helper for Windows Spooler Printing (Fallback for USB / Local Printers)
         const printViaSpooler = () => {
           return new Promise((spoolerResolve, spoolerReject) => {
             const psPath = path.join(tmpDir, `print_job_${jobId}.ps1`);
@@ -513,35 +625,49 @@ if ($res) { exit 0 } else { exit 1 }
 
         if (printerConfig.type === 'bluetooth') {
           try {
-            logger.info(`Routing Bluetooth print job for ${printerKey} (${targetDevice}) to Persistent Worker...`);
-            const comName = await persistentWorker.printJob(targetDevice, binPath);
+            logger.info(`Routing Bluetooth print job for ${effectivePrinterKey} (${targetDevice}) to Persistent Worker...`);
+            const comName = await persistentWorker.printJob(targetDevice, binPath, 'bluetooth');
             try { fs.unlinkSync(binPath); } catch (e) {}
             logger.info(`Successfully printed via Persistent Worker on ${comName}`);
-            printerStatus[printerKey] = 'online';
+            printerStatus[effectivePrinterKey] = 'online';
+            if (printerKey === 'kitchen') printerStatus.kitchen = 'online';
             return resolve();
           } catch (workerErr) {
             logger.warn(`Persistent Bluetooth worker failed for ${targetDevice}: ${workerErr.message}. Trying Spooler fallback.`);
             try {
               await printViaSpooler();
-              printerStatus[printerKey] = 'online';
+              printerStatus[effectivePrinterKey] = 'online';
+              if (printerKey === 'kitchen') printerStatus.kitchen = 'online';
               return resolve();
             } catch (spoolerErr) {
-              printerStatus[printerKey] = 'offline';
+              printerStatus[effectivePrinterKey] = 'offline';
+              if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
               return reject(spoolerErr);
             }
           }
         } else {
-          // USB / Local printer: Route DIRECTLY to Windows Spooler!
+          // USB / Local printer: Route to Persistent Worker (instantaneous: <20ms)!
           try {
-            logger.info(`Routing USB/Local print job for ${printerKey} (${targetDevice}) directly to Windows Spooler...`);
-            await printViaSpooler();
-            logger.info(`Successfully printed USB/Local job for ${printerKey} (${targetDevice})`);
-            printerStatus[printerKey] = 'online';
+            logger.info(`Routing USB/Local print job for ${effectivePrinterKey} (${targetDevice}) to Persistent Worker...`);
+            const printerUsed = await persistentWorker.printJob(targetDevice, binPath, 'spooler');
+            try { fs.unlinkSync(binPath); } catch (e) {}
+            logger.info(`Successfully printed USB/Local job for ${effectivePrinterKey} on ${printerUsed}`);
+            printerStatus[effectivePrinterKey] = 'online';
+            if (printerKey === 'kitchen') printerStatus.kitchen = 'online';
             return resolve();
-          } catch (spoolerErr) {
-            logger.error(`USB/Local Spooler printing failed for ${printerKey}: ${spoolerErr.message}`);
-            printerStatus[printerKey] = 'offline';
-            return reject(spoolerErr);
+          } catch (workerErr) {
+            logger.warn(`Persistent Spooler worker failed for ${targetDevice}: ${workerErr.message}. Trying standalone Spooler fallback.`);
+            try {
+              await printViaSpooler();
+              printerStatus[effectivePrinterKey] = 'online';
+              if (printerKey === 'kitchen') printerStatus.kitchen = 'online';
+              return resolve();
+            } catch (spoolerErr) {
+              logger.error(`USB/Local Spooler printing failed for ${effectivePrinterKey}: ${spoolerErr.message}`);
+              printerStatus[effectivePrinterKey] = 'offline';
+              if (printerKey === 'kitchen') printerStatus.kitchen = 'offline';
+              return reject(spoolerErr);
+            }
           }
         }
       });
@@ -562,6 +688,11 @@ async function checkPrinterStatuses() {
     const printerConfig = config.printers[key];
     if (!printerConfig) {
       printerStatus[key] = 'not_configured';
+      continue;
+    }
+
+    if (key === 'kitchen' && printerConfig.sameAsBilling) {
+      printerStatus.kitchen = printerStatus.billing || 'online';
       continue;
     }
 

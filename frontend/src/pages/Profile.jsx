@@ -43,7 +43,7 @@ const Profile = () => {
     const [loading, setLoading] = useState(false);
     const [printerConfig, setPrinterConfig] = useState({
         billing: { type: 'usb', printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42 },
-        kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42 }
+        kitchen: { type: 'usb', printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, sameAsBilling: false }
     });
     const [installedPrinters, setInstalledPrinters] = useState([]);
     const [bluetoothDevices, setBluetoothDevices] = useState([]);
@@ -650,13 +650,15 @@ const Profile = () => {
             if (res.data) {
                 const bType = res.data.printers?.billing?.type || localStorage.getItem('cfg_printer_type_billing') || 'usb';
                 const kType = res.data.printers?.kitchen?.type || localStorage.getItem('cfg_printer_type_kot') || 'usb';
+                const kSameAsBilling = res.data.printers?.kitchen?.sameAsBilling ?? (localStorage.getItem('cfg_printer_same_as_billing_kot') === 'true');
 
                 localStorage.setItem('cfg_printer_type_billing', bType);
                 localStorage.setItem('cfg_printer_type_kot', kType);
+                localStorage.setItem('cfg_printer_same_as_billing_kot', kSameAsBilling ? 'true' : 'false');
 
                 setPrinterConfig({
                     billing: { type: bType, printerName: 'billing-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.billing || {}) },
-                    kitchen: { type: kType, printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, ...(res.data.printers?.kitchen || {}) }
+                    kitchen: { type: kType, printerName: 'kitchen-printer', ip: '', port: 9100, paperSize: '80mm', charLimit: 42, sameAsBilling: kSameAsBilling, ...(res.data.printers?.kitchen || {}) }
                 });
                 setSelectedGuestIp(res.data.guestIp || '');
             }
@@ -818,7 +820,12 @@ const Profile = () => {
     const handleTestPrintKot = async () => {
         const tId = toast.loading('Sending test ticket to KOT Printer...');
         try {
-            if (printerConfig.kitchen.type === 'bluetooth' && typeof window !== 'undefined' && window.bluetoothSerial) {
+            const isSame = !!printerConfig.kitchen.sameAsBilling;
+            const effectiveType = isSame ? printerConfig.billing.type : printerConfig.kitchen.type;
+            const effectiveName = isSame ? (printerConfig.billing.printerName || BluetoothPrinterService.getSelectedPrinter('billing')) : (printerConfig.kitchen.printerName || BluetoothPrinterService.getSelectedPrinter('kot'));
+            const effectiveSize = printerConfig.kitchen.paperSize || (isSame ? printerConfig.billing.paperSize : '80mm') || '80mm';
+
+            if (effectiveType === 'bluetooth' && typeof window !== 'undefined' && window.bluetoothSerial) {
                 const sampleItems = [
                     { name: 'Paneer Butter Masala', qty: 2 },
                     { name: 'Garlic Naan', qty: 4 },
@@ -835,10 +842,8 @@ const Profile = () => {
                     notes: 'Test KOT Notes'
                 };
 
-                const size = printerConfig.kitchen.paperSize || '80mm';
-                const bytes = await formatKOT(testPayload, size);
-                const targetMac = printerConfig.kitchen.printerName || BluetoothPrinterService.getSelectedPrinter('kot');
-                const success = await BluetoothPrinterService.printData(bytes, targetMac);
+                const bytes = await formatKOT(testPayload, effectiveSize);
+                const success = await BluetoothPrinterService.printData(bytes, effectiveName);
                 if (success) {
                     toast.success('Kitchen Bluetooth KOT Test Print Successful!', { id: tId });
                 }
@@ -858,6 +863,7 @@ const Profile = () => {
         try {
             localStorage.setItem('cfg_printer_type_billing', printerConfig.billing.type || 'usb');
             localStorage.setItem('cfg_printer_type_kot', printerConfig.kitchen.type || 'usb');
+            localStorage.setItem('cfg_printer_same_as_billing_kot', printerConfig.kitchen.sameAsBilling ? 'true' : 'false');
 
             if (printerConfig.billing.printerName) {
                 localStorage.setItem('cfg_bluetooth_mac', printerConfig.billing.printerName);
@@ -1467,6 +1473,79 @@ const Profile = () => {
                                             <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }}></span>
                                             Kitchen KOT Printer
                                         </h3>
+
+                                        {/* Option to select printer Same as Billing Printer on top of KOT card */}
+                                        <div 
+                                            onClick={() => {
+                                                const nextVal = !printerConfig.kitchen.sameAsBilling;
+                                                setPrinterConfig({
+                                                    ...printerConfig,
+                                                    kitchen: {
+                                                        ...printerConfig.kitchen,
+                                                        sameAsBilling: nextVal,
+                                                        ...(nextVal ? {
+                                                            type: printerConfig.billing.type,
+                                                            printerName: printerConfig.billing.printerName,
+                                                            ip: printerConfig.billing.ip,
+                                                            port: printerConfig.billing.port
+                                                        } : {})
+                                                    }
+                                                });
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '12px 14px',
+                                                borderRadius: '8px',
+                                                backgroundColor: printerConfig.kitchen.sameAsBilling ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-card)',
+                                                border: printerConfig.kitchen.sameAsBilling ? '1px solid #0ea5e9' : '1px solid var(--bg-border)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <input 
+                                                    type="checkbox"
+                                                    id="kotSameAsBillingToggle"
+                                                    checked={!!printerConfig.kitchen.sameAsBilling}
+                                                    onChange={() => {}} // handled by parent onClick
+                                                    style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#0ea5e9' }}
+                                                />
+                                                <div>
+                                                    <label htmlFor="kotSameAsBillingToggle" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block' }}>
+                                                        Same as Billing Printer
+                                                    </label>
+                                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                        {printerConfig.kitchen.sameAsBilling 
+                                                            ? `Printing KOTs to: ${printerConfig.billing.printerName || printerConfig.billing.ip || 'Billing Printer'} (${(printerConfig.billing.type || 'USB').toUpperCase()})` 
+                                                            : 'Print both KOT tickets and cashier bills from the same printer'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '11px',
+                                                fontWeight: 700,
+                                                padding: '4px 8px',
+                                                borderRadius: '6px',
+                                                backgroundColor: printerConfig.kitchen.sameAsBilling ? '#0ea5e9' : 'var(--bg-base)',
+                                                color: printerConfig.kitchen.sameAsBilling ? '#ffffff' : 'var(--text-muted)',
+                                                border: printerConfig.kitchen.sameAsBilling ? 'none' : '1px solid var(--bg-border)'
+                                            }}>
+                                                {printerConfig.kitchen.sameAsBilling ? 'Active' : 'Off'}
+                                            </span>
+                                        </div>
+
+                                        {printerConfig.kitchen.sameAsBilling ? (
+                                            <div style={{ padding: '12px 14px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px dashed #0ea5e9', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <span style={{ fontSize: '18px' }}>🔗</span>
+                                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                                    Kitchen KOT is linked to <strong>{printerConfig.billing.printerName || printerConfig.billing.ip || 'Billing Printer'}</strong> ({(printerConfig.billing.type || 'USB').toUpperCase()}). When an order is placed, KOT tickets will automatically print to your cashier billing printer.
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>CONNECTION TYPE</label>
                                             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -1553,7 +1632,7 @@ const Profile = () => {
                                                         })}
                                                         style={{width: '100%', padding: '10px 14px', paddingRight: '40px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', fontWeight: 600, appearance: 'none', outline: 'none' }}
                                                     >
-                                                        <option value="">Same as Billing Printer (Default)</option>
+                                                        <option value="">-- Select KOT Bluetooth Printer --</option>
                                                         {printerConfig.kitchen.printerName && !bluetoothDevices.includes(printerConfig.kitchen.printerName) && (
                                                             <option value={printerConfig.kitchen.printerName}>{printerConfig.kitchen.printerName} (Saved Device)</option>
                                                         )}
@@ -1593,6 +1672,8 @@ const Profile = () => {
                                                     />
                                                 </div>
                                             </div>
+                                        )}
+                                            </>
                                         )}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                             <label style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>PAPER ROLL SIZE</label>

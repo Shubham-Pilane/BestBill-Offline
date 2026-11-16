@@ -16,7 +16,10 @@ class PrintService {
   _resolvePaperSize(printerKey, payload) {
     try {
       const config = configManager.getConfig();
-      const printerCfg = config.printers?.[printerKey];
+      let printerCfg = config.printers?.[printerKey];
+      if (printerKey === 'kitchen' && printerCfg?.sameAsBilling && !printerCfg?.paperSize) {
+        printerCfg = config.printers?.billing;
+      }
       if (printerCfg?.paperSize) return printerCfg.paperSize;
     } catch (e) { /* fallback */ }
     return payload.printerSize || '80mm';
@@ -29,7 +32,10 @@ class PrintService {
     if (paperSize === '58mm') return 31;
     try {
       const config = configManager.getConfig();
-      const printerCfg = config.printers?.[printerKey];
+      let printerCfg = config.printers?.[printerKey];
+      if (printerKey === 'kitchen' && printerCfg?.sameAsBilling && !printerCfg?.charLimit) {
+        printerCfg = config.printers?.billing;
+      }
       if (printerCfg?.charLimit) return Number(printerCfg.charLimit);
     } catch (e) { /* fallback */ }
     return 42; // default

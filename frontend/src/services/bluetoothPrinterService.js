@@ -611,6 +611,10 @@ export class BluetoothPrinterService {
 
   static getSelectedPrinter(type = 'billing') {
     if (type === 'kot' || type === 'kitchen') {
+      const isSameAsBilling = localStorage.getItem('cfg_printer_same_as_billing_kot') === 'true';
+      if (isSameAsBilling) {
+        return localStorage.getItem('cfg_bluetooth_mac') || '';
+      }
       return localStorage.getItem('cfg_bluetooth_mac_kot') || localStorage.getItem('cfg_bluetooth_mac') || '';
     }
     return localStorage.getItem('cfg_bluetooth_mac') || '';
@@ -618,6 +622,10 @@ export class BluetoothPrinterService {
 
   static getPrinterSize(type = 'billing') {
     if (type === 'kot' || type === 'kitchen') {
+      const isSameAsBilling = localStorage.getItem('cfg_printer_same_as_billing_kot') === 'true';
+      if (isSameAsBilling && !localStorage.getItem('cfg_printer_size_kot')) {
+        return localStorage.getItem('cfg_printer_size') || '80mm';
+      }
       return localStorage.getItem('cfg_printer_size_kot') || localStorage.getItem('cfg_printer_size') || '58mm';
     }
     return localStorage.getItem('cfg_printer_size') || '58mm';
