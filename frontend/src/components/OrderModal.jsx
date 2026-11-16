@@ -76,6 +76,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     }
   });
   const [showAddPartnerInput, setShowAddPartnerInput] = useState(false);
+  const [newPartnerName, setNewPartnerName] = useState('');
   const [partnerToDelete, setPartnerToDelete] = useState(null);
   const [partnerToRename, setPartnerToRename] = useState(null);
   const [renameValue, setRenameValue] = useState('');

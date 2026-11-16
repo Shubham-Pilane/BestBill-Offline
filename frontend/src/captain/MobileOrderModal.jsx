@@ -10,7 +10,6 @@ import SwapModal from '../components/SwapModal';
 // import { onUpdate } from '../services/socketService'; // Removed for PWA
 
 const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables }) => {
-  if (!table) return null;
   const { user } = useAuth();
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
   const [categories, setCategories] = useState(initialMenu?.categories || []);
@@ -70,6 +69,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
     }
   });
   const [showAddPartnerInput, setShowAddPartnerInput] = useState(false);
+  const [newPartnerName, setNewPartnerName] = useState('');
   const [partnerToDelete, setPartnerToDelete] = useState(null);
   const [partnerToRename, setPartnerToRename] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -591,7 +591,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const amountVal = billData?.final_amount || 0;
   const upiLink = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(hname)}&am=${amountVal}&cu=INR`;
 
-  if (loading) return null;
+  if (loading || !table) return null;
 
   return createPortal(
     <div className="order-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.95)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: isMobile ? 0 : '16px' }}>

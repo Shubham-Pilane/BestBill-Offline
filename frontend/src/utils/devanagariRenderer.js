@@ -357,7 +357,7 @@ export function renderKOTItemRowToRaster(itemData, options = {}) {
     if (metrics.width <= itemColWidth - 4) {
       currentLine = testLine;
     } else {
-      if (currentLine) lines.push(currentLine);
+      if (currentLine) nameLines.push(currentLine);
       currentLine = word;
     }
   });
