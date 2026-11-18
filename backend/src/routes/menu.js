@@ -70,6 +70,41 @@ router.post('/menus', auth, async (req, res) => {
   }
 });
 
+// Delete a menu definition
+router.delete('/menus/:menu_number', auth, async (req, res) => {
+  try {
+    const menuNum = parseInt(req.params.menu_number, 10);
+    if (!menuNum || isNaN(menuNum)) {
+      return res.status(400).json({ message: 'Valid menu number is required' });
+    }
+    if (menuNum === 1) {
+      return res.status(400).json({ message: 'Menu 1 is the default menu and cannot be deleted' });
+    }
+
+    // 1. Delete from hotel_menus
+    await db.query('DELETE FROM hotel_menus WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+
+    // 2. Delete / soft-delete items and categories for this menu
+    await db.query('UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+    await db.query('UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+
+    // 3. Reset any section_menus assigned to this menu back to 1
+    await db.query('UPDATE section_menus SET menu_number = 1 WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+
+    // 4. Reset tables assigned to this menu back to 1
+    try {
+      await db.query('UPDATE tables SET menu_number = 1 WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+    } catch (e) {}
+
+    // Return remaining menus
+    const menus = await db.query('SELECT * FROM hotel_menus WHERE hotel_id = $1 ORDER BY menu_number ASC', [req.user.hotel_id]);
+    res.json({ success: true, message: `Menu ${menuNum} deleted successfully`, menus: menus.rows });
+  } catch (err) {
+    console.error('Error deleting menu definition:', err);
+    res.status(500).json({ message: 'Error deleting menu' });
+  }
+});
+
 // Get categories
 router.get('/categories', auth, async (req, res) => {
   try {

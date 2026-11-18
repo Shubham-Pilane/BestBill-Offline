@@ -123,6 +123,33 @@ const MenuManagement = () => {
     }
   };
 
+  const handleDeleteMenu = (menuObj) => {
+    const menuTitle = menuObj.name || `Menu ${menuObj.menu_number}`;
+    setConfirmModal({
+      isOpen: true,
+      title: `Delete ${menuTitle}?`,
+      message: `Are you sure you want to delete ${menuTitle}? All its categories and menu items will be deleted, and any table sections assigned to it will automatically revert to Menu 1 (Default). This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          const res = await api.delete(`/menu/menus/${menuObj.menu_number}`);
+          toast.success(res.data?.message || `${menuTitle} deleted successfully`);
+          if (Array.isArray(res.data?.menus) && res.data.menus.length > 0) {
+            setMenus(res.data.menus);
+          } else {
+            setMenus(prev => prev.filter(m => m.menu_number !== menuObj.menu_number));
+          }
+          if (selectedMenuNumber === menuObj.menu_number) {
+            setSelectedMenuNumber(1);
+            fetchData(1, '', 1);
+          }
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Failed to delete menu');
+        }
+      }
+    });
+  };
+
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -542,6 +569,31 @@ const MenuManagement = () => {
                       >
                         <Edit2 size={13} />
                       </button>
+                      {m.menu_number !== 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteMenu(m);
+                          }}
+                          title={`Delete ${m.name || `Menu ${m.menu_number}`}`}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#f43f5e',
+                            cursor: 'pointer',
+                            padding: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: isSelected ? 0.9 : 0.6,
+                            transition: 'opacity 0.15s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = isSelected ? '0.9' : '0.6'}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
