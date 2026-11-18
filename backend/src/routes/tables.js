@@ -47,11 +47,15 @@ router.post('/section-menus', auth, async (req, res) => {
       );
     }
 
-    // Update all tables in this section to keep table.menu_number in sync
-    await db.query(
-      'UPDATE tables SET menu_number = $1 WHERE hotel_id = $2 AND floor = $3',
-      [menuNum, hotelId, section_name]
-    );
+    // Update all tables in this section to keep table.menu_number in sync if column exists
+    try {
+      await db.query(
+        'UPDATE tables SET menu_number = $1 WHERE hotel_id = $2 AND floor = $3',
+        [menuNum, hotelId, section_name]
+      );
+    } catch (e) {
+      // Ignore if table column not updated yet
+    }
 
     notifyUpdate(hotelId, 'table-update');
     res.json({ success: true, section_name, menu_number: menuNum });
@@ -65,7 +69,7 @@ router.post('/section-menus', auth, async (req, res) => {
 router.get('/', auth, async (req, res) => {
   try {
     const tables = await db.query(
-      `SELECT t.*, COALESCE(sm.menu_number, t.menu_number, 1) as menu_number, o.id as active_order_id 
+      `SELECT t.*, COALESCE(sm.menu_number, 1) as menu_number, o.id as active_order_id 
        FROM tables t 
        LEFT JOIN section_menus sm ON sm.hotel_id = t.hotel_id AND sm.section_name = t.floor
        LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'active'
@@ -97,10 +101,21 @@ router.post('/batch', auth, async (req, res) => {
     const menuNum = smRes.rows[0]?.menu_number || 1;
 
     for (const num of tableNumbers) {
-       await db.query(
-         'INSERT INTO tables (hotel_id, table_number, floor, menu_number) VALUES ($1, $2, $3, $4)', 
-         [req.user.hotel_id, num, floorValue, menuNum]
-       );
+       try {
+         await db.query(
+           'INSERT INTO tables (hotel_id, table_number, floor, menu_number) VALUES ($1, $2, $3, $4)', 
+           [req.user.hotel_id, num, floorValue, menuNum]
+         );
+       } catch (insertErr) {
+         if (insertErr.message && insertErr.message.includes('menu_number')) {
+           await db.query(
+             'INSERT INTO tables (hotel_id, table_number, floor) VALUES ($1, $2, $3)', 
+             [req.user.hotel_id, num, floorValue]
+           );
+         } else {
+           throw insertErr;
+         }
+       }
     }
     res.status(201).json({ message: 'Tables created securely' });
   } catch (err) {
@@ -127,10 +142,22 @@ router.put('/:id', auth, async (req, res) => {
     );
     const menuNum = smRes.rows[0]?.menu_number || 1;
 
-    const result = await db.query(
-      'UPDATE tables SET table_number = $1, capacity = $2, floor = $3, menu_number = $4 WHERE id = $5 AND hotel_id = $6 RETURNING *',
-      [table_number, capacity, floor, menuNum, id, req.user.hotel_id]
-    );
+    let result;
+    try {
+      result = await db.query(
+        'UPDATE tables SET table_number = $1, capacity = $2, floor = $3, menu_number = $4 WHERE id = $5 AND hotel_id = $6 RETURNING *',
+        [table_number, capacity, floor, menuNum, id, req.user.hotel_id]
+      );
+    } catch (updateErr) {
+      if (updateErr.message && updateErr.message.includes('menu_number')) {
+        result = await db.query(
+          'UPDATE tables SET table_number = $1, capacity = $2, floor = $3 WHERE id = $4 AND hotel_id = $5 RETURNING *',
+          [table_number, capacity, floor, id, req.user.hotel_id]
+        );
+      } else {
+        throw updateErr;
+      }
+    }
     if (result.rows.length === 0) return res.status(404).json({ message: 'Table not found' });
     notifyUpdate(req.user.hotel_id, 'table-update');
     res.json(result.rows[0]);

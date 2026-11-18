@@ -41,7 +41,8 @@ const syncSchema = async () => {
                 name VARCHAR(100) NOT NULL,
                 marathi_name VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_deleted BOOLEAN DEFAULT false
+                is_deleted BOOLEAN DEFAULT false,
+                menu_number INTEGER DEFAULT 1
             )`,
             `CREATE TABLE IF NOT EXISTS menu_items (
                 id SERIAL PRIMARY KEY,
@@ -53,7 +54,8 @@ const syncSchema = async () => {
                 description TEXT,
                 is_available BOOLEAN DEFAULT true,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_deleted BOOLEAN DEFAULT false
+                is_deleted BOOLEAN DEFAULT false,
+                menu_number INTEGER DEFAULT 1
             )`,
             `CREATE TABLE IF NOT EXISTS rooms (
                 id SERIAL PRIMARY KEY, 
@@ -73,6 +75,7 @@ const syncSchema = async () => {
                 status VARCHAR(20) DEFAULT 'available',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 floor VARCHAR(50) DEFAULT 'Floor 1',
+                menu_number INTEGER DEFAULT 1,
                 UNIQUE (hotel_id, floor, table_number)
             )`,
             `CREATE TABLE IF NOT EXISTS orders (
@@ -364,36 +367,26 @@ const syncSchema = async () => {
             }
         }
 
-        // 5. Special SQLite Migration for dropping UNIQUE constraint on tables
+        // 5. Special SQLite Migration for ensuring columns
         if (db.sqliteDb) {
             try {
-                console.log('[MIGRATION] Running SQLite-specific table rebuild to update constraints...');
-                db.sqliteDb.exec('PRAGMA foreign_keys = OFF');
-                db.sqliteDb.exec(`
-                    CREATE TABLE IF NOT EXISTS tables_new (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        hotel_id INTEGER REFERENCES hotels(id) ON DELETE CASCADE,
-                        table_number TEXT NOT NULL,
-                        capacity INTEGER DEFAULT 4,
-                        status TEXT DEFAULT 'available',
-                        floor TEXT DEFAULT 'Floor 1',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        UNIQUE (hotel_id, floor, table_number)
-                    )
-                `);
-                
-                // Copy data using named columns to avoid mismatches
-                db.sqliteDb.exec(`
-                    INSERT OR IGNORE INTO tables_new (id, hotel_id, table_number, capacity, status, floor, created_at) 
-                    SELECT id, hotel_id, table_number, capacity, status, floor, created_at FROM tables
-                `);
-                
-                db.sqliteDb.exec('DROP TABLE tables');
-                db.sqliteDb.exec('ALTER TABLE tables_new RENAME TO tables');
-                db.sqliteDb.exec('PRAGMA foreign_keys = ON');
+                const tableCols = db.sqliteDb.prepare("PRAGMA table_info(tables)").all().map(c => c.name);
+                if (!tableCols.includes('menu_number')) {
+                    db.sqliteDb.exec('ALTER TABLE tables ADD COLUMN menu_number INTEGER DEFAULT 1');
+                    console.log('[MIGRATION] Added menu_number column to tables');
+                }
+                const catCols = db.sqliteDb.prepare("PRAGMA table_info(categories)").all().map(c => c.name);
+                if (!catCols.includes('menu_number')) {
+                    db.sqliteDb.exec('ALTER TABLE categories ADD COLUMN menu_number INTEGER DEFAULT 1');
+                    console.log('[MIGRATION] Added menu_number column to categories');
+                }
+                const itemCols = db.sqliteDb.prepare("PRAGMA table_info(menu_items)").all().map(c => c.name);
+                if (!itemCols.includes('menu_number')) {
+                    db.sqliteDb.exec('ALTER TABLE menu_items ADD COLUMN menu_number INTEGER DEFAULT 1');
+                    console.log('[MIGRATION] Added menu_number column to menu_items');
+                }
             } catch (e) {
-                console.error('[MIGRATION] SQLite table rebuild error:', e.message);
-                db.sqliteDb.exec('PRAGMA foreign_keys = ON');
+                console.error('[MIGRATION] SQLite ensure column error:', e.message);
             }
         }
 
