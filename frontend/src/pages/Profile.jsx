@@ -80,6 +80,9 @@ const Profile = () => {
     // Cancel Orders State
     const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
 
+    // Multiple Menu State
+    const [multipleMenuEnabled, setMultipleMenuEnabled] = useState(false);
+
     // Settle Without Print State
     const [settleWithoutPrintEnabled, setSettleWithoutPrintEnabled] = useState(
         typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true'
@@ -194,6 +197,7 @@ const Profile = () => {
             fetchInventoryStatus();
             fetchTokenCounterStatus();
             fetchCancelOrdersStatus();
+            fetchMultipleMenuStatus();
             fetchEmailReportStatus();
             fetchEmailReportConfig();
             fetchCloudSyncConfig();
@@ -369,6 +373,29 @@ const Profile = () => {
             }
         } catch (err) {
             toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Cancel Order Management`);
+        }
+    };
+
+    const fetchMultipleMenuStatus = async () => {
+        try {
+            const res = await api.get('/hotel/multiple-menu-status');
+            setMultipleMenuEnabled(res.data.multipleMenuEnabled);
+            updateUser({ multipleMenuEnabled: res.data.multipleMenuEnabled });
+        } catch (err) {
+            console.error('Failed to fetch multiple menu status', err);
+        }
+    };
+
+    const handleToggleMultipleMenu = async (shouldEnable) => {
+        try {
+            const res = await api.post('/hotel/toggle-multiple-menu', { enabled: shouldEnable });
+            if (res.data.success) {
+                setMultipleMenuEnabled(shouldEnable);
+                updateUser({ multipleMenuEnabled: shouldEnable });
+                toast.success(`Multiple Menu ${shouldEnable ? 'Activated' : 'Deactivated'}!`);
+            }
+        } catch (err) {
+            toast.error(err.response?.data?.message || `Failed to ${shouldEnable ? 'activate' : 'deactivate'} Multiple Menu`);
         }
     };
 
@@ -2415,6 +2442,41 @@ const Profile = () => {
                                         name="settleWithoutPrintModule"
                                         checked={settleWithoutPrintEnabled} 
                                         onChange={() => handleToggleSettleWithoutPrint(true)}
+                                        style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Multiple Menu Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Multiple Menu</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Maintain multiple independent menus with section-based pricing (e.g. Regular Hall vs AC Hall) and assign specific menus to table sections.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="multipleMenuModule"
+                                        checked={!multipleMenuEnabled} 
+                                        onChange={() => handleToggleMultipleMenu(false)}
+                                        style={{ accentColor: '#f43f5e', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Disabled
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="multipleMenuModule"
+                                        checked={multipleMenuEnabled} 
+                                        onChange={() => handleToggleMultipleMenu(true)}
                                         style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
                                     />
                                     Enabled

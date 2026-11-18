@@ -3,10 +3,81 @@ const db = require('../db/db');
 const auth = require('../middleware/auth');
 const router = express.Router();
 
+// Helper to ensure default menus exist (Menu 1..4)
+const ensureDefaultMenus = async (hotelId) => {
+  try {
+    const existing = await db.query('SELECT * FROM hotel_menus WHERE hotel_id = $1 ORDER BY menu_number ASC', [hotelId]);
+    if (existing.rows.length === 0) {
+      const defaultMenus = [
+        { num: 1, name: 'Menu 1' },
+        { num: 2, name: 'Menu 2' },
+        { num: 3, name: 'Menu 3' },
+        { num: 4, name: 'Menu 4' }
+      ];
+      for (const m of defaultMenus) {
+        try {
+          await db.query('INSERT INTO hotel_menus (hotel_id, menu_number, name) VALUES ($1, $2, $3)', [hotelId, m.num, m.name]);
+        } catch {
+          // ignore duplicate
+        }
+      }
+      const refreshed = await db.query('SELECT * FROM hotel_menus WHERE hotel_id = $1 ORDER BY menu_number ASC', [hotelId]);
+      return refreshed.rows;
+    }
+    return existing.rows;
+  } catch (err) {
+    console.error('Error ensuring default menus:', err);
+    return [
+      { menu_number: 1, name: 'Menu 1' },
+      { menu_number: 2, name: 'Menu 2' },
+      { menu_number: 3, name: 'Menu 3' },
+      { menu_number: 4, name: 'Menu 4' }
+    ];
+  }
+};
+
+// Get all configured menus
+router.get('/menus', auth, async (req, res) => {
+  try {
+    const menus = await ensureDefaultMenus(req.user.hotel_id);
+    res.json(menus);
+  } catch (err) {
+    console.error('Error fetching menus:', err);
+    res.status(500).json({ message: 'Error fetching menus' });
+  }
+});
+
+// Create or update a menu definition (e.g. rename or add Menu 5)
+router.post('/menus', auth, async (req, res) => {
+  try {
+    const { menu_number, name } = req.body;
+    const menuNum = parseInt(menu_number, 10);
+    if (!menuNum || isNaN(menuNum)) {
+      return res.status(400).json({ message: 'Valid menu number is required' });
+    }
+    const cleanName = (name || `Menu ${menuNum}`).trim();
+    const existing = await db.query('SELECT * FROM hotel_menus WHERE hotel_id = $1 AND menu_number = $2', [req.user.hotel_id, menuNum]);
+    if (existing.rows.length > 0) {
+      await db.query('UPDATE hotel_menus SET name = $1 WHERE hotel_id = $2 AND menu_number = $3', [cleanName, req.user.hotel_id, menuNum]);
+    } else {
+      await db.query('INSERT INTO hotel_menus (hotel_id, menu_number, name) VALUES ($1, $2, $3)', [req.user.hotel_id, menuNum, cleanName]);
+    }
+    const menus = await db.query('SELECT * FROM hotel_menus WHERE hotel_id = $1 ORDER BY menu_number ASC', [req.user.hotel_id]);
+    res.json({ success: true, menus: menus.rows });
+  } catch (err) {
+    console.error('Error saving menu definition:', err);
+    res.status(500).json({ message: 'Error saving menu definition' });
+  }
+});
+
 // Get categories
 router.get('/categories', auth, async (req, res) => {
   try {
-    const categories = await db.query('SELECT * FROM categories WHERE hotel_id = $1 AND is_deleted = 0 ORDER BY name ASC', [req.user.hotel_id]);
+    const menuNum = parseInt(req.query.menu_number) || 1;
+    const categories = await db.query(
+      'SELECT * FROM categories WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND is_deleted = 0 ORDER BY name ASC',
+      [req.user.hotel_id, menuNum]
+    );
     res.json(categories.rows);
   } catch (err) {
     res.status(500).json({ message: 'Server error fetching categories' });
@@ -15,20 +86,21 @@ router.get('/categories', auth, async (req, res) => {
 
 // Create category
 router.post('/categories', auth, async (req, res) => {
-  const { name } = req.body;
+  const { name, marathi_name, menu_number } = req.body;
   const hotelId = req.user.hotel_id;
+  const menuNum = parseInt(menu_number) || 1;
   try {
     const trimmedName = name.trim();
     const existing = await db.query(
-      'SELECT * FROM categories WHERE hotel_id = $1 AND LOWER(name) = LOWER($2)',
-      [hotelId, trimmedName]
+      'SELECT * FROM categories WHERE hotel_id = $1 AND LOWER(name) = LOWER($2) AND COALESCE(menu_number, 1) = $3',
+      [hotelId, trimmedName, menuNum]
     );
 
     if (existing.rows.length > 0) {
       const cat = existing.rows[0];
       if (cat.is_deleted === 1 || cat.is_deleted === true) {
         // Restore category
-        await db.query('UPDATE categories SET is_deleted = 0 WHERE id = $1', [cat.id]);
+        await db.query('UPDATE categories SET is_deleted = 0, marathi_name = COALESCE($1, marathi_name) WHERE id = $2', [marathi_name || null, cat.id]);
         const restored = await db.query('SELECT * FROM categories WHERE id = $1', [cat.id]);
         return res.status(201).json(restored.rows[0]);
       }
@@ -36,8 +108,8 @@ router.post('/categories', auth, async (req, res) => {
     }
 
     const newCategory = await db.query(
-      'INSERT INTO categories (hotel_id, name) VALUES ($1, $2) RETURNING *',
-      [hotelId, trimmedName]
+      'INSERT INTO categories (hotel_id, name, marathi_name, menu_number) VALUES ($1, $2, $3, $4) RETURNING *',
+      [hotelId, trimmedName, marathi_name || null, menuNum]
     );
     res.status(201).json(newCategory.rows[0]);
   } catch (err) {
@@ -84,13 +156,14 @@ router.get('/items', auth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const search = req.query.search || '';
     const category_id = req.query.category_id || 'all';
+    const menuNum = parseInt(req.query.menu_number) || 1;
     let queryStr = `
       SELECT mi.*, c.name as category_name, c.marathi_name as category_marathi_name
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
+      WHERE mi.hotel_id = $1 AND COALESCE(mi.menu_number, 1) = $2 AND mi.is_deleted = 0
     `;
-    const params = [req.user.hotel_id];
+    const params = [req.user.hotel_id, menuNum];
 
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
@@ -115,9 +188,9 @@ router.get('/items', auth, async (req, res) => {
       SELECT COUNT(*) AS count
       FROM menu_items mi 
       JOIN categories c ON mi.category_id = c.id 
-      WHERE mi.hotel_id = $1 AND mi.is_deleted = 0
+      WHERE mi.hotel_id = $1 AND COALESCE(mi.menu_number, 1) = $2 AND mi.is_deleted = 0
     `;
-    const countParams = [req.user.hotel_id];
+    const countParams = [req.user.hotel_id, menuNum];
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
       countParams.push(searchParam, searchParam, searchParam);
@@ -152,15 +225,16 @@ router.get('/items', auth, async (req, res) => {
 
 // Create menu item
 router.post('/items', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available, marathi_name } = req.body;
+  const { name, price, category_id, description, is_available, marathi_name, menu_number } = req.body;
   const hotelId = req.user.hotel_id;
+  const menuNum = parseInt(menu_number) || 1;
   try {
     const lowercaseName = name.trim().toLowerCase();
     
     // Create the hotel-specific menu item directly
     const newItem = await db.query(
-      'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true]
+      'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true, menuNum]
     );
     res.status(201).json(newItem.rows[0]);
   } catch (err) {
@@ -258,23 +332,30 @@ router.delete('/items/:id', auth, async (req, res) => {
 
 // Bulk import menu items
 router.post('/items/bulk', auth, async (req, res) => {
-  const { items } = req.body;
+  const { items, menu_number } = req.body;
   const hotelId = req.user.hotel_id;
+  const menuNum = parseInt(menu_number, 10) || 1;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: 'No items provided' });
   }
 
   try {
-    // 1. Get existing categories
-    const categoriesResult = await db.query('SELECT * FROM categories WHERE hotel_id = $1', [hotelId]);
+    // 1. Get existing categories for this specific menu
+    const categoriesResult = await db.query(
+      'SELECT * FROM categories WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2',
+      [hotelId, menuNum]
+    );
     const categoriesMap = new Map();
     categoriesResult.rows.forEach(c => {
       categoriesMap.set(c.name.toLowerCase().trim(), c);
     });
 
-    // 2. Get existing menu items
-    const existingItemsResult = await db.query(`SELECT * FROM menu_items WHERE hotel_id = $1`, [hotelId]);
+    // 2. Get existing menu items for this specific menu
+    const existingItemsResult = await db.query(
+      `SELECT * FROM menu_items WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2`,
+      [hotelId, menuNum]
+    );
     const existingItemsMap = new Map();
     existingItemsResult.rows.forEach(item => {
       existingItemsMap.set(item.name.toLowerCase().trim(), item);
@@ -307,13 +388,13 @@ router.post('/items/bulk', auth, async (req, res) => {
           existingCat.marathi_name = marathiCatName;
         }
       } else {
-        // Create category if it doesn't exist
+        // Create category for this menu if it doesn't exist
         const newCat = await db.query(
-          'INSERT INTO categories (hotel_id, name, marathi_name) VALUES ($1, $2, $3) RETURNING id',
-          [hotelId, catName, marathiCatName]
+          'INSERT INTO categories (hotel_id, name, marathi_name, menu_number) VALUES ($1, $2, $3, $4) RETURNING id',
+          [hotelId, catName, marathiCatName, menuNum]
         );
         categoryId = newCat.rows[0].id;
-        categoriesMap.set(catKey, { id: categoryId, name: catName, marathi_name: marathiCatName, is_deleted: 0 });
+        categoriesMap.set(catKey, { id: categoryId, name: catName, marathi_name: marathiCatName, is_deleted: 0, menu_number: menuNum });
       }
 
       const lowercaseName = item.name.trim().toLowerCase();
@@ -336,20 +417,21 @@ router.post('/items/bulk', auth, async (req, res) => {
           updatedCount++;
         }
       } else {
-        // Insert new item
+        // Insert new item for this specific menu
         const newMarathiName = item.marathi_name || null;
         await db.query(
-          'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true]
+          'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true, menuNum]
         );
         createdCount++;
       }
     }
 
     res.status(201).json({ 
-      message: `Successfully imported menu: ${createdCount} new items added, ${updatedCount} items updated.`, 
+      message: `Successfully imported Menu ${menuNum}: ${createdCount} new items added, ${updatedCount} items updated.`, 
       createdCount, 
-      updatedCount 
+      updatedCount,
+      menu_number: menuNum
     });
   } catch (err) {
     console.error('[BULK IMPORT ERROR]', err);
@@ -357,27 +439,40 @@ router.post('/items/bulk', auth, async (req, res) => {
   }
 });
 
-// Purge all menu items and categories
+// Purge menu items and categories (supports purging a specific menu)
 router.delete('/purge-all', auth, async (req, res) => {
   const hotelId = req.user.hotel_id;
+  const menuNum = parseInt(req.query.menu_number || req.body?.menu_number, 10);
   try {
-    // Try hard deleting menu items matching language first
-    try {
-      await db.query(`DELETE FROM menu_items WHERE hotel_id = $1`, [hotelId]);
-    } catch (err) {
-      // Soft delete if referenced in active orders / bills
-      await db.query(`UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1`, [hotelId]);
+    if (menuNum && !isNaN(menuNum)) {
+      // Purge only the specific menu
+      try {
+        await db.query('DELETE FROM menu_items WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2', [hotelId, menuNum]);
+      } catch {
+        await db.query('UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2', [hotelId, menuNum]);
+      }
+      try {
+        await db.query('DELETE FROM categories WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2', [hotelId, menuNum]);
+      } catch {
+        await db.query('UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2', [hotelId, menuNum]);
+      }
+      return res.json({ message: `Menu ${menuNum} cleared successfully` });
     }
 
-    // Try hard deleting categories
+    // Purge all menus
     try {
-      await db.query(`DELETE FROM categories WHERE hotel_id = $1`, [hotelId]);
-    } catch (err) {
-      // Soft delete if referenced
-      await db.query(`UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1`, [hotelId]);
+      await db.query('DELETE FROM menu_items WHERE hotel_id = $1', [hotelId]);
+    } catch {
+      await db.query('UPDATE menu_items SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
     }
 
-    res.json({ message: `Menu cleared successfully` });
+    try {
+      await db.query('DELETE FROM categories WHERE hotel_id = $1', [hotelId]);
+    } catch {
+      await db.query('UPDATE categories SET is_deleted = 1 WHERE hotel_id = $1', [hotelId]);
+    }
+
+    res.json({ message: 'All menus cleared successfully' });
   } catch (err) {
     console.error('[PURGE ALL ERROR]', err);
     res.status(500).json({ message: 'Failed to purge menu' });

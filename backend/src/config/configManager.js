@@ -45,7 +45,8 @@ const defaultConfig = {
   cloudSyncOwnerEmail: "",
   cloudSyncOwnerPassword: "",
   cloudSyncIntervalMinutes: 15,
-  lastCloudSyncTime: ""
+  lastCloudSyncTime: "",
+  multipleMenuEnabled: false
 };
 
 /**

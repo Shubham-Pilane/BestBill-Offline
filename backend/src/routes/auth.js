@@ -241,6 +241,7 @@ router.post('/login', async (req, res) => {
         inventoryEnabled: !!config.inventoryEnabled,
         tokenCounterEnabled: !!config.tokenCounterEnabled,
         cancelOrdersEnabled: !!config.cancelOrdersEnabled,
+        multipleMenuEnabled: !!config.multipleMenuEnabled,
 
         emailReportModuleEnabled: !!config.emailReportModuleEnabled,
         licenseWarning: details ? details.warning : false,

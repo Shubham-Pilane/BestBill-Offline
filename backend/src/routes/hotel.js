@@ -450,6 +450,31 @@ router.post('/toggle-cancel-orders', auth, (req, res) => {
   }
 });
 
+// Get Multiple Menu Module Status
+router.get('/multiple-menu-status', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ multipleMenuEnabled: !!config.multipleMenuEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking multiple menu status' });
+  }
+});
+
+// Toggle Multiple Menu Module
+router.post('/toggle-multiple-menu', auth, (req, res) => {
+  const { enabled } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+    config.multipleMenuEnabled = !!enabled;
+    configManager.saveConfig(config);
+    res.json({ success: true, multipleMenuEnabled: config.multipleMenuEnabled });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating multiple menu configuration' });
+  }
+});
+
 // Get Token Counter Activation Status
 router.get('/token-counter-status', auth, (req, res) => {
   try {

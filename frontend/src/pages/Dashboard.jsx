@@ -4,7 +4,7 @@ import api from '../services/api';
 import OrderModal from '../components/OrderModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint, Sun, Moon, ChevronDown } from 'lucide-react';
+import { PlusCircle, Table as TableIcon, LayoutGrid, Search, X, Hash, Trash2, RefreshCcw, Hotel, Fingerprint, Sun, Moon, ChevronDown, Utensils } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import SwapModal from '../components/SwapModal';
@@ -33,12 +33,59 @@ const Dashboard = () => {
   const [isEditCustomFloor, setIsEditCustomFloor] = useState(false);
   const [editCustomFloorName, setEditCustomFloorName] = useState('');
 
+  // Multiple Menu States
+  const [sectionMenuMap, setSectionMenuMap] = useState({});
+  const [availableMenus, setAvailableMenus] = useState([
+    { menu_number: 1, name: 'Menu 1' },
+    { menu_number: 2, name: 'Menu 2' },
+    { menu_number: 3, name: 'Menu 3' },
+    { menu_number: 4, name: 'Menu 4' }
+  ]);
+  const [showSectionMenuModal, setShowSectionMenuModal] = useState(false);
+
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [menuData, setMenuData] = useState({ categories: [], items: [] });
   const [subStatus, setSubStatus] = useState(null);
   const [timeRemainingStr, setTimeRemainingStr] = useState('');
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [tableSearchQuery, setTableSearchQuery] = useState('');
+
+  const fetchSectionMenus = async () => {
+    if (!user?.multipleMenuEnabled) return;
+    try {
+      const [smRes, mRes] = await Promise.all([
+        api.get('/tables/section-menus'),
+        api.get('/menu/menus')
+      ]);
+      if (smRes.data && typeof smRes.data === 'object') {
+        setSectionMenuMap(smRes.data);
+      }
+      if (Array.isArray(mRes.data) && mRes.data.length > 0) {
+        setAvailableMenus(mRes.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch section menus:', err);
+    }
+  };
+
+  const handleAssignMenuToSection = async (floorName, menuNum) => {
+    try {
+      const res = await api.post('/tables/section-menus', {
+        section_name: floorName,
+        menu_number: menuNum
+      });
+      if (res.data?.success) {
+        setSectionMenuMap(prev => ({ ...prev, [floorName]: menuNum }));
+        setTables(prev => prev.map(t => t.floor === floorName ? { ...t, menu_number: menuNum } : t));
+        const menuObj = availableMenus.find(m => m.menu_number === menuNum);
+        const menuName = menuObj?.name || `Menu ${menuNum}`;
+        toast.success(`Assigned ${menuName} to ${floorName}`);
+      }
+    } catch (err) {
+      console.error('Failed to assign menu to section:', err);
+      toast.error('Failed to assign menu');
+    }
+  };
 
   const fetchSubscriptionStatus = async () => {
     try {
@@ -127,6 +174,9 @@ const Dashboard = () => {
   useEffect(() => {
     fetchTables();
     fetchSubscriptionStatus();
+    if (user?.multipleMenuEnabled) {
+      fetchSectionMenus();
+    }
 
     const socketUrl = getSocketUrl();
     const socket = io(socketUrl, { 
@@ -783,6 +833,39 @@ const Dashboard = () => {
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--text-secondary)' }}></span>
                   Dining Table
                 </button>
+
+                {user?.multipleMenuEnabled && (
+                  <button
+                    onClick={() => {
+                      setShowCreateDropdown(false);
+                      setShowSectionMenuModal(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: '#0ea5e9',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'left',
+                      transition: 'all 0.15s',
+                      borderTop: '1px solid var(--bg-border)',
+                      marginTop: '4px',
+                      paddingTop: '8px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-border)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <Utensils size={14} style={{ color: '#0ea5e9' }} />
+                    Assign Section Menus
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -862,9 +945,43 @@ const Dashboard = () => {
              const tableCount = floorTables.length;
              return (
                <div key={floor} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                      <h2 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-secondary)', letterSpacing: '0.05em', margin: 0, textTransform: 'uppercase' }}>{floor}</h2>
-                     <div style={{ flex: 1, height: '2px', backgroundColor: 'var(--bg-border)' }}></div>
+                     <div style={{ flex: 1, height: '2px', backgroundColor: 'var(--bg-border)', minWidth: '30px' }}></div>
+                     {user?.multipleMenuEnabled && (
+                       isOwner ? (
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--bg-card)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border-rgba-05)' }}>
+                           <Utensils size={14} style={{ color: '#0ea5e9' }} />
+                           <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Menu:</span>
+                           <select
+                             value={sectionMenuMap[floor] || 1}
+                             onChange={(e) => handleAssignMenuToSection(floor, parseInt(e.target.value, 10))}
+                             style={{
+                               backgroundColor: 'transparent',
+                               border: 'none',
+                               color: '#0ea5e9',
+                               fontWeight: 800,
+                               fontSize: '12px',
+                               outline: 'none',
+                               cursor: 'pointer'
+                             }}
+                           >
+                             {availableMenus.map(m => (
+                               <option key={m.menu_number} value={m.menu_number} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+                                 {m.name || Menu } {m.menu_number === 1 ? '(Default)' : ''}
+                               </option>
+                             ))}
+                           </select>
+                         </div>
+                       ) : (
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-card)', padding: '4px 10px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
+                           <Utensils size={12} style={{ color: '#0ea5e9' }} />
+                           <span style={{ fontSize: '11px', fontWeight: 800, color: '#0ea5e9' }}>
+                             {availableMenus.find(m => m.menu_number === (sectionMenuMap[floor] || 1))?.name || Menu }
+                           </span>
+                         </div>
+                       )
+                     )}
                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{tableCount} TABLES</span>
                   </div>
                   
@@ -1061,6 +1178,102 @@ const Dashboard = () => {
             fetchTables();
           }}
         />
+      )}
+
+      {/* Assign Section Menus Modal */}
+      {showSectionMenuModal && (
+        <div style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(2, 6, 23, 0.8)', backdropFilter: 'blur(16px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '520px',
+            backgroundColor: 'var(--bg-card)',
+            borderRadius: '28px',
+            border: '1px solid var(--border-rgba-1)',
+            padding: '32px',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', backgroundColor: 'rgba(14, 165, 233, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Utensils size={20} style={{ color: '#0ea5e9' }} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Assign Section Menus</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>Configure which menu appears for each table section</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSectionMenuModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
+                <X size={22} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
+              {existingFloors.filter(f => f && f !== 'Counter').map((f) => {
+                const currentMenu = sectionMenuMap[f] || 1;
+                return (
+                  <div key={f} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    backgroundColor: 'var(--bg-base)',
+                    borderRadius: '16px',
+                    border: '1px solid var(--bg-border)'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--text-primary)' }}>{f}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Currently: {availableMenus.find(m => m.menu_number === currentMenu)?.name || `Menu ${currentMenu}`}
+                      </div>
+                    </div>
+                    <select
+                      value={currentMenu}
+                      onChange={(e) => handleAssignMenuToSection(f, parseInt(e.target.value, 10))}
+                      style={{
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1.5px solid var(--border-color)',
+                        color: '#0ea5e9',
+                        padding: '8px 14px',
+                        borderRadius: '12px',
+                        outline: 'none',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {availableMenus.map(m => (
+                        <option key={m.menu_number} value={m.menu_number}>
+                          {m.name || `Menu ${m.menu_number}`} {m.menu_number === 1 ? '(Default)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowSectionMenuModal(false)}
+                style={{
+                  backgroundColor: '#0ea5e9',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '14px',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: 'pointer'
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <SwapModal 

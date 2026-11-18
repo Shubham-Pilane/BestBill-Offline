@@ -5,12 +5,69 @@ const router = express.Router();
 const { notifyUpdate } = require('../socket');
 const inventoryService = require('../services/inventoryService');
 
+// Get section-to-menu assignments
+router.get('/section-menus', auth, async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT section_name, menu_number FROM section_menus WHERE hotel_id = $1',
+      [req.user.hotel_id]
+    );
+    const map = {};
+    result.rows.forEach(r => {
+      map[r.section_name] = r.menu_number || 1;
+    });
+    res.json(map);
+  } catch (err) {
+    console.error('Error fetching section menus:', err);
+    res.status(500).json({ message: 'Error fetching section menus' });
+  }
+});
+
+// Update section-to-menu assignment
+router.post('/section-menus', auth, async (req, res) => {
+  try {
+    const { section_name, menu_number } = req.body;
+    if (!section_name) return res.status(400).json({ message: 'Section name is required' });
+    const menuNum = parseInt(menu_number, 10) || 1;
+    const hotelId = req.user.hotel_id;
+
+    const existing = await db.query(
+      'SELECT * FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
+      [hotelId, section_name]
+    );
+    if (existing.rows.length > 0) {
+      await db.query(
+        'UPDATE section_menus SET menu_number = $1 WHERE hotel_id = $2 AND section_name = $3',
+        [menuNum, hotelId, section_name]
+      );
+    } else {
+      await db.query(
+        'INSERT INTO section_menus (hotel_id, section_name, menu_number) VALUES ($1, $2, $3)',
+        [hotelId, section_name, menuNum]
+      );
+    }
+
+    // Update all tables in this section to keep table.menu_number in sync
+    await db.query(
+      'UPDATE tables SET menu_number = $1 WHERE hotel_id = $2 AND floor = $3',
+      [menuNum, hotelId, section_name]
+    );
+
+    notifyUpdate(hotelId, 'table-update');
+    res.json({ success: true, section_name, menu_number: menuNum });
+  } catch (err) {
+    console.error('Error assigning section menu:', err);
+    res.status(500).json({ message: 'Error assigning section menu' });
+  }
+});
+
 // Get all tables for a hotel
 router.get('/', auth, async (req, res) => {
   try {
     const tables = await db.query(
-      `SELECT t.*, o.id as active_order_id 
+      `SELECT t.*, COALESCE(sm.menu_number, t.menu_number, 1) as menu_number, o.id as active_order_id 
        FROM tables t 
+       LEFT JOIN section_menus sm ON sm.hotel_id = t.hotel_id AND sm.section_name = t.floor
        LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'active'
        WHERE t.hotel_id = $1 
        ORDER BY t.floor ASC, LENGTH(t.table_number) ASC, t.table_number ASC`,
@@ -32,8 +89,18 @@ router.post('/batch', auth, async (req, res) => {
   
   try {
     const floorValue = floor || 'Floor 1';
+    // Resolve menu assigned to this section (defaults to 1)
+    const smRes = await db.query(
+      'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
+      [req.user.hotel_id, floorValue]
+    );
+    const menuNum = smRes.rows[0]?.menu_number || 1;
+
     for (const num of tableNumbers) {
-       await db.query('INSERT INTO tables (hotel_id, table_number, floor) VALUES ($1, $2, $3)', [req.user.hotel_id, num, floorValue]);
+       await db.query(
+         'INSERT INTO tables (hotel_id, table_number, floor, menu_number) VALUES ($1, $2, $3, $4)', 
+         [req.user.hotel_id, num, floorValue, menuNum]
+       );
     }
     res.status(201).json({ message: 'Tables created securely' });
   } catch (err) {
@@ -54,9 +121,15 @@ router.put('/:id', auth, async (req, res) => {
   const { id } = req.params;
   const { table_number, capacity, floor } = req.body;
   try {
+    const smRes = await db.query(
+      'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
+      [req.user.hotel_id, floor]
+    );
+    const menuNum = smRes.rows[0]?.menu_number || 1;
+
     const result = await db.query(
-      'UPDATE tables SET table_number = $1, capacity = $2, floor = $3 WHERE id = $4 AND hotel_id = $5 RETURNING *',
-      [table_number, capacity, floor, id, req.user.hotel_id]
+      'UPDATE tables SET table_number = $1, capacity = $2, floor = $3, menu_number = $4 WHERE id = $5 AND hotel_id = $6 RETURNING *',
+      [table_number, capacity, floor, menuNum, id, req.user.hotel_id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'Table not found' });
     notifyUpdate(req.user.hotel_id, 'table-update');

@@ -34,7 +34,8 @@ const translateCategory = (name) => {
 const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floors: passedFloors }) => {
   const { user } = useAuth();
   const { t } = useLanguage();
-  const [categories, setCategories] = useState(initialMenu?.categories || []);
+  const targetMenuNumber = user?.multipleMenuEnabled ? (table?.menu_number || 1) : 1;
+  const [categories, setCategories] = useState((!user?.multipleMenuEnabled && initialMenu?.categories) || []);
   const [allItems, setAllItems] = useState([]);
   const [items, setItems] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -191,7 +192,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const fetchAllMenu = async () => {
     try {
-      const res = await api.get('/menu/items');
+      const res = await api.get(`/menu/items?menu_number=${targetMenuNumber}`);
       setAllItems(res.data || []);
     } catch (err) {
       console.error(err);
@@ -202,17 +203,19 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     const fetchData = async () => {
       try {
         const needsOrderFetch = !!table.active_order_id;
-        const needsStaticFetch = !initialMenu || !passedTables;
+        const needsStaticFetch = user?.multipleMenuEnabled || !initialMenu || !passedTables;
 
         const [catRes, orderRes, tablesRes] = await Promise.all([
-          needsStaticFetch ? api.get('/menu/categories') : Promise.resolve({ data: initialMenu.categories }),
+          needsStaticFetch ? api.get(`/menu/categories?menu_number=${targetMenuNumber}`) : Promise.resolve({ data: initialMenu.categories }),
           needsOrderFetch ? api.get(`/tables/${table.id}/order`) : Promise.resolve({ data: { items: [] } }),
-          needsStaticFetch ? api.get('/tables') : Promise.resolve({ data: passedTables })
+          (!passedTables) ? api.get('/tables') : Promise.resolve({ data: passedTables })
         ]);
 
         if (needsStaticFetch) {
             setCategories(catRes.data || []);
             setAllTables(tablesRes.data || []);
+        } else {
+            setAllTables(passedTables || []);
         }
         setOrderItems(orderRes.data.items || []);
         
@@ -226,7 +229,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     };
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table.id]);
+  }, [table.id, table.menu_number]);
 
   const togglePinItem = async (e, item) => {
     e.stopPropagation();
@@ -653,6 +656,11 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
               </h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                  <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>BestBill POS</span>
+                 {user?.multipleMenuEnabled && (
+                   <span style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+                     {table.floor ? `${table.floor} • ` : ''}Menu {targetMenuNumber}
+                   </span>
+                 )}
                  {table.active_order_id && !showBill && (
                     <button onClick={() => setSwapModalOpen(true)} style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', border: '1px solid #0ea5e9', color: '#0ea5e9', padding: '2px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 900, cursor: 'pointer' }}>SWAP TABLE</button>
                  )}

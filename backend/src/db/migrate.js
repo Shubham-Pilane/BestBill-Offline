@@ -343,6 +343,11 @@ const syncSchema = async () => {
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS cgst DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS sgst DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS round_off DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE categories ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
+            "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
+            "ALTER TABLE tables ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
+            "CREATE TABLE IF NOT EXISTS section_menus (id SERIAL PRIMARY KEY, hotel_id INTEGER, section_name VARCHAR(100) NOT NULL, menu_number INTEGER DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (hotel_id, section_name))",
+            "CREATE TABLE IF NOT EXISTS hotel_menus (id SERIAL PRIMARY KEY, hotel_id INTEGER, menu_number INTEGER NOT NULL, name VARCHAR(100) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (hotel_id, menu_number))",
             
             // 4. Critical Unique Indexes (for ON CONFLICT logic)
             "CREATE UNIQUE INDEX IF NOT EXISTS unique_active_table_order ON orders (table_id) WHERE status = 'active' AND table_id IS NOT NULL",

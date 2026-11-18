@@ -4,14 +4,27 @@ import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
 import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Check, Save, Search, UploadCloud, ChevronDown, ChevronUp, RefreshCcw, Pin } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 const MenuManagement = () => {
   const { language, t } = useLanguage();
+  const { user } = useAuth();
   const [menuLang, setMenuLang] = useState(language || 'en');
   const [categories, setCategories] = useState([]);
   const [items, setItems] = useState([]);
   const [newCatName, setNewCatName] = useState('');
   const fileInputRef = useRef(null);
+
+  // Multiple Menu states
+  const [menus, setMenus] = useState([
+    { menu_number: 1, name: 'Menu 1' },
+    { menu_number: 2, name: 'Menu 2' },
+    { menu_number: 3, name: 'Menu 3' },
+    { menu_number: 4, name: 'Menu 4' }
+  ]);
+  const [selectedMenuNumber, setSelectedMenuNumber] = useState(1);
+  const [editingMenuNumber, setEditingMenuNumber] = useState(null);
+  const [editMenuName, setEditMenuName] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -34,11 +47,29 @@ const MenuManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
-  const fetchData = async (page = 1, search = '') => {
+  const fetchMenus = async () => {
     try {
+      const res = await api.get('/menu/menus');
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setMenus(res.data);
+      }
+    } catch (err) {
+      console.error('Error fetching menus list:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.multipleMenuEnabled) {
+      fetchMenus();
+    }
+  }, [user?.multipleMenuEnabled]);
+
+  const fetchData = async (page = 1, search = '', menuNum = selectedMenuNumber) => {
+    try {
+      const activeMenu = user?.multipleMenuEnabled ? menuNum : 1;
       const [catRes, itemsRes] = await Promise.all([
-        api.get('/menu/categories'),
-        api.get(`/menu/items?page=${page}&limit=10&search=${encodeURIComponent(search)}`)
+        api.get(`/menu/categories?menu_number=${activeMenu}`),
+        api.get(`/menu/items?page=${page}&limit=10&search=${encodeURIComponent(search)}&menu_number=${activeMenu}`)
       ]);
       setCategories(Array.isArray(catRes.data) ? catRes.data : []);
       const itemsData = itemsRes.data;
@@ -61,8 +92,36 @@ const MenuManagement = () => {
   };
 
   useEffect(() => {
-    fetchData(currentPage, searchTerm);
-  }, [currentPage, searchTerm]);
+    fetchData(currentPage, searchTerm, selectedMenuNumber);
+  }, [currentPage, searchTerm, selectedMenuNumber]);
+
+  const handleAddNewMenu = async () => {
+    const nextNum = Math.max(...menus.map(m => m.menu_number), 0) + 1;
+    const nextName = `Menu ${nextNum}`;
+    try {
+      await api.post('/menu/menus', { menu_number: nextNum, name: nextName });
+      setMenus(prev => [...prev, { menu_number: nextNum, name: nextName }]);
+      setSelectedMenuNumber(nextNum);
+      toast.success(`Created ${nextName}`);
+    } catch {
+      toast.error('Failed to create new menu');
+    }
+  };
+
+  const handleSaveMenuName = async (menuNum) => {
+    if (!editMenuName.trim()) {
+      setEditingMenuNumber(null);
+      return;
+    }
+    try {
+      await api.post('/menu/menus', { menu_number: menuNum, name: editMenuName.trim() });
+      setMenus(prev => prev.map(m => m.menu_number === menuNum ? { ...m, name: editMenuName.trim() } : m));
+      setEditingMenuNumber(null);
+      toast.success('Menu renamed successfully');
+    } catch {
+      toast.error('Failed to rename menu');
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -128,14 +187,20 @@ const MenuManagement = () => {
         return;
       }
 
-      const loadingToast = toast.loading(`Importing ${importedItems.length} items into menu...`);
+      const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
+      const targetMenuObj = menus.find(m => m.menu_number === activeMenu);
+      const targetMenuTitle = targetMenuObj?.name || `Menu ${activeMenu}`;
+      const loadingToast = toast.loading(`Importing ${importedItems.length} items into ${targetMenuTitle}...`);
       try {
-        const res = await api.post('/menu/items/bulk', { items: importedItems });
-        toast.success(res.data.message || `Successfully imported ${importedItems.length} menu items!`, { id: loadingToast });
-        fetchData(1, '');
+        const res = await api.post('/menu/items/bulk', { 
+          items: importedItems,
+          menu_number: activeMenu
+        });
+        toast.success(res.data.message || `Successfully imported ${importedItems.length} items into ${targetMenuTitle}!`, { id: loadingToast });
+        fetchData(1, '', activeMenu);
         setCurrentPage(1);
-      } catch (err) {
-        toast.error('Failed to import menu CSV', { id: loadingToast });
+      } catch {
+        toast.error(`Failed to import menu CSV into ${targetMenuTitle}`, { id: loadingToast });
       }
       
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -146,9 +211,10 @@ const MenuManagement = () => {
   const addCategory = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/menu/categories', { name: newCatName });
+      const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
+      await api.post('/menu/categories', { name: newCatName, menu_number: activeMenu });
       setNewCatName('');
-      fetchData(currentPage, searchTerm, menuLang);
+      fetchData(currentPage, searchTerm, activeMenu);
       toast.success('Category successfully added!');
     } catch (err) {
       toast.error('Could not add category');
@@ -163,7 +229,7 @@ const MenuManagement = () => {
       onConfirm: async () => {
         try {
           const res = await api.delete(`/menu/categories/${id}`);
-          fetchData(currentPage, searchTerm, menuLang);
+          fetchData(currentPage, searchTerm, selectedMenuNumber);
           toast.success(res.data?.message || 'Category deleted');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
@@ -177,7 +243,7 @@ const MenuManagement = () => {
     try {
       await api.put(`/menu/categories/${id}`, { name: editCatName, marathi_name: editCatMarathiName });
       setEditingCatId(null);
-      fetchData(currentPage, searchTerm, menuLang);
+      fetchData(currentPage, searchTerm, selectedMenuNumber);
       toast.success('Category updated');
     } catch (err) {
       toast.error('Update failed');
@@ -188,9 +254,10 @@ const MenuManagement = () => {
     e.preventDefault();
     if (!newItem.category_id) return toast.error('Please assign a category');
     try {
-      await api.post('/menu/items', { ...newItem });
+      const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
+      await api.post('/menu/items', { ...newItem, menu_number: activeMenu });
       setNewItem({ name: '', marathi_name: '', price: '', category_id: '', description: '' });
-      fetchData(1, '');
+      fetchData(1, '', activeMenu);
       setCurrentPage(1);
       setSearchTerm('');
       toast.success(`Menu item added successfully!`);
@@ -207,7 +274,7 @@ const MenuManagement = () => {
       onConfirm: async () => {
         try {
           const res = await api.delete(`/menu/items/${id}`);
-          fetchData(currentPage, searchTerm);
+          fetchData(currentPage, searchTerm, selectedMenuNumber);
           toast.success(res.data?.message || 'Item deleted');
           setConfirmModal({ ...confirmModal, isOpen: false });
         } catch (err) {
@@ -227,7 +294,7 @@ const MenuManagement = () => {
       const res = await api.put(`/menu/items/${item.id}/pin`);
       const newPinned = Boolean(res.data?.is_pinned);
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_pinned: newPinned } : i));
-      fetchData(currentPage, searchTerm);
+      fetchData(currentPage, searchTerm, selectedMenuNumber);
       toast.success(newPinned ? `Pinned ${item.name} to top!` : `Unpinned ${item.name}`);
     } catch (err) {
       console.error('Toggle pin error:', err);
@@ -239,7 +306,7 @@ const MenuManagement = () => {
     try {
       await api.put(`/menu/items/${id}`, { ...editItemData });
       setEditingItemId(null);
-      fetchData(currentPage, searchTerm);
+      fetchData(currentPage, searchTerm, selectedMenuNumber);
       toast.success('Item details updated');
     } catch (err) {
       toast.error('Update failed');
@@ -247,18 +314,23 @@ const MenuManagement = () => {
   };
 
   const deleteAllMenu = () => {
+    const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
+    const targetMenuObj = menus.find(m => m.menu_number === activeMenu);
+    const targetMenuTitle = targetMenuObj?.name || `Menu ${activeMenu}`;
     setConfirmModal({
       isOpen: true,
-      title: `Delete Entire Menu?`,
-      message: `This will permanently delete all menu items. Active tables will lose item references. This action is irreversible!`,
+      title: user?.multipleMenuEnabled ? `Delete ${targetMenuTitle}?` : `Delete Entire Menu?`,
+      message: user?.multipleMenuEnabled
+        ? `This will permanently delete all items in ${targetMenuTitle}. Other menus will not be affected. This action is irreversible!`
+        : `This will permanently delete all menu items. Active tables will lose item references. This action is irreversible!`,
       onConfirm: async () => {
         const loadingToast = toast.loading(`Deleting menu items...`);
         try {
-          await api.delete(`/menu/purge-all`);
-          fetchData(1, '');
+          await api.delete(`/menu/purge-all${user?.multipleMenuEnabled ? `?menu_number=${activeMenu}` : ''}`);
+          fetchData(1, '', activeMenu);
           setCurrentPage(1);
           setSearchTerm('');
-          toast.success(`Menu items successfully deleted`, { id: loadingToast });
+          toast.success(`${targetMenuTitle} items successfully deleted`, { id: loadingToast });
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
         } catch (err) {
           toast.error(err.response?.data?.message || 'Delete failed', { id: loadingToast });
@@ -314,7 +386,170 @@ const MenuManagement = () => {
   return (
     <div style={{ width: '100%', maxWidth: '1400px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
+      {/* Multiple Menu Tabs Bar */}
+      {user?.multipleMenuEnabled && (
+        <div style={{
+          backgroundColor: 'var(--bg-card)',
+          borderRadius: '24px',
+          padding: '20px 28px',
+          border: '1px solid var(--border-rgba-05)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '38px', height: '38px', backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Utensils size={20} style={{ color: '#f59e0b' }} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  Multiple Menus
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '2px 8px', borderRadius: '6px' }}>Enabled</span>
+                </h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Select a menu below to edit items or import CSV. Assign menus to table sections in Table Management.
+                </span>
+              </div>
+            </div>
 
+            <button
+              onClick={handleAddNewMenu}
+              type="button"
+              style={{
+                backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                color: '#818cf8',
+                border: '1px solid rgba(99, 102, 241, 0.25)',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                fontSize: '13px',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <Plus size={16} strokeWidth={3} /> Add Menu
+            </button>
+          </div>
+
+          {/* Menu Selection Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {menus.map((m) => {
+              const isSelected = selectedMenuNumber === m.menu_number;
+              const isEditing = editingMenuNumber === m.menu_number;
+
+              return (
+                <div
+                  key={m.menu_number}
+                  onClick={() => {
+                    if (!isEditing) {
+                      setSelectedMenuNumber(m.menu_number);
+                      setCurrentPage(1);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-base)',
+                    border: isSelected ? '2px solid #6366f1' : '1px solid var(--bg-border)',
+                    borderRadius: '14px',
+                    padding: '8px 14px',
+                    cursor: isEditing ? 'default' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    transition: 'all 0.15s',
+                    boxShadow: isSelected ? '0 4px 12px rgba(99, 102, 241, 0.2)' : 'none'
+                  }}
+                >
+                  {isEditing ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        value={editMenuName}
+                        onChange={(e) => setEditMenuName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveMenuName(m.menu_number);
+                          if (e.key === 'Escape') setEditingMenuNumber(null);
+                        }}
+                        style={{
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid #6366f1',
+                          color: 'var(--text-primary)',
+                          borderRadius: '8px',
+                          padding: '3px 8px',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          width: '110px',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        onClick={() => handleSaveMenuName(m.menu_number)}
+                        style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 2, display: 'flex' }}
+                      >
+                        <Check size={16} strokeWidth={3} />
+                      </button>
+                      <button
+                        onClick={() => setEditingMenuNumber(null)}
+                        style={{ background: 'none', border: 'none', color: '#f43f5e', cursor: 'pointer', padding: 2, display: 'flex' }}
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                          fontSize: '13px',
+                          fontWeight: 800,
+                          color: isSelected ? '#a5b4fc' : 'var(--text-primary)'
+                        }}>
+                          {m.name || `Menu ${m.menu_number}`}
+                        </span>
+                        {m.menu_number === 1 && (
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 800,
+                            color: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            padding: '1px 6px',
+                            borderRadius: '4px'
+                          }}>
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingMenuNumber(m.menu_number);
+                          setEditMenuName(m.name || `Menu ${m.menu_number}`);
+                        }}
+                        title="Rename menu"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          cursor: 'pointer',
+                          padding: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          opacity: isSelected ? 1 : 0.6
+                        }}
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="responsive-grid-12" style={{ width: '100%' }}>
       
@@ -418,11 +653,11 @@ const MenuManagement = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center', margin: 0 }}>
-                <UploadCloud size={18} /> {t('import_csv', 'Import Menu CSV')}
+                <UploadCloud size={18} /> {user?.multipleMenuEnabled ? `Import ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`} CSV` : t('import_csv', 'Import Menu CSV')}
                 <input type="file" accept=".csv, text/csv, application/vnd.ms-excel, text/plain, text/comma-separated-values" style={{ display: 'none' }} onChange={handleFileUpload} ref={fileInputRef} />
               </label>
               <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center' }}>
-                <Trash2 size={18} /> {t('delete_menu', 'Delete Entire Menu')}
+                <Trash2 size={18} /> {user?.multipleMenuEnabled ? `Clear ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`}` : t('delete_menu', 'Delete Entire Menu')}
               </button>
             </div>
           </div>
