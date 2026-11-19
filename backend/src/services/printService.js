@@ -100,7 +100,8 @@ class PrintService {
       items: items.map(item => ({
         name: item.name,
         qty: Number(item.quantity || item.qty || 1),
-        rasterBase64: item.rasterBase64
+        rasterBase64: item.rasterBase64,
+        notes: item.notes || ''
       })),
       notes: notes || ''
     };
@@ -129,7 +130,8 @@ class PrintService {
         name: item.name,
         price: Number(item.price),
         qty: Number(item.quantity !== undefined ? item.quantity : (item.qty !== undefined ? item.qty : 1)),
-        rasterBase64: item.rasterBase64
+        rasterBase64: item.rasterBase64,
+        notes: item.notes || ''
       })),
       hotelName: hotelName || '',
       hotelPhone: hotelPhone || '',

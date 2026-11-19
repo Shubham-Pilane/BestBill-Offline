@@ -12,10 +12,11 @@ router.get('/history', auth, async (req, res) => {
     const result = await db.query(`
       SELECT b.*, t.table_number, o.created_at as order_time,
              (
-                SELECT json_group_array(json_object('name', COALESCE(oi.custom_name, mi.name, 'Other'), 'marathi_name', mi.marathi_name, 'quantity', oi.quantity, 'price', COALESCE(oi.custom_price, mi.price, 0)))
+                SELECT json_group_array(json_object('name', COALESCE(oi.custom_name, mi.name, 'Other'), 'marathi_name', mi.marathi_name, 'quantity', oi.quantity, 'price', COALESCE(oi.custom_price, mi.price, 0), 'notes', oi.notes))
                 FROM order_items oi
                 LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
                 WHERE oi.order_id = b.order_id AND oi.quantity > 0
+                ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
              ) as items_json
       FROM bills b 
       JOIN orders o ON b.order_id = o.id 
@@ -85,12 +86,12 @@ async function getFullBillById(billId, hotelId, queryRunner = db) {
   const billRow = bill.rows[0];
 
   const items = await queryRunner.query(`
-    SELECT oi.id, oi.menu_item_id, oi.quantity, oi.is_manual, oi.custom_name, oi.custom_price,
+    SELECT oi.id, oi.menu_item_id, oi.quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
            COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
     FROM order_items oi 
     LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
     WHERE oi.order_id = $1 AND oi.quantity > 0
-    ORDER BY oi.created_at ASC, oi.id ASC`,
+    ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC, oi.id ASC`,
     [billRow.order_id]
   );
 
@@ -338,10 +339,11 @@ router.post('/:id/print', auth, async (req, res) => {
 
     // Fetch items
     const items = await db.query(`
-      SELECT oi.quantity, COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.quantity, oi.notes, COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1 AND oi.quantity > 0`,
+      WHERE oi.order_id = $1 AND oi.quantity > 0
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC`,
       [billData.order_id]
     );
 
@@ -370,7 +372,8 @@ router.post('/:id/print', auth, async (req, res) => {
     let printItems = items.rows.map(item => ({
       name: printLangBill === 'mr' ? (item.marathi_name || item.name) : item.name,
       price: Number(item.price),
-      quantity: Number(item.quantity)
+      quantity: Number(item.quantity),
+      notes: item.notes || ''
     }));
 
     let roomCharge = 0;
@@ -418,6 +421,7 @@ router.post('/:id/print', auth, async (req, res) => {
       guestName: guestName,
       checkInDate: checkInDate,
       printerSize: billData.printer_size || '80mm',
+      notes: (billData.notes || '').trim(),
       lang: printLangBill
     };
 

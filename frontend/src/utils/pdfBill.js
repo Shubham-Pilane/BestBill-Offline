@@ -108,9 +108,10 @@ export const createBillPDFDocDefinition = (billData, hotelInfo = {}) => {
     const qty = item.quantity || item.qty || 1;
     const price = parseFloat(item.price || 0);
     const amount = qty * price;
+    const noteSuffix = item.notes && String(item.notes).trim() ? ` (${String(item.notes).trim()})` : '';
     tableBody.push([
       { text: index++, alignment: 'center' },
-      { text: item.name || 'Item' },
+      { text: (item.name || 'Item') + noteSuffix },
       { text: qty.toString(), alignment: 'center' },
       { text: formatAmount(price), alignment: 'right' },
       { text: formatAmount(amount), alignment: 'right' }

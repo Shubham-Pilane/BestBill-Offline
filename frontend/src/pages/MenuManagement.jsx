@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Check, Save, Search, UploadCloud, ChevronDown, ChevronUp, RefreshCcw, Pin } from 'lucide-react';
+import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Check, Save, Search, UploadCloud, ChevronDown, ChevronUp, RefreshCcw, Pin, Hash } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -41,7 +41,8 @@ const MenuManagement = () => {
     name: '',
     price: '',
     category_id: '',
-    description: ''
+    description: '',
+    item_number: ''
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -235,6 +236,18 @@ const MenuManagement = () => {
     reader.readAsText(file);
   };
 
+  const handleRenumberMenu = async () => {
+    const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
+    const tId = toast.loading('Renumbering items sequentially (1 to N)...');
+    try {
+      const res = await api.post('/menu/items/renumber', { menu_number: activeMenu });
+      toast.success(`Renumbered ${res.data?.total || ''} items sequentially (1 to ${res.data?.total || ''})`, { id: tId });
+      fetchData(currentPage, searchTerm, activeMenu);
+    } catch (err) {
+      toast.error('Failed to renumber items', { id: tId });
+    }
+  };
+
   const addCategory = async (e) => {
     e.preventDefault();
     try {
@@ -283,7 +296,7 @@ const MenuManagement = () => {
     try {
       const activeMenu = user?.multipleMenuEnabled ? selectedMenuNumber : 1;
       await api.post('/menu/items', { ...newItem, menu_number: activeMenu });
-      setNewItem({ name: '', marathi_name: '', price: '', category_id: '', description: '' });
+      setNewItem({ name: '', marathi_name: '', price: '', category_id: '', description: '', item_number: '' });
       fetchData(1, '', activeMenu);
       setCurrentPage(1);
       setSearchTerm('');
@@ -703,19 +716,32 @@ const MenuManagement = () => {
               </div>
               <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{t('add_to_live_menu', 'Add To Live Menu')}</h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center', margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '220px', justifyContent: 'center', margin: 0 }}>
                 <UploadCloud size={18} /> {user?.multipleMenuEnabled ? `Import ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`} CSV` : t('import_csv', 'Import Menu CSV')}
                 <input type="file" accept=".csv, text/csv, application/vnd.ms-excel, text/plain, text/comma-separated-values" style={{ display: 'none' }} onChange={handleFileUpload} ref={fileInputRef} />
               </label>
-              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '240px', justifyContent: 'center' }}>
+              <button onClick={handleRenumberMenu} type="button" style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '180px', justifyContent: 'center' }} title="Contiguously renumber all active items (1 to N)">
+                <Hash size={18} /> Renumber (1 to N)
+              </button>
+              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '220px', justifyContent: 'center' }}>
                 <Trash2 size={18} /> {user?.multipleMenuEnabled ? `Clear ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`}` : t('delete_menu', 'Delete Entire Menu')}
               </button>
             </div>
           </div>
         </div>
 
-          <form onSubmit={addItem} style={{ gap: '24px' }} className="responsive-grid-12">
+          <form onSubmit={addItem} style={{ gap: '20px' }} className="responsive-grid-12">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+              <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Item No. (Auto)</label>
+              <input
+                type="number"
+                placeholder="Auto"
+                style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: '#38bdf8', padding: '14px 12px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 800, textAlign: 'center' }}
+                value={newItem.item_number || ''}
+                onChange={(e) => setNewItem({...newItem, item_number: e.target.value})}
+              />
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_name', 'Dish Name')} (English) {language === 'mr' ? '(Optional)' : ''}</label>
               <input
@@ -726,7 +752,7 @@ const MenuManagement = () => {
                 required={language !== 'mr'}
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 3' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Marathi Name {language !== 'mr' ? '(Optional)' : ''}</label>
               <input
                 type="text"
@@ -736,7 +762,7 @@ const MenuManagement = () => {
                 required={language === 'mr'}
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 4' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 3' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('item_price', 'Price (₹)')}</label>
               <div style={{ position: 'relative' }}>
                 <IndianRupee style={{ position: 'absolute', top: '15px', left: '16px', color: 'var(--text-muted)' }} size={16} />
@@ -749,7 +775,7 @@ const MenuManagement = () => {
                 />
               </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 5' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('category_name', 'Category')}</label>
               <select
                 style={{width: '100%', backgroundColor: 'var(--bg-base)', border: '2px solid var(--bg-border)', color: 'var(--text-primary)', padding: '14px 16px', borderRadius: '16px', outline: 'none', fontSize: '14px', fontWeight: 700 }}
@@ -764,7 +790,7 @@ const MenuManagement = () => {
                 ))}
               </select>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 6' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 7' }}>
               <label style={{ fontSize: '11px', fontWeight: 950, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{t('description_label', 'Description')}</label>
               <input
                 type="text"
@@ -819,13 +845,22 @@ const MenuManagement = () => {
                       </span>
                       {editingItemId === item.id ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 900, color: '#38bdf8' }}>No:</span>
+                            <input type="number" value={editItemData.item_number ?? ''} placeholder="Item #" onChange={(e) => setEditItemData({...editItemData, item_number: e.target.value})} style={{background: 'var(--bg-base)', border: '1.5px solid #38bdf8', color: '#38bdf8', padding: '3px 6px', borderRadius: '8px', fontSize: '13px', fontWeight: 900, width: '75px', outline: 'none' }} title="Edit Item Number" />
+                          </div>
                           <input value={editItemData.name} placeholder="English Name" onChange={(e) => setEditItemData({...editItemData, name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '15px', fontWeight: 900, width: '200px' }} />
                           <input value={editItemData.marathi_name || ''} placeholder="Marathi Name" onChange={(e) => setEditItemData({...editItemData, marathi_name: e.target.value})} style={{background: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, width: '200px' }} />
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <h4 style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
-                          {item.marathi_name && <span style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>{item.marathi_name}</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 900, color: '#0284c7', backgroundColor: 'rgba(14, 165, 233, 0.12)', border: '1px solid rgba(14, 165, 233, 0.25)', padding: '1px 7px', borderRadius: '6px', letterSpacing: '0.02em' }}>
+                              #{item.item_number || '-'}
+                            </span>
+                            <h4 style={{fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase' }}>{item.name}</h4>
+                          </div>
+                          {item.marathi_name && <span style={{fontSize: '15px', fontWeight: 800, color: 'var(--text-muted)', marginTop: '2px', marginLeft: '4px' }}>{item.marathi_name}</span>}
                         </div>
                       )}
                    </div>

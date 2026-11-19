@@ -113,7 +113,9 @@ function renderItemRowToRaster(itemData, options = {}) {
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.font = fontStack;
 
-  const words = String(itemData.name || '').trim().split(/\s+/);
+  const noteSuffix = itemData.notes && String(itemData.notes).trim() ? ` (${String(itemData.notes).trim()})` : '';
+  const fullName = String(itemData.name || '').trim() + noteSuffix;
+  const words = fullName.split(/\s+/);
   const nameLines = [];
   let currentLine = '';
 
@@ -183,7 +185,9 @@ function renderKOTItemRowToRaster(itemData, options = {}) {
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.font = fontStack;
 
-  const words = String(itemData.name || '').trim().split(/\s+/);
+  const noteSuffix = itemData.notes && String(itemData.notes).trim() ? ` (${String(itemData.notes).trim()})` : '';
+  const fullName = String(itemData.name || '').trim() + noteSuffix;
+  const words = fullName.split(/\s+/);
   const nameLines = [];
   let currentLine = '';
 

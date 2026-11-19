@@ -235,7 +235,7 @@ router.post('/:roomId/order/kot', auth, async (req, res) => {
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT room_number FROM rooms WHERE id = $1', [roomId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, mi.name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, oi.notes, mi.name, mi.marathi_name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         JOIN menu_items mi ON oi.menu_item_id = mi.id
@@ -257,7 +257,8 @@ router.post('/:roomId/order/kot', auth, async (req, res) => {
       .filter(item => item.quantity > (item.printed_quantity || 0))
       .map(item => ({
         name: item.name,
-        quantity: item.quantity - (item.printed_quantity || 0)
+        quantity: item.quantity - (item.printed_quantity || 0),
+        notes: item.notes || ''
       }));
 
     if (printItems.length === 0) {

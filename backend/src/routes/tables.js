@@ -68,15 +68,27 @@ router.post('/section-menus', auth, async (req, res) => {
 // Get all tables for a hotel
 router.get('/', auth, async (req, res) => {
   try {
-    const tables = await db.query(
-      `SELECT t.*, COALESCE(sm.menu_number, 1) as menu_number, o.id as active_order_id 
-       FROM tables t 
-       LEFT JOIN section_menus sm ON sm.hotel_id = t.hotel_id AND sm.section_name = t.floor
-       LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'active'
-       WHERE t.hotel_id = $1 
-       ORDER BY t.floor ASC, LENGTH(t.table_number) ASC, t.table_number ASC`,
-      [req.user.hotel_id]
-    );
+    let tables;
+    try {
+      tables = await db.query(
+        `SELECT t.*, COALESCE(sm.menu_number, 1) as menu_number, o.id as active_order_id 
+         FROM tables t 
+         LEFT JOIN section_menus sm ON sm.hotel_id = t.hotel_id AND sm.section_name = t.floor
+         LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'active'
+         WHERE t.hotel_id = $1 
+         ORDER BY t.floor ASC, LENGTH(t.table_number) ASC, t.table_number ASC`,
+        [req.user.hotel_id]
+      );
+    } catch (joinErr) {
+      tables = await db.query(
+        `SELECT t.*, 1 as menu_number, o.id as active_order_id 
+         FROM tables t 
+         LEFT JOIN orders o ON o.table_id = t.id AND o.status = 'active'
+         WHERE t.hotel_id = $1 
+         ORDER BY t.floor ASC, LENGTH(t.table_number) ASC, t.table_number ASC`,
+        [req.user.hotel_id]
+      );
+    }
     res.json(tables.rows);
   } catch (err) {
     console.error('------- TABLES GET ERROR -------');
@@ -94,11 +106,16 @@ router.post('/batch', auth, async (req, res) => {
   try {
     const floorValue = floor || 'Floor 1';
     // Resolve menu assigned to this section (defaults to 1)
-    const smRes = await db.query(
-      'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
-      [req.user.hotel_id, floorValue]
-    );
-    const menuNum = smRes.rows[0]?.menu_number || 1;
+    let menuNum = 1;
+    try {
+      const smRes = await db.query(
+        'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
+        [req.user.hotel_id, floorValue]
+      );
+      menuNum = smRes.rows[0]?.menu_number || 1;
+    } catch (e) {
+      menuNum = 1;
+    }
 
     for (const num of tableNumbers) {
        try {
@@ -136,11 +153,16 @@ router.put('/:id', auth, async (req, res) => {
   const { id } = req.params;
   const { table_number, capacity, floor } = req.body;
   try {
-    const smRes = await db.query(
-      'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
-      [req.user.hotel_id, floor]
-    );
-    const menuNum = smRes.rows[0]?.menu_number || 1;
+    let menuNum = 1;
+    try {
+      const smRes = await db.query(
+        'SELECT menu_number FROM section_menus WHERE hotel_id = $1 AND section_name = $2',
+        [req.user.hotel_id, floor]
+      );
+      menuNum = smRes.rows[0]?.menu_number || 1;
+    } catch (e) {
+      menuNum = 1;
+    }
 
     let result;
     try {
@@ -183,12 +205,12 @@ router.get('/:tableId/order', auth, async (req, res) => {
 
     const order = orderResult.rows[0];
     const itemsQuery = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
       WHERE oi.order_id = $1 AND oi.quantity > 0
-      ORDER BY oi.created_at ASC
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `;
     const itemsResult = await db.query(itemsQuery, [order.id]);
     
@@ -208,11 +230,12 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       db.query('SELECT billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       db.query('SELECT table_number, floor FROM tables WHERE id = $1', [tableId]),
       db.query(`
-        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name
+        SELECT o.id as order_id, oi.quantity, oi.printed_quantity, oi.notes, COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
+        ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
       `, [tableId]),
       db.query('SELECT app_language, print_lang_kot FROM users WHERE id = $1', [req.user.id])
     ]);
@@ -232,7 +255,8 @@ router.post('/:tableId/order/kot', auth, async (req, res) => {
       .filter(item => item.quantity > (item.printed_quantity || 0))
       .map(item => ({
         name: printLangKot === 'mr' ? (item.marathi_name || item.name) : item.name,
-        quantity: item.quantity - (item.printed_quantity || 0)
+        quantity: item.quantity - (item.printed_quantity || 0),
+        notes: item.notes || ''
       }));
 
     if (printItems.length === 0) {
@@ -310,19 +334,21 @@ router.post('/:tableId/order', auth, async (req, res) => {
         [newQty, newMax, existingItem.rows[0].id]
       );
     } else {
+      const seqRes = await db.query('SELECT COALESCE(MAX(sequence), 0) as max_seq FROM order_items WHERE order_id = $1', [orderId]);
+      const nextSeq = (parseInt(seqRes.rows[0]?.max_seq, 10) || 0) + 1;
       await db.query(
-        `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity) VALUES ($1, $2, $3, $3)`,
-        [orderId, menuItemId, quantity, quantity]
+        `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity, sequence, notes) VALUES ($1, $2, $3, $3, $4, $5)`,
+        [orderId, menuItemId, quantity, nextSeq, req.body.notes || '']
       );
     }
 
     const query2 = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
-      ORDER BY oi.created_at ASC
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
     notifyUpdate(req.user.hotel_id, 'table-update');
@@ -350,18 +376,21 @@ router.post('/:tableId/order/manual-item', auth, async (req, res) => {
       orderId = orderRes.rows[0].id;
     }
 
+    const seqRes = await db.query('SELECT COALESCE(MAX(sequence), 0) as max_seq FROM order_items WHERE order_id = $1', [orderId]);
+    const nextSeq = (parseInt(seqRes.rows[0]?.max_seq, 10) || 0) + 1;
+
     await db.query(
-      `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity, is_manual, custom_name, custom_price) VALUES ($1, NULL, 1, 1, true, $2, $3)`,
-      [orderId, (name || 'Other').trim(), parseFloat(price) || 0]
+      `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity, is_manual, custom_name, custom_price, sequence, notes) VALUES ($1, NULL, 1, 1, true, $2, $3, $4, '')`,
+      [orderId, (name || 'Other').trim(), parseFloat(price) || 0, nextSeq]
     );
 
     const query2 = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
-      ORDER BY oi.created_at ASC
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
     notifyUpdate(req.user.hotel_id, 'table-update');
@@ -399,12 +428,12 @@ router.put('/:tableId/order/items/:itemId/custom', auth, async (req, res) => {
     }
 
     const query2 = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
-      ORDER BY oi.created_at ASC
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
     res.json({ items: updatedItems.rows });
@@ -430,18 +459,71 @@ router.put('/:tableId/order/items/:itemId', auth, async (req, res) => {
     notifyUpdate(req.user.hotel_id, 'table-update');
 
     const query2 = `
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
       WHERE oi.order_id = $1 AND oi.quantity > 0
-      ORDER BY oi.created_at ASC
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `;
     const updatedItems = await db.query(query2, [orderId]);
     res.json({ items: updatedItems.rows });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Update failed' });
+  }
+});
+
+// Update item notes
+router.put('/:tableId/order/items/:itemId/notes', auth, async (req, res) => {
+  const { notes } = req.body;
+  const { itemId, tableId } = req.params;
+  try {
+    const orderRes = await db.query(`SELECT id FROM orders WHERE table_id = $1 AND status = 'active'`, [tableId]);
+    const activeOrderId = orderRes.rows[0]?.id;
+    let itemQuery = await db.query(`SELECT id, order_id FROM order_items WHERE id = $1`, [itemId]);
+    if (itemQuery.rows.length === 0 && activeOrderId) {
+      itemQuery = await db.query(`SELECT id, order_id FROM order_items WHERE order_id = $1 AND (menu_item_id = $2 OR id = $2)`, [activeOrderId, itemId]);
+    }
+    if (itemQuery.rows.length === 0) return res.status(404).json({ message: 'Item not found' });
+    const resolvedId = itemQuery.rows[0].id;
+    const orderId = itemQuery.rows[0].order_id;
+
+    await db.query(`UPDATE order_items SET notes = $1 WHERE id = $2`, [notes || '', resolvedId]);
+    notifyUpdate(req.user.hotel_id, 'table-update');
+
+    const query2 = `
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
+      FROM order_items oi 
+      LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
+      WHERE oi.order_id = $1 AND oi.quantity > 0
+      ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
+    `;
+    const updatedItems = await db.query(query2, [orderId]);
+    res.json({ items: updatedItems.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Failed to update item notes' });
+  }
+});
+
+// Update entire order items sequence
+router.put('/:tableId/order/sequence', auth, async (req, res) => {
+  const { itemIds } = req.body;
+  const { tableId } = req.params;
+  try {
+    if (!Array.isArray(itemIds) || itemIds.length === 0) {
+      return res.status(400).json({ message: 'Invalid item IDs array' });
+    }
+    for (let index = 0; index < itemIds.length; index++) {
+      await db.query(`UPDATE order_items SET sequence = $1 WHERE id = $2`, [index + 1, itemIds[index]]);
+    }
+    notifyUpdate(req.user.hotel_id, 'table-update');
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Sequence update error:', err);
+    res.status(500).json({ message: 'Failed to update item sequence' });
   }
 });
 
@@ -457,11 +539,11 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
       if (orderCheck.rows.length === 0) return res.json({ items: [], order_deleted: true });
       
       const currentItems = await db.query(`
-        SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-               COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
+        SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
         FROM order_items oi 
         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
-        WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
+        WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
       `, [orderCheck.rows[0].id]);
       return res.json({ items: currentItems.rows, order_deleted: false });
     }
@@ -538,11 +620,11 @@ router.delete('/:tableId/order/items/:itemId', auth, async (req, res) => {
     }
 
     const updatedItems = await db.query(`
-      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price,
-             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price 
+      SELECT oi.id, oi.order_id, oi.menu_item_id, oi.quantity, oi.printed_quantity, oi.max_quantity, oi.is_manual, oi.custom_name, oi.custom_price, oi.notes, oi.sequence,
+             COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
       FROM order_items oi 
       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id 
-      WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY oi.created_at ASC
+      WHERE oi.order_id = $1 AND oi.quantity > 0 ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
     `, [orderId]);
 
     notifyUpdate(req.user.hotel_id, 'table-update');
@@ -631,7 +713,7 @@ router.post('/:tableId/clear-order', auth, async (req, res) => {
 // Generate Bill
 router.post('/:tableId/bill', auth, async (req, res) => {
   const { tableId } = req.params;
-  const { discount_percentage, selected_discount_item_ids } = req.body;
+  const { discount_percentage, selected_discount_item_ids, notes } = req.body;
   
   const client = await db.getClient();
   try {
@@ -641,12 +723,13 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       client.query('SELECT name, phone, location, gst_percentage, cgst_percentage, sgst_percentage, billing_method FROM hotels WHERE id = $1', [req.user.hotel_id]),
       client.query('SELECT table_number FROM tables WHERE id = $1', [tableId]),
       client.query(`
-        SELECT o.id as order_id, oi.id, oi.id as oi_id, oi.menu_item_id, oi.quantity,
-               COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price
+        SELECT o.id as order_id, oi.id, oi.id as oi_id, oi.menu_item_id, oi.quantity, oi.notes, oi.sequence,
+               COALESCE(oi.custom_name, mi.name, 'Other') as name, mi.marathi_name, COALESCE(oi.custom_price, mi.price, 0) as price, mi.item_number
         FROM orders o
         JOIN order_items oi ON oi.order_id = o.id
         LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
         WHERE o.table_id = $1 AND o.status = 'active' AND oi.quantity > 0
+        ORDER BY COALESCE(oi.sequence, 0) ASC, oi.created_at ASC
       `, [tableId])
     ]);
 
@@ -701,9 +784,9 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
 
     const billRes = await client.query(
-      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discount]
+      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage, notes) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discount, notes || '']
     );
 
     await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
@@ -722,6 +805,7 @@ router.post('/:tableId/bill', auth, async (req, res) => {
       sgst: sgst,
       round_off: roundOff,
       items: orderRes.rows,
+      notes: notes || '',
       hotel_name: hotelRes.rows[0].name,
       hotel_phone: hotelRes.rows[0].phone,
       hotel_location: hotelRes.rows[0].location

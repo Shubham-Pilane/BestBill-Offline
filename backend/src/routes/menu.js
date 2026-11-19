@@ -202,8 +202,8 @@ router.get('/items', auth, async (req, res) => {
 
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      params.push(searchParam, searchParam, searchParam);
-      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 2} OR LOWER(mi.marathi_name) LIKE $${params.length - 1} OR LOWER(c.name) LIKE $${params.length})`;
+      params.push(searchParam, searchParam, searchParam, searchParam);
+      queryStr += ` AND (LOWER(mi.name) LIKE $${params.length - 3} OR LOWER(mi.marathi_name) LIKE $${params.length - 2} OR LOWER(c.name) LIKE $${params.length - 1} OR CAST(mi.item_number AS TEXT) LIKE $${params.length})`;
     }
 
     if (category_id && category_id !== 'all') {
@@ -213,7 +213,7 @@ router.get('/items', auth, async (req, res) => {
 
     // If page is not specified, return all items without pagination
     if (isNaN(page)) {
-      queryStr += ` ORDER BY COALESCE(mi.is_pinned, false) DESC, mi.name ASC`;
+      queryStr += ` ORDER BY CASE WHEN mi.item_number IS NOT NULL AND mi.item_number > 0 THEN mi.item_number ELSE 999999 END ASC, mi.name ASC`;
       const result = await db.query(queryStr, params);
       return res.json(result.rows);
     }
@@ -228,8 +228,8 @@ router.get('/items', auth, async (req, res) => {
     const countParams = [req.user.hotel_id, menuNum];
     if (search) {
       const searchParam = `%${search.toLowerCase()}%`;
-      countParams.push(searchParam, searchParam, searchParam);
-      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 2} OR LOWER(mi.marathi_name) LIKE $${countParams.length - 1} OR LOWER(c.name) LIKE $${countParams.length})`;
+      countParams.push(searchParam, searchParam, searchParam, searchParam);
+      countQueryStr += ` AND (LOWER(mi.name) LIKE $${countParams.length - 3} OR LOWER(mi.marathi_name) LIKE $${countParams.length - 2} OR LOWER(c.name) LIKE $${countParams.length - 1} OR CAST(mi.item_number AS TEXT) LIKE $${countParams.length})`;
     }
     if (category_id && category_id !== 'all') {
       countParams.push(parseInt(category_id));
@@ -242,7 +242,7 @@ router.get('/items', auth, async (req, res) => {
     // Add pagination order and limit
     const offset = (page - 1) * limit;
     params.push(limit, offset);
-    queryStr += ` ORDER BY COALESCE(mi.is_pinned, false) DESC, mi.name ASC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+    queryStr += ` ORDER BY CASE WHEN mi.item_number IS NOT NULL AND mi.item_number > 0 THEN mi.item_number ELSE 999999 END ASC, mi.name ASC LIMIT $${params.length - 1} OFFSET $${params.length}`;
 
     const itemsResult = await db.query(queryStr, params);
 
@@ -260,16 +260,26 @@ router.get('/items', auth, async (req, res) => {
 
 // Create menu item
 router.post('/items', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available, marathi_name, menu_number } = req.body;
+  const { name, price, category_id, description, is_available, marathi_name, menu_number, item_number } = req.body;
   const hotelId = req.user.hotel_id;
   const menuNum = parseInt(menu_number) || 1;
   try {
     const lowercaseName = name.trim().toLowerCase();
+
+    // Auto-assign item_number if not provided (MAX + 1)
+    let assignedItemNumber = item_number !== undefined && item_number !== null && item_number !== '' ? parseInt(item_number, 10) : null;
+    if (!assignedItemNumber || isNaN(assignedItemNumber) || assignedItemNumber <= 0) {
+      const maxNumRes = await db.query(
+        'SELECT COALESCE(MAX(item_number), 0) as max_num FROM menu_items WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND is_deleted = 0',
+        [hotelId, menuNum]
+      );
+      assignedItemNumber = (parseInt(maxNumRes.rows[0]?.max_num, 10) || 0) + 1;
+    }
     
     // Create the hotel-specific menu item directly
     const newItem = await db.query(
-      'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true, menuNum]
+      'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number, item_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true, menuNum, assignedItemNumber]
     );
     res.status(201).json(newItem.rows[0]);
   } catch (err) {
@@ -333,14 +343,15 @@ router.patch('/items/:id/pin', auth, handlePinToggle);
 
 // Update menu item
 router.put('/items/:id', auth, async (req, res) => {
-  const { name, price, category_id, description, is_available, marathi_name } = req.body;
+  const { name, price, category_id, description, is_available, marathi_name, item_number } = req.body;
   const { id } = req.params;
   try {
     const lowercaseName = name ? name.trim().toLowerCase() : '';
+    const parsedItemNumber = item_number !== undefined && item_number !== null && item_number !== '' ? parseInt(item_number, 10) : null;
     
     const updated = await db.query(
-      'UPDATE menu_items SET name = $1, marathi_name = $2, price = $3, category_id = $4, description = $5, is_available = $6 WHERE id = $7 RETURNING *',
-      [lowercaseName, marathi_name || null, price, category_id, description, is_available, id]
+      'UPDATE menu_items SET name = $1, marathi_name = $2, price = $3, category_id = $4, description = $5, is_available = $6, item_number = COALESCE($7, item_number) WHERE id = $8 RETURNING *',
+      [lowercaseName, marathi_name || null, price, category_id, description, is_available, parsedItemNumber, id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -357,11 +368,73 @@ router.delete('/items/:id', auth, async (req, res) => {
     res.json({ message: 'Item deleted' });
   } catch (err) {
     if (err.message && err.message.includes('FOREIGN KEY constraint failed')) {
-      // Soft delete to preserve history
-      await db.query('UPDATE menu_items SET is_deleted = 1 WHERE id = $1', [id]);
+      // Soft delete to preserve history, and clear item_number so it doesn't take up numbers
+      await db.query('UPDATE menu_items SET is_deleted = 1, item_number = NULL WHERE id = $1', [id]);
       return res.json({ message: 'Item removed (archived to preserve billing history)' });
     }
     res.status(500).json({ message: 'Delete failed' });
+  }
+});
+
+// Swap sequence of two menu items (Left side menu list ordering)
+router.put('/items/swap', auth, async (req, res) => {
+  const { id1, id2 } = req.body;
+  const hotelId = req.user.hotel_id;
+  try {
+    const r1 = await db.query('SELECT id, item_number, menu_number FROM menu_items WHERE id = $1 AND hotel_id = $2', [id1, hotelId]);
+    const r2 = await db.query('SELECT id, item_number, menu_number FROM menu_items WHERE id = $2 AND hotel_id = $3', [id2, hotelId]);
+    if (r1.rows.length === 0 || r2.rows.length === 0) {
+      return res.status(404).json({ message: 'Menu items not found' });
+    }
+    let num1 = r1.rows[0].item_number;
+    let num2 = r2.rows[0].item_number;
+
+    if (num1 === num2 || num1 === null || num2 === null) {
+      const menuNum = r1.rows[0].menu_number || 1;
+      const allActive = await db.query(
+        `SELECT id FROM menu_items WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 0 OR is_deleted IS FALSE)
+         ORDER BY CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC, id ASC`,
+        [hotelId, menuNum]
+      );
+      for (let i = 0; i < allActive.rows.length; i++) {
+        await db.query('UPDATE menu_items SET item_number = $1 WHERE id = $2', [i + 1, allActive.rows[i].id]);
+      }
+      const refetch1 = await db.query('SELECT item_number FROM menu_items WHERE id = $1', [id1]);
+      const refetch2 = await db.query('SELECT item_number FROM menu_items WHERE id = $2', [id2]);
+      num1 = refetch1.rows[0].item_number;
+      num2 = refetch2.rows[0].item_number;
+    }
+
+    await db.query('UPDATE menu_items SET item_number = $1 WHERE id = $2', [num2, id1]);
+    await db.query('UPDATE menu_items SET item_number = $1 WHERE id = $2', [num1, id2]);
+    notifyUpdate(hotelId, 'menu-update');
+    res.json({ success: true, item1: { id: id1, item_number: num2 }, item2: { id: id2, item_number: num1 } });
+  } catch (err) {
+    console.error('Failed to swap menu item sequence:', err);
+    res.status(500).json({ message: 'Failed to swap menu items' });
+  }
+});
+
+// Contiguously renumber all active menu items 1..N
+router.post('/items/renumber', auth, async (req, res) => {
+  const menuNum = parseInt(req.body.menu_number) || 1;
+  const hotelId = req.user.hotel_id;
+  try {
+    const activeItems = await db.query(
+      `SELECT id, item_number FROM menu_items 
+       WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 0 OR is_deleted IS FALSE)
+       ORDER BY CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC, id ASC`,
+      [hotelId, menuNum]
+    );
+    for (let i = 0; i < activeItems.rows.length; i++) {
+      await db.query('UPDATE menu_items SET item_number = $1 WHERE id = $2', [i + 1, activeItems.rows[i].id]);
+    }
+    await db.query('UPDATE menu_items SET item_number = NULL WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 1 OR is_deleted IS TRUE)', [hotelId, menuNum]);
+    notifyUpdate(hotelId, 'menu-update');
+    res.json({ success: true, total: activeItems.rows.length });
+  } catch (err) {
+    console.error('Failed to renumber items:', err);
+    res.status(500).json({ message: 'Failed to renumber items' });
   }
 });
 
@@ -392,10 +465,15 @@ router.post('/items/bulk', auth, async (req, res) => {
       [hotelId, menuNum]
     );
     const existingItemsMap = new Map();
+    let maxItemNumber = 0;
     existingItemsResult.rows.forEach(item => {
       existingItemsMap.set(item.name.toLowerCase().trim(), item);
+      if (item.item_number && Number(item.item_number) > maxItemNumber) {
+        maxItemNumber = Number(item.item_number);
+      }
     });
 
+    let nextItemNumber = maxItemNumber + 1;
     let createdCount = 0;
     let updatedCount = 0;
 
@@ -444,23 +522,42 @@ router.post('/items/bulk', auth, async (req, res) => {
         const hasMarathiNameChanged = existingItem.marathi_name !== newMarathiName;
         const wasDeleted = existingItem.is_deleted === 1;
 
-        if (hasPriceChanged || hasCategoryChanged || hasMarathiNameChanged || wasDeleted) {
+        const needsNumber = !existingItem.item_number;
+        const itemNumberToSet = needsNumber ? nextItemNumber++ : existingItem.item_number;
+
+        if (hasPriceChanged || hasCategoryChanged || hasMarathiNameChanged || wasDeleted || needsNumber) {
           await db.query(
-            'UPDATE menu_items SET category_id = $1, marathi_name = $2, price = $3, description = $4, is_deleted = 0, is_available = true WHERE id = $5',
-            [categoryId, newMarathiName, newPrice, item.description || existingItem.description || '', existingItem.id]
+            'UPDATE menu_items SET category_id = $1, marathi_name = $2, price = $3, description = $4, is_deleted = 0, is_available = true, item_number = $5 WHERE id = $6',
+            [categoryId, newMarathiName, newPrice, item.description || existingItem.description || '', itemNumberToSet, existingItem.id]
           );
+          if (needsNumber) existingItem.item_number = itemNumberToSet;
           updatedCount++;
         }
       } else {
-        // Insert new item for this specific menu
+        // Insert new item for this specific menu with sequential auto-assigned item_number
         const newMarathiName = item.marathi_name || null;
+        const assignedNumber = nextItemNumber++;
         await db.query(
-          'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true, menuNum]
+          'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number, item_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true, menuNum, assignedNumber]
         );
         createdCount++;
       }
     }
+
+    // Ensure all active items in this menu are contiguously numbered 1..N with no gaps or excessive numbers
+    const activeItems = await db.query(
+      `SELECT id, item_number FROM menu_items 
+       WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 0 OR is_deleted IS FALSE)
+       ORDER BY CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC, id ASC`,
+      [hotelId, menuNum]
+    );
+    for (let i = 0; i < activeItems.rows.length; i++) {
+      if (activeItems.rows[i].item_number !== i + 1) {
+        await db.query('UPDATE menu_items SET item_number = $1 WHERE id = $2', [i + 1, activeItems.rows[i].id]);
+      }
+    }
+    await db.query('UPDATE menu_items SET item_number = NULL WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 1 OR is_deleted IS TRUE)', [hotelId, menuNum]);
 
     res.status(201).json({ 
       message: `Successfully imported Menu ${menuNum}: ${createdCount} new items added, ${updatedCount} items updated.`, 

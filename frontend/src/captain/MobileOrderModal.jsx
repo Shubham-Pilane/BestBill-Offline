@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
 import { shareBillPDFViaWhatsApp } from '../utils/pdfBill';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, ShoppingBag, ChevronUp, ChevronDown, ChevronsDown, Ticket, Ban, Edit2, Pin } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, ShoppingBag, ChevronUp, ChevronDown, ChevronsDown, Ticket, Ban, Edit2, Pin, FileText } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import SwapModal from '../components/SwapModal';
@@ -74,6 +74,23 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const [partnerToDelete, setPartnerToDelete] = useState(null);
   const [partnerToRename, setPartnerToRename] = useState(null);
   const [renameValue, setRenameValue] = useState('');
+  const [editingNoteItemId, setEditingNoteItemId] = useState(null);
+  const [itemNoteInput, setItemNoteInput] = useState('');
+  const [currentFilteredItems, setCurrentFilteredItems] = useState([]);
+
+  const handleSaveItemNote = async (itemId, notes) => {
+    const trimmedNotes = String(notes || '').trim();
+    setOrderItems(prev => prev.map(i => (i.id === itemId || i.tempId === itemId || i.menu_item_id === itemId) ? { ...i, notes: trimmedNotes } : i));
+    setEditingNoteItemId(null);
+    if (itemId) {
+      try {
+        await api.put(`/tables/${table.id}/order/items/${itemId}/notes`, { notes: trimmedNotes });
+        toast.success(trimmedNotes ? 'Note saved for item' : 'Note cleared');
+      } catch (err) {
+        console.error('Failed to update item note:', err);
+      }
+    }
+  };
 
   const handleAddDeliveryPartner = (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -207,14 +224,28 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
       filtered = filtered.filter(i => String(i.category_id) === String(selectedCategory));
     }
     if (searchQuery.trim().length > 0) {
-      const query = searchQuery.toLowerCase().replace(/\s/g, '');
+      const trimmedQuery = searchQuery.trim().toLowerCase();
+      const query = trimmedQuery.replace(/\s/g, '');
       filtered = filtered.filter(i => {
+        // Number matching (Feature 2.D)
+        if (i.item_number !== undefined && i.item_number !== null) {
+          const itemNumStr = String(i.item_number);
+          if (itemNumStr === trimmedQuery || itemNumStr.startsWith(trimmedQuery)) return true;
+        }
+
         const name = i.name.toLowerCase();
+        const marathiName = (i.marathi_name || '').toLowerCase();
         const categoryName = (i.category_name || '').toLowerCase();
-        if (name.includes(searchQuery.toLowerCase()) || categoryName.includes(searchQuery.toLowerCase())) return true;
+        if (name.includes(trimmedQuery) || marathiName.includes(trimmedQuery) || categoryName.includes(trimmedQuery)) return true;
         
         let patternIdx = 0;
         for (let char of name) {
+          if (char === query[patternIdx]) patternIdx++;
+          if (patternIdx === query.length) return true;
+        }
+
+        patternIdx = 0;
+        for (let char of marathiName) {
           if (char === query[patternIdx]) patternIdx++;
           if (patternIdx === query.length) return true;
         }
@@ -230,17 +261,14 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
     }
 
     filtered.sort((a, b) => {
-      const aPinned = a.is_pinned === 1 ? 1 : 0;
-      const bPinned = b.is_pinned === 1 ? 1 : 0;
-      if (aPinned !== bPinned) return bPinned - aPinned;
+      const numA = (a.item_number !== undefined && a.item_number !== null && a.item_number !== '') ? Number(a.item_number) : 999999;
+      const numB = (b.item_number !== undefined && b.item_number !== null && b.item_number !== '') ? Number(b.item_number) : 999999;
+      if (numA !== numB) return numA - numB;
 
-      const aInOrder = orderItems.some(i => i.menu_item_id === a.id);
-      const bInOrder = orderItems.some(i => i.menu_item_id === b.id);
-      if (aInOrder && !bInOrder) return -1;
-      if (!aInOrder && bInOrder) return 1;
-      return 0;
+      return String(a.name || '').localeCompare(String(b.name || ''));
     });
 
+    setCurrentFilteredItems(filtered);
     setTotalPages(Math.ceil(filtered.length / 10) || 1);
     const startIndex = (currentPage - 1) * 10;
     setItems(filtered.slice(startIndex, startIndex + 10));
@@ -392,7 +420,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const generateBill = async () => {
     try {
       const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
-      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discPct });
+      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discPct, notes: kitchenNotes });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', {
@@ -720,7 +748,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                       <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{ padding: '12px 18px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <Plus size={14} color="#0ea5e9" />
-                          <span>{s.name}</span>
+                          <span>{s.item_number ? `${s.item_number} - ` : ''}{s.name}</span>
                         </div>
                         <span style={{ color: '#10b981' }}>₹{s.price}</span>
                       </div>
@@ -845,29 +873,30 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                       boxSizing: 'border-box'
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, paddingRight: '12px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <button 
-                          type="button"
-                          title={item.is_pinned === 1 ? "Unpin Item" : "Pin Item"}
-                          onClick={(e) => togglePinItem(e, item)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            borderRadius: '6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: item.is_pinned === 1 ? '#f59e0b' : 'var(--text-muted)',
-                            backgroundColor: item.is_pinned === 1 ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          <Pin size={15} fill={item.is_pinned === 1 ? '#f59e0b' : 'none'} color={item.is_pinned === 1 ? '#f59e0b' : 'var(--text-muted)'} />
-                        </button>
-                        <span style={{ fontSize: '14px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.01em' }}>{item.name}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, paddingRight: '12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <button 
+                            type="button"
+                            title={item.is_pinned === 1 ? "Unpin Item" : "Pin Item"}
+                            onClick={(e) => togglePinItem(e, item)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: item.is_pinned === 1 ? '#f59e0b' : 'var(--text-muted)',
+                              backgroundColor: item.is_pinned === 1 ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            <Pin size={15} fill={item.is_pinned === 1 ? '#f59e0b' : 'none'} color={item.is_pinned === 1 ? '#f59e0b' : 'var(--text-muted)'} />
+                          </button>
+                        <span style={{ fontSize: '14px', fontWeight: 900, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.01em' }}>{item.item_number ? `${item.item_number} - ` : ''}{item.name}</span>
                         <span style={{ fontSize: '9px', color: 'var(--text-secondary)', fontWeight: 800, backgroundColor: 'var(--bg-base)', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
                           {item.category_name || 'Item'}
                         </span>
@@ -883,8 +912,9 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                         </p>
                       )}
                     </div>
-                    
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
+                  </div>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
                       <span style={{ color: '#10b981', fontSize: '15px', fontWeight: 900 }}>₹{item.price}</span>
                       
                       {currentQty === 0 ? (
@@ -1068,74 +1098,190 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
 
                 {/* Drawer Cart List - Compact to fit 6+ items easily */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {orderItems.map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                      <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                        {!item.menu_item_id ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input 
-                              type="text" 
-                              value={item.name} 
-                              onChange={(e) => updateManualItem(item.id, e.target.value, item.price)}
-                              placeholder="Item Name"
-                              style={{
-                                padding: '4px 6px',
-                                borderRadius: '6px',
-                                border: '1px solid var(--border-color)',
-                                backgroundColor: 'var(--bg-base)',
-                                color: 'var(--text-primary)',
-                                fontWeight: 800,
-                                fontSize: '12px',
-                                width: '100px',
-                                outline: 'none'
-                              }}
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px' }}>
-                              <span>₹</span>
+                  {orderItems.map((item, idx) => (
+                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '8px 12px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', gap: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                          {!item.menu_item_id ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                               <input 
-                                type="number" 
-                                value={item.price === 0 ? '' : item.price} 
-                                onChange={(e) => updateManualItem(item.id, item.name, e.target.value)}
-                                placeholder="0"
+                                type="text" 
+                                value={item.name} 
+                                onChange={(e) => updateManualItem(item.id, e.target.value, item.price)}
+                                placeholder="Item Name"
                                 style={{
-                                  padding: '4px 4px',
+                                  padding: '4px 6px',
                                   borderRadius: '6px',
                                   border: '1px solid var(--border-color)',
                                   backgroundColor: 'var(--bg-base)',
                                   color: 'var(--text-primary)',
-                                  fontWeight: 900,
+                                  fontWeight: 800,
                                   fontSize: '12px',
-                                  width: '55px',
+                                  width: '100px',
                                   outline: 'none'
                                 }}
                               />
+                              <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '12px' }}>
+                                <span>₹</span>
+                                <input 
+                                  type="number" 
+                                  value={item.price === 0 ? '' : item.price} 
+                                  onChange={(e) => updateManualItem(item.id, item.name, e.target.value)}
+                                  placeholder="0"
+                                  style={{
+                                    padding: '4px 4px',
+                                    borderRadius: '6px',
+                                    border: '1px solid var(--border-color)',
+                                    backgroundColor: 'var(--bg-base)',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 900,
+                                    fontSize: '12px',
+                                    width: '55px',
+                                    outline: 'none'
+                                  }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', wordBreak: 'break-word' }}>{item.name}</div>
-                            <div style={{ color: 'var(--text-primary)', fontSize: '11px', fontWeight: 800, marginTop: '1px' }}>
-                               ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '9px' }}>(₹{Math.round(item.price)} each)</span>}
-                            </div>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', wordBreak: 'break-word' }}>
+                                {item.item_number ? `${item.item_number} - ` : ''}{item.name}
+                                {item.notes && String(item.notes).trim() ? <span style={{ color: '#f59e0b', fontWeight: 700, marginLeft: '6px' }}>({String(item.notes).trim()})</span> : null}
+                              </div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '11px', fontWeight: 800, marginTop: '1px' }}>
+                                 ₹{Math.round(item.price * item.quantity)} {item.quantity > 1 && <span style={{ color: 'var(--text-muted)', fontSize: '9px' }}>(₹{Math.round(item.price)} each)</span>}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button 
+                            onClick={() => updateQuantity(item.id, -1, item.menu_item_id)} 
+                            style={{ border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--border-rgba-05)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Minus size={11} />
+                          </button>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '14px', textAlign: 'center' }}>{item.quantity}</span>
+                          <button 
+                            onClick={() => updateQuantity(item.id, 1, item.menu_item_id)} 
+                            style={{ border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--border-rgba-05)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Plus size={11} />
+                          </button>
+                        </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <button 
-                          onClick={() => updateQuantity(item.id, -1, item.menu_item_id)} 
-                          style={{ border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--border-rgba-05)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Minus size={11} />
-                        </button>
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px', minWidth: '14px', textAlign: 'center' }}>{item.quantity}</span>
-                        <button 
-                          onClick={() => updateQuantity(item.id, 1, item.menu_item_id)} 
-                          style={{ border: 'none', width: '26px', height: '26px', borderRadius: '50%', backgroundColor: 'var(--border-rgba-05)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <Plus size={11} />
-                        </button>
-                      </div>
+                      {/* Notes Section for Mobile Drawer Cart */}
+                      {editingNoteItemId === (item.id || item.tempId || item.menu_item_id) ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '4px', borderTop: '1px dashed var(--border-color)' }}>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={itemNoteInput}
+                            placeholder="Item note (e.g. Less spicy)..."
+                            onChange={e => setItemNoteInput(e.target.value)}
+                            onBlur={() => handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput);
+                              if (e.key === 'Escape') setEditingNoteItemId(null);
+                            }}
+                            style={{
+                              flex: 1,
+                              backgroundColor: 'var(--bg-base)',
+                              border: '1px solid #f59e0b',
+                              color: 'var(--text-primary)',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput)}
+                            style={{
+                              backgroundColor: '#f59e0b',
+                              border: 'none',
+                              color: '#ffffff',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingNoteItemId(null)}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px 4px',
+                              fontSize: '11px'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '20px' }}>
+                          {item.notes && String(item.notes).trim() ? (
+                            <div
+                              onClick={() => {
+                                setEditingNoteItemId(item.id || item.tempId || item.menu_item_id);
+                                setItemNoteInput(item.notes || '');
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                color: '#f59e0b',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                              title="Click to edit item note"
+                            >
+                              <FileText size={10} />
+                              <span>{item.notes}</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingNoteItemId(item.id || item.tempId || item.menu_item_id);
+                                setItemNoteInput('');
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                padding: '0 2px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                fontSize: '10px',
+                                opacity: 0.6
+                              }}
+                              title="Add note for this item"
+                            >
+                              <FileText size={10} />
+                              <span>+ Note</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1208,66 +1354,186 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                     No items selected yet. Tap items on the left to add.
                   </div>
                 ) : (
-                  orderItems.map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-                      <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
-                        {!item.menu_item_id ? (
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input 
-                              type="text" 
-                              value={item.name} 
-                              onChange={(e) => updateManualItem(item.id, e.target.value, item.price)}
-                              placeholder="Item Name"
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: '8px',
-                                border: '1px solid var(--border-color)',
-                                backgroundColor: 'var(--bg-base)',
-                                color: 'var(--text-primary)',
-                                fontWeight: 800,
-                                fontSize: '13px',
-                                width: '120px',
-                                outline: 'none'
-                              }}
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px' }}>
-                              <span>₹</span>
+                  orderItems.map((item, idx) => (
+                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', backgroundColor: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-color)', gap: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
+                          {!item.menu_item_id ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                               <input 
-                                type="number" 
-                                value={item.price === 0 ? '' : item.price} 
-                                onChange={(e) => updateManualItem(item.id, item.name, e.target.value)}
-                                placeholder="0"
+                                type="text" 
+                                value={item.name} 
+                                onChange={(e) => updateManualItem(item.id, e.target.value, item.price)}
+                                placeholder="Item Name"
                                 style={{
-                                  padding: '4px 6px',
+                                  padding: '4px 8px',
                                   borderRadius: '8px',
                                   border: '1px solid var(--border-color)',
                                   backgroundColor: 'var(--bg-base)',
                                   color: 'var(--text-primary)',
-                                  fontWeight: 900,
+                                  fontWeight: 800,
                                   fontSize: '13px',
-                                  width: '60px',
+                                  width: '120px',
                                   outline: 'none'
                                 }}
                               />
+                              <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, fontSize: '13px' }}>
+                                <span>₹</span>
+                                <input 
+                                  type="number" 
+                                  value={item.price === 0 ? '' : item.price} 
+                                  onChange={(e) => updateManualItem(item.id, item.name, e.target.value)}
+                                  placeholder="0"
+                                  style={{
+                                    padding: '4px 6px',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--border-color)',
+                                    backgroundColor: 'var(--bg-base)',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 900,
+                                    fontSize: '13px',
+                                    width: '60px',
+                                    outline: 'none'
+                                  }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '14px', wordBreak: 'break-word' }}>{item.name}</div>
-                            <div style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 900, marginTop: '2px' }}>
-                              ₹{item.price}
-                            </div>
-                          </>
-                        )}
-                      </div>
+                          ) : (
+                            <>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '14px', wordBreak: 'break-word' }}>
+                                {item.item_number ? `${item.item_number} - ` : ''}{item.name}
+                                {item.notes && String(item.notes).trim() ? <span style={{ color: '#f59e0b', fontWeight: 700, marginLeft: '6px' }}>({String(item.notes).trim()})</span> : null}
+                              </div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '12px', fontWeight: 900, marginTop: '2px' }}>
+                                ₹{item.price}
+                              </div>
+                            </>
+                          )}
+                        </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderRadius: '12px', padding: '4px', border: '1px solid var(--border-color)' }}>
-                          <button onClick={() => updateQuantity(item.id, -1, item.menu_item_id)} style={{ width: '28px', height: '28px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={14} /></button>
-                          <span style={{ width: '28px', textAlign: 'center', fontWeight: 900, color: 'var(--text-primary)', fontSize: '14px' }}>{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.id, 1, item.menu_item_id)} style={{ width: '28px', height: '28px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={14} /></button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-base)', borderRadius: '12px', padding: '4px', border: '1px solid var(--border-color)' }}>
+                            <button onClick={() => updateQuantity(item.id, -1, item.menu_item_id)} style={{ width: '28px', height: '28px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Minus size={14} /></button>
+                            <span style={{ width: '28px', textAlign: 'center', fontWeight: 900, color: 'var(--text-primary)', fontSize: '14px' }}>{item.quantity}</span>
+                            <button onClick={() => updateQuantity(item.id, 1, item.menu_item_id)} style={{ width: '28px', height: '28px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={14} /></button>
+                          </div>
                         </div>
                       </div>
+
+                      {/* Notes Section for Desktop Right Panel Cart */}
+                      {editingNoteItemId === (item.id || item.tempId || item.menu_item_id) ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingTop: '4px', borderTop: '1px dashed var(--border-color)' }}>
+                          <input
+                            type="text"
+                            autoFocus
+                            value={itemNoteInput}
+                            placeholder="Item note (e.g. Less spicy, No onion)..."
+                            onChange={e => setItemNoteInput(e.target.value)}
+                            onBlur={() => handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput);
+                              if (e.key === 'Escape') setEditingNoteItemId(null);
+                            }}
+                            style={{
+                              flex: 1,
+                              backgroundColor: 'var(--bg-base)',
+                              border: '1.5px solid #f59e0b',
+                              color: 'var(--text-primary)',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              outline: 'none'
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveItemNote(item.id || item.menu_item_id, itemNoteInput)}
+                            style={{
+                              backgroundColor: '#f59e0b',
+                              border: 'none',
+                              color: '#ffffff',
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingNoteItemId(null)}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              padding: '2px 4px',
+                              fontSize: '11px'
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '22px' }}>
+                          {item.notes && String(item.notes).trim() ? (
+                            <div
+                              onClick={() => {
+                                setEditingNoteItemId(item.id || item.tempId || item.menu_item_id);
+                                setItemNoteInput(item.notes || '');
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                color: '#f59e0b',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                padding: '2px 8px',
+                                borderRadius: '6px',
+                                cursor: 'pointer'
+                              }}
+                              title="Click to edit item note"
+                            >
+                              <FileText size={11} />
+                              <span>{item.notes}</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingNoteItemId(item.id || item.tempId || item.menu_item_id);
+                                setItemNoteInput('');
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: 'var(--text-muted)',
+                                cursor: 'pointer',
+                                padding: '1px 4px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                fontSize: '10px',
+                                opacity: 0.6,
+                                borderRadius: '4px',
+                                transition: 'opacity 0.15s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                              onMouseLeave={e => e.currentTarget.style.opacity = '0.6'}
+                              title="Add note for this item (e.g. Less spicy)"
+                            >
+                              <FileText size={11} />
+                              <span>+ Note</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))
                 )}
@@ -1431,10 +1697,23 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                       <span>Item</span><span style={{ textAlign: 'right' }}>Price</span><span style={{ textAlign: 'right' }}>Qty</span><span style={{ textAlign: 'right' }}>Total</span>
                    </div>
                    {billData.items.map((i, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 30px 70px' : '1fr 80px 60px 100px', fontSize: isMobile ? '12px' : '14px', fontWeight: 800, marginBottom: '6px', color: billData.is_paid ? '#ffffff' : 'var(--text-primary)' }}>
-                        <span style={{ paddingRight: '8px' }}>{i.name}</span><span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span><span style={{ textAlign: 'right' }}>{i.quantity}</span><span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                      <div key={idx} style={{ marginBottom: '6px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 60px 30px 70px' : '1fr 80px 60px 100px', fontSize: isMobile ? '12px' : '14px', fontWeight: 800, color: billData.is_paid ? '#ffffff' : 'var(--text-primary)' }}>
+                          <span style={{ paddingRight: '8px' }}>
+                            {i.name}
+                            {i.notes && String(i.notes).trim() ? <span style={{ color: '#fbbf24', fontStyle: 'italic', marginLeft: '6px' }}>({String(i.notes).trim()})</span> : null}
+                          </span>
+                          <span style={{ textAlign: 'right' }}>₹{Math.round(i.price)}</span>
+                          <span style={{ textAlign: 'right' }}>{i.quantity}</span>
+                          <span style={{ textAlign: 'right' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
+                        </div>
                       </div>
                    ))}
+                   {billData.notes && String(billData.notes).trim() && (
+                      <div style={{ marginTop: '8px', padding: '6px 10px', backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px dashed rgba(251, 191, 36, 0.3)', borderRadius: '6px', fontSize: '11px', color: '#fbbf24', fontStyle: 'italic' }}>
+                        Note: {String(billData.notes).trim()}
+                      </div>
+                   )}
                 </div>
  
                 <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '6px', color: billData.is_paid ? 'rgba(255,255,255,0.8)' : 'var(--text-secondary)' }}>

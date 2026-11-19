@@ -55,7 +55,8 @@ const syncSchema = async () => {
                 is_available BOOLEAN DEFAULT true,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 is_deleted BOOLEAN DEFAULT false,
-                menu_number INTEGER DEFAULT 1
+                menu_number INTEGER DEFAULT 1,
+                item_number INTEGER
             )`,
             `CREATE TABLE IF NOT EXISTS rooms (
                 id SERIAL PRIMARY KEY, 
@@ -106,6 +107,8 @@ const syncSchema = async () => {
                 quantity INTEGER NOT NULL,
                 printed_quantity INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT DEFAULT '',
+                sequence INTEGER DEFAULT 0,
                 UNIQUE (order_id, menu_item_id)
             )`,
             `CREATE TABLE IF NOT EXISTS order_chats (
@@ -346,9 +349,13 @@ const syncSchema = async () => {
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS cgst DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS sgst DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS round_off DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''",
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE tables ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
+            "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS item_number INTEGER",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''",
+            "ALTER TABLE order_items ADD COLUMN IF NOT EXISTS sequence INTEGER DEFAULT 0",
             "CREATE TABLE IF NOT EXISTS section_menus (id SERIAL PRIMARY KEY, hotel_id INTEGER, section_name VARCHAR(100) NOT NULL, menu_number INTEGER DEFAULT 1, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (hotel_id, section_name))",
             "CREATE TABLE IF NOT EXISTS hotel_menus (id SERIAL PRIMARY KEY, hotel_id INTEGER, menu_number INTEGER NOT NULL, name VARCHAR(100) NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE (hotel_id, menu_number))",
             
@@ -367,9 +374,60 @@ const syncSchema = async () => {
             }
         }
 
+        if (!db.sqliteDb) {
+            try {
+                const hotelMenusPg = await db.query(`
+                    SELECT DISTINCT hotel_id, COALESCE(menu_number, 1) as menu_num 
+                    FROM menu_items 
+                    WHERE (is_deleted = 0 OR is_deleted IS FALSE)
+                `);
+                for (const hm of hotelMenusPg.rows) {
+                    const activeItems = await db.query(`
+                        SELECT id, item_number 
+                        FROM menu_items 
+                        WHERE hotel_id = $1 AND COALESCE(menu_number, 1) = $2 AND (is_deleted = 0 OR is_deleted IS FALSE)
+                        ORDER BY 
+                          CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC,
+                          id ASC
+                    `, [hm.hotel_id, hm.menu_num]);
+
+                    for (let i = 0; i < activeItems.rows.length; i++) {
+                        const sequentialNum = i + 1;
+                        if (activeItems.rows[i].item_number !== sequentialNum) {
+                            await db.query("UPDATE menu_items SET item_number = $1 WHERE id = $2", [sequentialNum, activeItems.rows[i].id]);
+                        }
+                    }
+                }
+                await db.query("UPDATE menu_items SET item_number = NULL WHERE is_deleted = 1 OR is_deleted IS TRUE");
+            } catch (pgErr) {
+                console.error('[MIGRATION] PG menu renumber error:', pgErr.message);
+            }
+        }
+
         // 5. Special SQLite Migration for ensuring columns
         if (db.sqliteDb) {
             try {
+                db.sqliteDb.exec(`
+                    CREATE TABLE IF NOT EXISTS section_menus (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                        hotel_id INTEGER, 
+                        section_name TEXT NOT NULL, 
+                        menu_number INTEGER DEFAULT 1, 
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                        UNIQUE (hotel_id, section_name)
+                    )
+                `);
+                db.sqliteDb.exec(`
+                    CREATE TABLE IF NOT EXISTS hotel_menus (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                        hotel_id INTEGER, 
+                        menu_number INTEGER NOT NULL, 
+                        name TEXT NOT NULL, 
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP, 
+                        UNIQUE (hotel_id, menu_number)
+                    )
+                `);
+
                 const tableCols = db.sqliteDb.prepare("PRAGMA table_info(tables)").all().map(c => c.name);
                 if (!tableCols.includes('menu_number')) {
                     db.sqliteDb.exec('ALTER TABLE tables ADD COLUMN menu_number INTEGER DEFAULT 1');
@@ -385,6 +443,68 @@ const syncSchema = async () => {
                     db.sqliteDb.exec('ALTER TABLE menu_items ADD COLUMN menu_number INTEGER DEFAULT 1');
                     console.log('[MIGRATION] Added menu_number column to menu_items');
                 }
+                if (!itemCols.includes('item_number')) {
+                    db.sqliteDb.exec('ALTER TABLE menu_items ADD COLUMN item_number INTEGER');
+                    console.log('[MIGRATION] Added item_number column to menu_items');
+                }
+                const orderItemCols = db.sqliteDb.prepare("PRAGMA table_info(order_items)").all().map(c => c.name);
+                if (!orderItemCols.includes('notes')) {
+                    db.sqliteDb.exec("ALTER TABLE order_items ADD COLUMN notes TEXT DEFAULT ''");
+                    console.log('[MIGRATION] Added notes column to order_items');
+                }
+                if (!orderItemCols.includes('sequence')) {
+                    db.sqliteDb.exec('ALTER TABLE order_items ADD COLUMN sequence INTEGER DEFAULT 0');
+                    console.log('[MIGRATION] Added sequence column to order_items');
+                }
+
+                const billCols = db.sqliteDb.prepare("PRAGMA table_info(bills)").all().map(c => c.name);
+                if (!billCols.includes('notes')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN notes TEXT DEFAULT ''");
+                    console.log('[MIGRATION] Added notes column to bills');
+                }
+
+                // Renumber all active menu items sequentially (1 to N) per hotel and menu
+                // This eliminates gaps and cleans up jump numbers like 270, 363, 411
+                const hotelMenus = db.sqliteDb.prepare(`
+                    SELECT DISTINCT hotel_id, COALESCE(menu_number, 1) as menu_num 
+                    FROM menu_items 
+                    WHERE (is_deleted = 0 OR is_deleted IS FALSE OR is_deleted IS NULL)
+                `).all();
+
+                const updateItemNumStmt = db.sqliteDb.prepare("UPDATE menu_items SET item_number = ? WHERE id = ?");
+                for (const hm of hotelMenus) {
+                    const activeItems = hm.hotel_id !== null && hm.hotel_id !== undefined
+                      ? db.sqliteDb.prepare(`
+                          SELECT id, item_number 
+                          FROM menu_items 
+                          WHERE hotel_id = ? AND COALESCE(menu_number, 1) = ? AND (is_deleted = 0 OR is_deleted IS FALSE OR is_deleted IS NULL)
+                          ORDER BY 
+                            CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC,
+                            id ASC
+                        `).all(hm.hotel_id, hm.menu_num)
+                      : db.sqliteDb.prepare(`
+                          SELECT id, item_number 
+                          FROM menu_items 
+                          WHERE hotel_id IS NULL AND COALESCE(menu_number, 1) = ? AND (is_deleted = 0 OR is_deleted IS FALSE OR is_deleted IS NULL)
+                          ORDER BY 
+                            CASE WHEN item_number IS NOT NULL AND item_number > 0 THEN item_number ELSE 999999 END ASC,
+                            id ASC
+                        `).all(hm.menu_num);
+
+                    activeItems.forEach((item, index) => {
+                        const sequentialNum = index + 1;
+                        if (item.item_number !== sequentialNum) {
+                            updateItemNumStmt.run(sequentialNum, item.id);
+                        }
+                    });
+                    console.log(`[MIGRATION] Contiguously numbered ${activeItems.length} active menu items (1 to ${activeItems.length}) for hotel ${hm.hotel_id || 'DEFAULT'}, menu ${hm.menu_num}.`);
+                }
+
+                // Clear item_number for deleted items so they do not hold numbers
+                db.sqliteDb.exec("UPDATE menu_items SET item_number = NULL WHERE is_deleted = 1 OR is_deleted IS TRUE");
+
+                // Backfill sequence for order_items if 0 or null
+                db.sqliteDb.exec("UPDATE order_items SET sequence = id WHERE sequence IS NULL OR sequence = 0");
             } catch (e) {
                 console.error('[MIGRATION] SQLite ensure column error:', e.message);
             }

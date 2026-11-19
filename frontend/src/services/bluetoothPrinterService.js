@@ -283,7 +283,8 @@ export async function formatKOT(data, printerSize = '58mm') {
 
   (data.items || []).forEach(item => {
     const qty = item.quantity || item.qty || 1;
-    const nameStr = toTitleCase(String(item.name || ''));
+    const noteSuffix = item.notes && String(item.notes).trim() ? ` (${String(item.notes).trim()})` : '';
+    const nameStr = toTitleCase(String(item.name || '')) + noteSuffix;
     const wrappedName = wordWrap(nameStr, itemLen);
 
     if (wrappedName.length === 0) {
@@ -488,7 +489,8 @@ export async function formatBill(data, printerSize = '58mm') {
     const qty = item.quantity || item.qty || 1;
     const rate = formatAmount(item.price);
     const amt = formatAmount(item.price * qty);
-    const nameStr = toTitleCase(String(item.name || ''));
+    const noteSuffix = item.notes && String(item.notes).trim() ? ` (${String(item.notes).trim()})` : '';
+    const nameStr = toTitleCase(String(item.name || '')) + noteSuffix;
     const wrappedName = wordWrap(nameStr, itemLen);
 
     if (wrappedName.length === 0) {
