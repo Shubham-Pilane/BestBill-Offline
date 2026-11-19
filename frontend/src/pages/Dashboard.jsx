@@ -50,6 +50,9 @@ const Dashboard = () => {
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [tableSearchQuery, setTableSearchQuery] = useState('');
 
+  const tableCardSize = user?.tableCardSize || user?.table_card_size || (typeof window !== 'undefined' && localStorage.getItem('cfg_table_card_size')) || 'big';
+  const isSmall = tableCardSize === 'small';
+
   const fetchSectionMenus = async () => {
     if (!user?.multipleMenuEnabled) return;
     try {
@@ -921,12 +924,13 @@ const Dashboard = () => {
           
           {/* Fallback for only parcel, token, or online counters, no floors */}
           {floors.length === 0 && (parcelTables.length > 0 || tokenTables.length > 0 || onlineTables.length > 0) && (
-             <div className="dashboard-tables-grid">
+             <div className={`dashboard-tables-grid ${isSmall ? 'grid-small' : ''}`}>
                 {[...parcelTables, ...tokenTables, ...onlineTables].map((table) => (
                     <TableCard 
                       key={table.id} 
                       table={table} 
                       isOwner={isOwner} 
+                      isSmall={isSmall}
                       onOpen={openTable}
                       onEdit={initiateEditTable}
                       onDelete={initiateDeleteTable}
@@ -968,7 +972,7 @@ const Dashboard = () => {
                            >
                              {availableMenus.map(m => (
                                <option key={m.menu_number} value={m.menu_number} style={{ backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)' }}>
-                                 {m.name || Menu } {m.menu_number === 1 ? '(Default)' : ''}
+                                 {m.name || `Menu ${m.menu_number}`} {m.menu_number === 1 ? '(Default)' : ''}
                                </option>
                              ))}
                            </select>
@@ -977,7 +981,7 @@ const Dashboard = () => {
                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-card)', padding: '4px 10px', borderRadius: '10px', border: '1px solid var(--border-rgba-05)' }}>
                            <Utensils size={12} style={{ color: '#0ea5e9' }} />
                            <span style={{ fontSize: '11px', fontWeight: 800, color: '#0ea5e9' }}>
-                             {availableMenus.find(m => m.menu_number === (sectionMenuMap[floor] || 1))?.name || Menu }
+                             {availableMenus.find(m => m.menu_number === (sectionMenuMap[floor] || 1))?.name || `Menu ${sectionMenuMap[floor] || 1}`}
                            </span>
                          </div>
                        )
@@ -985,12 +989,13 @@ const Dashboard = () => {
                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800 }}>{tableCount} TABLES</span>
                   </div>
                   
-                  <div className="dashboard-tables-grid">
+                  <div className={`dashboard-tables-grid ${isSmall ? 'grid-small' : ''}`}>
                      {floorTables.map((table) => (
                          <TableCard 
                            key={table.id} 
                            table={table} 
                            isOwner={isOwner} 
+                           isSmall={isSmall}
                            onOpen={openTable}
                            onEdit={initiateEditTable}
                            onDelete={initiateDeleteTable}
@@ -1290,15 +1295,19 @@ const Dashboard = () => {
 };
 
 // Memoized Table Card for performance
-const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap }) => {
+const TableCard = React.memo(({ table, isOwner, isSmall, onOpen, onEdit, onDelete, onSwap }) => {
+  const isCounter = String(table.table_number || '').toLowerCase().includes('parcel') || 
+                    String(table.table_number || '').toLowerCase().includes('token') ||
+                    String(table.table_number || '').toLowerCase().includes('online');
+
   return (
     <div
-      className="table-card"
+      className={`table-card ${isSmall ? 'card-small' : ''}`}
       onClick={() => onOpen(table)}
       style={{
         backgroundColor: 'var(--bg-card)',
-        borderRadius: '32px',
-        padding: '32px',
+        borderRadius: isSmall ? '16px' : '32px',
+        padding: isSmall ? '14px 16px' : '32px',
         cursor: 'pointer',
         position: 'relative',
         overflow: 'hidden',
@@ -1307,10 +1316,11 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px'
+        gap: isSmall ? '8px' : '16px',
+        minHeight: isSmall ? '110px' : 'auto'
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-8px)';
+        e.currentTarget.style.transform = isSmall ? 'translateY(-4px)' : 'translateY(-8px)';
         e.currentTarget.style.backgroundColor = 'var(--bg-border)';
       }}
       onMouseLeave={(e) => {
@@ -1319,7 +1329,16 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{
+          fontSize: isSmall ? '9px' : '11px',
+          fontWeight: 900,
+          color: 'var(--text-muted)',
+          textTransform: 'uppercase',
+          letterSpacing: isSmall ? '0.04em' : '0.1em',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }}>
           {String(table.table_number || '').toLowerCase().includes('parcel') 
             ? 'SERVICE DESK' 
             : String(table.table_number || '').toLowerCase().includes('token')
@@ -1329,73 +1348,77 @@ const TableCard = React.memo(({ table, isOwner, onOpen, onEdit, onDelete, onSwap
                 : `TABLE ${table.table_number}`
           }
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isSmall ? '6px' : '12px' }}>
            {isOwner && (
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: isSmall ? '6px' : '12px' }}>
                  <button 
                     onClick={table.active_order_id ? onSwap : (e) => onEdit(e, table)}
-                    style={{ color: '#0ea5e9', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 900, fontSize: '11px', textTransform: 'uppercase' }}
+                    style={{ color: '#0ea5e9', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 900, fontSize: isSmall ? '9px' : '11px', textTransform: 'uppercase' }}
                  >
                     {table.active_order_id ? 'Swap' : 'Edit'}
                  </button>
                  <button 
                     onClick={(e) => onDelete(e, table)} 
-                    style={{ color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                    style={{ color: '#f43f5e', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
                  >
-                    <Trash2 size={14} />
+                    <Trash2 size={isSmall ? 11 : 14} />
                   </button>
               </div>
            )}
            <div style={{
-             width: '12px',
-             height: '12px',
+             width: isSmall ? '8px' : '12px',
+             height: isSmall ? '8px' : '12px',
              borderRadius: '50%',
              backgroundColor: table.active_order_id ? '#f43f5e' : '#10b981',
-             boxShadow: table.active_order_id ? '0 0 12px #f43f5e' : '0 0 12px #10b981'
+             boxShadow: table.active_order_id ? `0 0 ${isSmall ? 6 : 12}px #f43f5e` : `0 0 ${isSmall ? 6 : 12}px #10b981`
            }}></div>
         </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <h3 className="table-card-title" style={{
-          fontSize: (String(table.table_number || '').toLowerCase().includes('parcel') || 
-                     String(table.table_number || '').toLowerCase().includes('token') ||
-                     String(table.table_number || '').toLowerCase().includes('online')) 
-            ? '28px' 
-            : '48px', 
+        <h3 className={`table-card-title ${isCounter ? 'table-card-title-counter' : ''}`} style={{
+          fontSize: isCounter ? (isSmall ? '15px' : '28px') : (isSmall ? '24px' : '48px'), 
           fontWeight: 900, 
           color: 'var(--text-primary)', 
           margin: 0, 
           letterSpacing: '-0.05em',
+          lineHeight: 1.1,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis'
         }}>{table.table_number}</h3>
-        <span style={{ fontSize: '12px', fontWeight: 800, color: table.active_order_id ? '#f43f5e' : '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span style={{
+          fontSize: isSmall ? '9px' : '12px',
+          fontWeight: 800,
+          color: table.active_order_id ? '#f43f5e' : '#10b981',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          marginTop: isSmall ? '2px' : '0'
+        }}>
           {table.active_order_id ? 'OCCUPIED' : 'AVAILABLE'}
         </span>
       </div>
 
-      <div style={{ marginTop: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginTop: isSmall ? '2px' : '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
          {table.active_order_id ? (
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 700, fontStyle: 'italic' }}>Ongoing Order</span>
+            <span style={{ fontSize: isSmall ? '9px' : '11px', color: 'var(--text-secondary)', fontWeight: 700, fontStyle: 'italic' }}>Ongoing Order</span>
          ) : (
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>Ready to serve</span>
+            <span style={{ fontSize: isSmall ? '9px' : '11px', color: 'var(--text-muted)', fontWeight: 700 }}>Ready to serve</span>
          )}
-         <div style={{ padding: '8px', borderRadius: '12px', backgroundColor: 'rgba(255, 255, 255, 0.03)' }}>
-            <PlusCircle size={18} style={{ color: 'var(--text-muted)' }} />
+         <div style={{ padding: isSmall ? '4px' : '8px', borderRadius: isSmall ? '8px' : '12px', backgroundColor: 'rgba(255, 255, 255, 0.03)', display: 'flex', alignItems: 'center' }}>
+            <PlusCircle size={isSmall ? 13 : 18} style={{ color: 'var(--text-muted)' }} />
          </div>
       </div>
 
       <div style={{
         position: 'absolute',
-        bottom: '-20px',
-        right: '-20px',
-        width: '100px',
-        height: '100px',
+        bottom: isSmall ? '-10px' : '-20px',
+        right: isSmall ? '-10px' : '-20px',
+        width: isSmall ? '50px' : '100px',
+        height: isSmall ? '50px' : '100px',
         borderRadius: '50%',
         backgroundColor: table.active_order_id ? 'rgba(244, 63, 94, 0.05)' : 'rgba(16, 185, 129, 0.05)',
-        filter: 'blur(30px)'
+        filter: 'blur(20px)'
       }}></div>
     </div>
   );

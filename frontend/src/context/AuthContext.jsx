@@ -28,6 +28,7 @@ export const AuthProvider = ({ children }) => {
               cgst_percentage: res.data.user.cgst_percentage ?? parsed.cgst_percentage ?? 0,
               sgst_percentage: res.data.user.sgst_percentage ?? parsed.sgst_percentage ?? 0,
               fssai_number: res.data.user.fssai_number || parsed.fssai_number,
+              tableCardSize: res.data.user.tableCardSize || res.data.user.table_card_size || parsed.tableCardSize || parsed.table_card_size || localStorage.getItem('cfg_table_card_size') || 'big',
               licenseWarning: subRes.data.warning,
               offlineDays: subRes.data.offlineDays
             };
@@ -46,6 +47,7 @@ export const AuthProvider = ({ children }) => {
               cgst_percentage: res.data.user.cgst_percentage ?? parsed.cgst_percentage ?? 0,
               sgst_percentage: res.data.user.sgst_percentage ?? parsed.sgst_percentage ?? 0,
               fssai_number: res.data.user.fssai_number || parsed.fssai_number,
+              tableCardSize: res.data.user.tableCardSize || res.data.user.table_card_size || parsed.tableCardSize || parsed.table_card_size || localStorage.getItem('cfg_table_card_size') || 'big',
             };
             localStorage.setItem('user', JSON.stringify(freshUser));
             setUser(freshUser);

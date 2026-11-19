@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/db');
 const jwt = require('jsonwebtoken');
+const configManager = require('../config/configManager');
 const router = express.Router();
 
 // Auth verify middleware for any logged in user
@@ -27,7 +28,9 @@ router.get('/', authenticateToken, async (req, res) => {
       [userId]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: 'User not found' });
-    res.json({ user: result.rows[0] });
+    const cfg = configManager.getConfig();
+    const tableCardSize = cfg.tableCardSize || 'big';
+    res.json({ user: { ...result.rows[0], table_card_size: tableCardSize, tableCardSize } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Fetch profile failed' });

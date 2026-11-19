@@ -188,6 +188,26 @@ html, body {
   gap: 24px;
 }
 
+.dashboard-tables-grid.grid-small {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+  gap: 12px !important;
+}
+
+.table-card.card-small {
+  padding: 14px 16px !important;
+  border-radius: 16px !important;
+  gap: 8px !important;
+  min-height: 110px !important;
+}
+
+.table-card.card-small .table-card-title {
+  font-size: 24px !important;
+}
+
+.table-card.card-small .table-card-title-counter {
+  font-size: 15px !important;
+}
+
 /* --- Mobile Responsiveness --- */
 
 /* Hide Sidebar by default on small screens */
@@ -282,14 +302,29 @@ html, body {
     gap: 12px !important;
   }
 
+  .dashboard-tables-grid.grid-small {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
   .table-card {
     padding: 16px !important;
     border-radius: 20px !important;
     gap: 8px !important;
   }
 
+  .table-card.card-small {
+    padding: 12px 14px !important;
+    border-radius: 14px !important;
+    gap: 6px !important;
+  }
+
   .table-card-title {
     font-size: 28px !important;
+  }
+
+  .table-card.card-small .table-card-title {
+    font-size: 20px !important;
   }
 
 
@@ -527,7 +562,18 @@ html, body {
   .dashboard-tables-grid {
     grid-template-columns: repeat(2, 1fr) !important;
   }
+  .dashboard-tables-grid.grid-small {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 8px !important;
+  }
   .table-card-title {
     font-size: 24px !important;
+  }
+  .table-card.card-small {
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+  }
+  .table-card.card-small .table-card-title {
+    font-size: 18px !important;
   }
 }

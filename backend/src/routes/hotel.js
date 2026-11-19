@@ -475,6 +475,31 @@ router.post('/toggle-multiple-menu', auth, (req, res) => {
   }
 });
 
+// Get Table Card Size Status
+router.get('/table-card-size', auth, (req, res) => {
+  try {
+    const config = configManager.getConfig();
+    res.json({ tableCardSize: config.tableCardSize || 'big' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error checking table card size' });
+  }
+});
+
+// Update Table Card Size
+router.post('/table-card-size', auth, (req, res) => {
+  const { size } = req.body;
+  if (req.user.role !== 'owner') return res.status(403).json({ message: 'Unauthorized' });
+
+  try {
+    const config = configManager.getConfig();
+    config.tableCardSize = size === 'small' ? 'small' : 'big';
+    configManager.saveConfig(config);
+    res.json({ success: true, tableCardSize: config.tableCardSize });
+  } catch (err) {
+    res.status(500).json({ message: 'Error updating table card size' });
+  }
+});
+
 // Get Token Counter Activation Status
 router.get('/token-counter-status', auth, (req, res) => {
   try {

@@ -88,6 +88,11 @@ const Profile = () => {
         typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true'
     );
 
+    // Table Card Size State (big | small)
+    const [tableCardSize, setTableCardSize] = useState(
+        user?.tableCardSize || user?.table_card_size || (typeof window !== 'undefined' && localStorage.getItem('cfg_table_card_size')) || 'big'
+    );
+
     // Clear Test Data State
     const [testDataDate, setTestDataDate] = useState('');
     const [isClearingData, setIsClearingData] = useState(false);
@@ -198,6 +203,7 @@ const Profile = () => {
             fetchTokenCounterStatus();
             fetchCancelOrdersStatus();
             fetchMultipleMenuStatus();
+            fetchTableCardSize();
             fetchEmailReportStatus();
             fetchEmailReportConfig();
             fetchCloudSyncConfig();
@@ -403,6 +409,34 @@ const Profile = () => {
         setSettleWithoutPrintEnabled(shouldEnable);
         localStorage.setItem('cfg_settle_without_print', shouldEnable ? 'true' : 'false');
         toast.success(`Settle Without Print ${shouldEnable ? 'Enabled' : 'Disabled'}`);
+    };
+
+    const fetchTableCardSize = async () => {
+        try {
+            const res = await api.get('/hotel/table-card-size');
+            if (res.data?.tableCardSize) {
+                setTableCardSize(res.data.tableCardSize);
+                updateUser({ tableCardSize: res.data.tableCardSize, table_card_size: res.data.tableCardSize });
+                localStorage.setItem('cfg_table_card_size', res.data.tableCardSize);
+            }
+        } catch (err) {
+            console.error('Failed to fetch table card size', err);
+        }
+    };
+
+    const handleTableCardSizeChange = async (newSize) => {
+        const target = newSize === 'small' ? 'small' : 'big';
+        setTableCardSize(target);
+        localStorage.setItem('cfg_table_card_size', target);
+        updateUser({ tableCardSize: target, table_card_size: target });
+        try {
+            const res = await api.post('/hotel/table-card-size', { size: target });
+            if (res.data?.success) {
+                toast.success(`Table Card Size set to ${target === 'small' ? 'Small' : 'Big (Default)'}`);
+            }
+        } catch (err) {
+            toast.error('Failed to save table card size setting');
+        }
     };
 
     const handleClearTestDataClick = () => {
@@ -2480,6 +2514,41 @@ const Profile = () => {
                                         style={{ accentColor: '#10b981', width: '18px', height: '18px', cursor: 'pointer' }}
                                     />
                                     Enabled
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Table Card Size Module */}
+                        <div style={{ width: '100%', height: '1px', backgroundColor: 'var(--border-rgba-05)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '650px' }}>
+                                <h3 style={{fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Table Card Size</h3>
+                                <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: 0, lineHeight: '1.6', marginTop: '4px' }}>
+                                    Control the dimensions of table cards in Table Management. Choose "Small" to reduce card dimensions by 50% for a compact view, or "Big" for standard display.
+                                </p>
+                            </div>
+                            
+                            {/* Toggle / Radio Control */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'var(--bg-base)', padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--bg-border)' }}>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="tableCardSizeSetting"
+                                        checked={tableCardSize === 'big'} 
+                                        onChange={() => handleTableCardSizeChange('big')}
+                                        style={{ accentColor: '#0ea5e9', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Big (Default)
+                                </label>
+                                <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontWeight: 500, fontSize: '14px' }}>
+                                    <input 
+                                        type="radio" 
+                                        name="tableCardSizeSetting"
+                                        checked={tableCardSize === 'small'} 
+                                        onChange={() => handleTableCardSizeChange('small')}
+                                        style={{ accentColor: '#0ea5e9', width: '18px', height: '18px', cursor: 'pointer' }}
+                                    />
+                                    Small
                                 </label>
                             </div>
                         </div>
