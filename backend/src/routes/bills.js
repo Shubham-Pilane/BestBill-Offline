@@ -273,11 +273,52 @@ router.put('/:id', auth, async (req, res) => {
       roundOff = 0;
     }
 
+    const payMethod = (billRow.payment_method || '').toLowerCase();
+    let updatedCash = null;
+    let updatedOnline = null;
+
+    if (payMethod === 'cash') {
+      updatedCash = finalAmount;
+      updatedOnline = 0;
+    } else if (payMethod === 'upi' || payMethod === 'online' || payMethod === 'card') {
+      updatedOnline = finalAmount;
+      updatedCash = 0;
+    } else if (payMethod === 'partial') {
+      const reqCash = req.body.cash_amount !== undefined && req.body.cash_amount !== null ? parseFloat(req.body.cash_amount) : null;
+      const reqOnline = req.body.online_amount !== undefined && req.body.online_amount !== null ? parseFloat(req.body.online_amount) : null;
+
+      if (reqCash !== null && reqOnline !== null && !isNaN(reqCash) && !isNaN(reqOnline) && Math.abs((reqCash + reqOnline) - finalAmount) < 0.01) {
+        updatedCash = Math.max(0, reqCash);
+        updatedOnline = Math.max(0, reqOnline);
+      } else if (reqCash !== null && !isNaN(reqCash) && reqCash >= 0 && reqCash <= finalAmount) {
+        updatedCash = reqCash;
+        updatedOnline = Math.max(0, Number((finalAmount - reqCash).toFixed(2)));
+      } else if (reqOnline !== null && !isNaN(reqOnline) && reqOnline >= 0 && reqOnline <= finalAmount) {
+        updatedOnline = reqOnline;
+        updatedCash = Math.max(0, Number((finalAmount - reqOnline).toFixed(2)));
+      } else {
+        // Proportional rebalancing based on previous cash/online split
+        const oldFinal = Number(billRow.final_amount || 0);
+        const oldCash = Number(billRow.cash_amount || 0);
+        if (oldFinal > 0 && oldCash > 0) {
+          const ratio = Math.min(1, Math.max(0, oldCash / oldFinal));
+          updatedCash = Math.round(finalAmount * ratio);
+          updatedOnline = Math.max(0, Number((finalAmount - updatedCash).toFixed(2)));
+        } else {
+          updatedCash = Math.round(finalAmount / 2);
+          updatedOnline = Math.max(0, Number((finalAmount - updatedCash).toFixed(2)));
+        }
+      }
+    }
+
     await client.query(
       `UPDATE bills
-       SET total_amount = $1, gst = $2, cgst = $3, sgst = $4, round_off = $5, final_amount = $6, discount_percentage = $7, discount_type = $8, discount_amount = $9
-       WHERE id = $10`,
-      [subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, id]
+       SET total_amount = $1, gst = $2, cgst = $3, sgst = $4, round_off = $5, final_amount = $6,
+           discount_percentage = $7, discount_type = $8, discount_amount = $9,
+           cash_amount = COALESCE($10, cash_amount),
+           online_amount = COALESCE($11, online_amount)
+       WHERE id = $12`,
+      [subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, updatedCash, updatedOnline, id]
     );
 
     // Keep linked credit record synchronized with updated bill total

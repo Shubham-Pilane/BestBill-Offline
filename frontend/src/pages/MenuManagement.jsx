@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import ConfirmModal from '../components/ConfirmModal';
 import { toast } from 'react-hot-toast';
-import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Check, Save, Search, UploadCloud, ChevronDown, ChevronUp, RefreshCcw, Pin, Hash } from 'lucide-react';
+import { Plus, Utensils, Tag, IndianRupee, Layers, ListChecks, Trash2, Edit2, X, Check, Save, Search, UploadCloud, ChevronDown, ChevronUp, RefreshCcw, Pin } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -709,23 +709,20 @@ const MenuManagement = () => {
       {/* Item Management Column */}
       <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '32px' }}>
         <div style={{ backgroundColor: 'var(--bg-card)', borderRadius: '32px', padding: '40px', border: '1px solid var(--border-rgba-05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px', gap: '16px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '44px', height: '44px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Utensils size={22} style={{ color: '#10b981' }} />
               </div>
               <h2 style={{fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>{t('add_to_live_menu', 'Add To Live Menu')}</h2>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-              <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '220px', justifyContent: 'center', margin: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap' }}>
+              <label style={{ backgroundColor: 'rgba(14, 165, 233, 0.1)', color: '#0ea5e9', border: '1px solid rgba(14, 165, 233, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', justifyContent: 'center', margin: 0, whiteSpace: 'nowrap' }}>
                 <UploadCloud size={18} /> {user?.multipleMenuEnabled ? `Import ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`} CSV` : t('import_csv', 'Import Menu CSV')}
                 <input type="file" accept=".csv, text/csv, application/vnd.ms-excel, text/plain, text/comma-separated-values" style={{ display: 'none' }} onChange={handleFileUpload} ref={fileInputRef} />
               </label>
-              <button onClick={handleRenumberMenu} type="button" style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '180px', justifyContent: 'center' }} title="Contiguously renumber all active items (1 to N)">
-                <Hash size={18} /> Renumber (1 to N)
-              </button>
-              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', width: '220px', justifyContent: 'center' }}>
-                <Trash2 size={18} /> {user?.multipleMenuEnabled ? `Clear ${menus.find(m => m.menu_number === selectedMenuNumber)?.name || `Menu ${selectedMenuNumber}`}` : t('delete_menu', 'Delete Entire Menu')}
+              <button onClick={deleteAllMenu} type="button" style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', color: '#f43f5e', border: '1px solid rgba(244, 63, 94, 0.2)', padding: '10px 16px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: 'all 0.2s', justifyContent: 'center', whiteSpace: 'nowrap' }}>
+                <Trash2 size={18} /> {t('purge_all', 'Delete All Menu')}
               </button>
             </div>
           </div>

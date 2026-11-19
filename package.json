@@ -1,6 +1,6 @@
 {
   "name": "bestbill-desktop",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "BestBill POS Offline Desktop Application",
   "main": "electron/main.js",
   "scripts": {

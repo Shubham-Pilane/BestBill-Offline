@@ -360,6 +360,7 @@ const syncSchema = async () => {
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0",
             "UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash'",
             "UPDATE bills SET online_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) IN ('upi', 'online', 'card')",
+            "UPDATE bills SET online_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN 0 ELSE ROUND(final_amount - cash_amount, 2) END, cash_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN final_amount ELSE cash_amount END WHERE LOWER(payment_method) = 'partial' AND ROUND(COALESCE(cash_amount, 0) + COALESCE(online_amount, 0), 2) != ROUND(final_amount, 2)",
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE tables ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
@@ -492,6 +493,7 @@ const syncSchema = async () => {
                     db.sqliteDb.exec(`
                         UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash';
                         UPDATE bills SET online_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) IN ('upi', 'online', 'card');
+                        UPDATE bills SET online_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN 0 ELSE ROUND(final_amount - cash_amount, 2) END, cash_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN final_amount ELSE cash_amount END WHERE LOWER(payment_method) = 'partial' AND ROUND(COALESCE(cash_amount, 0) + COALESCE(online_amount, 0), 2) != ROUND(final_amount, 2);
                     `);
                 } catch (e) {
                     console.warn('[MIGRATION] Backfill bills cash/online note:', e.message);

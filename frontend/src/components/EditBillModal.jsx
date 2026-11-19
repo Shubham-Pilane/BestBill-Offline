@@ -36,6 +36,10 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
       ? (bill?.discount_amount !== undefined && bill?.discount_amount !== null ? String(bill.discount_amount) : '0')
       : (bill?.discount_percentage !== undefined && bill?.discount_percentage !== null ? String(bill.discount_percentage) : '0')
   );
+  const isPartialPayment = bill?.payment_method?.toLowerCase() === 'partial';
+  const originalCash = bill?.cash_amount !== undefined && bill?.cash_amount !== null ? parseFloat(bill.cash_amount) : 0;
+  const originalOnline = bill?.online_amount !== undefined && bill?.online_amount !== null ? parseFloat(bill.online_amount) : 0;
+  const [adjustmentTarget, setAdjustmentTarget] = useState('cash'); // 'cash' | 'online'
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
 
@@ -88,6 +92,7 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
         ? (bill.discount_amount !== undefined && bill.discount_amount !== null ? String(bill.discount_amount) : '0')
         : (bill.discount_percentage !== undefined && bill.discount_percentage !== null ? String(bill.discount_percentage) : '0')
     );
+    setAdjustmentTarget('cash');
   }, [bill?.id]);
 
   // Filter & paginate menu items
@@ -170,21 +175,21 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
       roundOff = 0;
     }
 
-    return { 
-      roomCharge, 
-      foodSubtotal, 
-      subtotal, 
-      gstRate, 
-      gstAmount, 
-      cgstRate, 
-      cgstAmount, 
-      sgstRate, 
-      sgstAmount, 
-      discountPct, 
-      discountAmount, 
+    return {
+      roomCharge,
+      foodSubtotal,
+      subtotal,
+      gstRate,
+      gstAmount,
+      cgstRate,
+      cgstAmount,
+      sgstRate,
+      sgstAmount,
+      discountPct,
+      discountAmount,
       unroundedTotal,
       roundOff,
-      grandTotal 
+      grandTotal
     };
   }, [editItems, discount, discountType, bill, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage]);
 
@@ -299,6 +304,50 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
     setEditItems(prev => prev.filter(i => i._uid !== uid));
   };
 
+  const computeAdjustedAmounts = (target) => {
+    const origC = Math.max(0, originalCash);
+    const origO = Math.max(0, originalOnline);
+    const currentTotal = Math.round(totals.grandTotal * 100) / 100;
+    const diff = Math.round((currentTotal - (origC + origO)) * 100) / 100;
+
+    if (Math.abs(diff) < 0.01) {
+      return { cash: origC, online: origO, diff: 0 };
+    }
+
+    if (diff > 0) {
+      // Bill increased: extra payment from customer
+      if (target === 'online') {
+        const o = Math.max(0, Math.round((origO + diff) * 100) / 100);
+        return { cash: origC, online: o, diff };
+      }
+      // default: cash
+      const c = Math.max(0, Math.round((origC + diff) * 100) / 100);
+      return { cash: c, online: origO, diff };
+    } else {
+      // Bill decreased: return money to customer (diff is negative)
+      const refund = Math.abs(diff);
+      if (target === 'online') {
+        // Deduct from online first, any remainder from cash
+        const oDeduct = Math.min(origO, refund);
+        const remRefund = refund - oDeduct;
+        const cDeduct = Math.min(origC, remRefund);
+        const o = Math.max(0, Math.round((origO - oDeduct) * 100) / 100);
+        const c = Math.max(0, Math.round((origC - cDeduct) * 100) / 100);
+        return { cash: c, online: o, diff };
+      }
+      // default: cash
+      // Deduct from cash first, any remainder from online
+      const cDeduct = Math.min(origC, refund);
+      const remRefund = refund - cDeduct;
+      const oDeduct = Math.min(origO, remRefund);
+      const c = Math.max(0, Math.round((origC - cDeduct) * 100) / 100);
+      const o = Math.max(0, Math.round((origO - oDeduct) * 100) / 100);
+      return { cash: c, online: o, diff };
+    }
+  };
+
+  const partialAdjusted = computeAdjustedAmounts(adjustmentTarget);
+
   const buildPayload = () => {
     const cleanItems = editItems
       .map(item => ({
@@ -315,12 +364,22 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
       return null;
     }
 
+    let resolvedCash = undefined;
+    let resolvedOnline = undefined;
+
+    if (isPartialPayment) {
+      const adjusted = computeAdjustedAmounts(adjustmentTarget);
+      resolvedCash = adjusted.cash;
+      resolvedOnline = adjusted.online;
+    }
+
     return {
       items: cleanItems,
       discount_percentage: totals.discountPct,
       discount_type: discountType,
       discount_amount: totals.discountAmount,
-      discount_value: totals.discountAmount
+      discount_value: totals.discountAmount,
+      ...(isPartialPayment ? { cash_amount: resolvedCash, online_amount: resolvedOnline } : {})
     };
   };
 
@@ -1316,6 +1375,189 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
                   <span style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>{t('grand_total', 'Grand Total')}</span>
                   <span style={{ fontSize: '24px', fontWeight: 1000, color: '#10b981' }}>₹{totals.grandTotal.toFixed(2)}</span>
                 </div>
+
+                {isPartialPayment && (
+                  <div style={{
+                    marginTop: '8px',
+                    marginBottom: '6px',
+                    padding: '12px 14px',
+                    backgroundColor: partialAdjusted.diff > 0
+                      ? 'rgba(16, 185, 129, 0.08)'
+                      : partialAdjusted.diff < 0
+                        ? 'rgba(244, 63, 94, 0.08)'
+                        : 'rgba(56, 189, 248, 0.08)',
+                    borderRadius: '14px',
+                    border: `1.5px solid ${
+                      partialAdjusted.diff > 0
+                        ? 'rgba(16, 185, 129, 0.35)'
+                        : partialAdjusted.diff < 0
+                          ? 'rgba(244, 63, 94, 0.35)'
+                          : 'rgba(56, 189, 248, 0.3)'
+                    }`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px'
+                  }}>
+                    {partialAdjusted.diff > 0 ? (
+                      /* CASE 1: Customer added items -> Collect extra amount */
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 950, color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            ⚡ Extra To Collect: <strong style={{ fontSize: '16px' }}>+₹{partialAdjusted.diff.toFixed(2)}</strong>
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>
+                            Paid earlier: 💵 ₹{originalCash.toFixed(0)} | 💳 ₹{originalOnline.toFixed(0)}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 800 }}>
+                          Select how customer is paying this extra ₹{partialAdjusted.diff.toFixed(0)}:
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setAdjustmentTarget('cash')}
+                            style={{
+                              padding: '11px 8px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontWeight: 950,
+                              fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s ease',
+                              backgroundColor: adjustmentTarget === 'cash' ? '#10b981' : 'var(--bg-base)',
+                              color: adjustmentTarget === 'cash' ? '#ffffff' : 'var(--text-primary)',
+                              border: adjustmentTarget === 'cash' ? '2px solid #10b981' : '1.5px solid var(--bg-border)',
+                              boxShadow: adjustmentTarget === 'cash' ? '0 4px 12px rgba(16, 185, 129, 0.35)' : 'none'
+                            }}
+                          >
+                            💵 +₹{partialAdjusted.diff.toFixed(0)} Cash
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setAdjustmentTarget('online')}
+                            style={{
+                              padding: '11px 8px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontWeight: 950,
+                              fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s ease',
+                              backgroundColor: adjustmentTarget === 'online' ? '#0ea5e9' : 'var(--bg-base)',
+                              color: adjustmentTarget === 'online' ? '#ffffff' : 'var(--text-primary)',
+                              border: adjustmentTarget === 'online' ? '2px solid #0ea5e9' : '1.5px solid var(--bg-border)',
+                              boxShadow: adjustmentTarget === 'online' ? '0 4px 12px rgba(14, 165, 233, 0.35)' : 'none'
+                            }}
+                          >
+                            💳 +₹{partialAdjusted.diff.toFixed(0)} Online
+                          </button>
+                        </div>
+                      </>
+                    ) : partialAdjusted.diff < 0 ? (
+                      /* CASE 2: Customer removed items -> Refund/return extra amount */
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 950, color: '#f43f5e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            ⚡ Amount To Return: <strong style={{ fontSize: '16px' }}>-₹{Math.abs(partialAdjusted.diff).toFixed(2)}</strong>
+                          </span>
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>
+                            Paid earlier: 💵 ₹{originalCash.toFixed(0)} | 💳 ₹{originalOnline.toFixed(0)}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 800 }}>
+                          Select how you are returning -₹{Math.abs(partialAdjusted.diff).toFixed(0)} to customer:
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setAdjustmentTarget('cash')}
+                            style={{
+                              padding: '11px 8px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontWeight: 950,
+                              fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s ease',
+                              backgroundColor: adjustmentTarget === 'cash' ? '#f43f5e' : 'var(--bg-base)',
+                              color: adjustmentTarget === 'cash' ? '#ffffff' : 'var(--text-primary)',
+                              border: adjustmentTarget === 'cash' ? '2px solid #f43f5e' : '1.5px solid var(--bg-border)',
+                              boxShadow: adjustmentTarget === 'cash' ? '0 4px 12px rgba(244, 63, 94, 0.35)' : 'none'
+                            }}
+                          >
+                            💵 -₹{Math.abs(partialAdjusted.diff).toFixed(0)} Cash
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setAdjustmentTarget('online')}
+                            style={{
+                              padding: '11px 8px',
+                              borderRadius: '12px',
+                              cursor: 'pointer',
+                              fontWeight: 950,
+                              fontSize: '13px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s ease',
+                              backgroundColor: adjustmentTarget === 'online' ? '#0ea5e9' : 'var(--bg-base)',
+                              color: adjustmentTarget === 'online' ? '#ffffff' : 'var(--text-primary)',
+                              border: adjustmentTarget === 'online' ? '2px solid #0ea5e9' : '1.5px solid var(--bg-border)',
+                              boxShadow: adjustmentTarget === 'online' ? '0 4px 12px rgba(14, 165, 233, 0.35)' : 'none'
+                            }}
+                          >
+                            💳 -₹{Math.abs(partialAdjusted.diff).toFixed(0)} Online
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      /* CASE 3: Total is unchanged */
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 900, color: '#38bdf8' }}>
+                          ✓ Total Unchanged (₹{totals.grandTotal.toFixed(2)})
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 800 }}>
+                          💵 ₹{originalCash.toFixed(0)} | 💳 ₹{originalOnline.toFixed(0)}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Resulting Final Breakdown */}
+                    <div style={{
+                      padding: '7px 10px',
+                      borderRadius: '10px',
+                      backgroundColor: 'var(--bg-base)',
+                      border: '1px solid var(--bg-border)',
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      color: 'var(--text-primary)'
+                    }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Final Adjusted Split:</span>
+                      <span>
+                        💵 ₹{partialAdjusted.cash.toFixed(0)} Cash &nbsp;|&nbsp; 💳 ₹{partialAdjusted.online.toFixed(0)} Online &nbsp;=&nbsp; <strong style={{ color: '#10b981' }}>₹{totals.grandTotal.toFixed(0)}</strong>
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '4px' }}>
                   <button
