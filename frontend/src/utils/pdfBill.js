@@ -44,7 +44,7 @@ export const formatTableStringForBill = (rawTableStr, isMarathi = false) => {
   };
 
   str = str.replace(/floor\s*(\d+)/gi, 'मजला $1');
-  
+
   Object.keys(floorTranslations).forEach(key => {
     const regex = new RegExp(key, 'gi');
     str = str.replace(regex, floorTranslations[key]);
@@ -129,19 +129,19 @@ export const createBillPDFDocDefinition = (billData, hotelInfo = {}) => {
   const isAmountDiscount = billData.discount_type === 'amount';
   const roundOffAmount = parseFloat(billData.round_off || billData.roundOff || 0);
   const finalAmount = parseFloat(billData.final_amount || (subtotal + gstAmount + cgstAmount + sgstAmount));
-  const discountVal = billData.discount_amount !== undefined 
-    ? parseFloat(billData.discount_amount) 
+  const discountVal = billData.discount_amount !== undefined
+    ? parseFloat(billData.discount_amount)
     : (isAmountDiscount ? parseFloat(billData.discount || 0) : (subtotal + gstAmount + cgstAmount + sgstAmount) * (discountPercentage / 100));
 
   const partnerName = billData.delivery_partner || billData.deliveryPartner || billData.selectedDeliveryPartner || '';
-  const isOnlineOrder = String(tableOrRoom || '').toLowerCase().includes('online') || 
-                        Boolean(partnerName) ||
-                        ['zomato', 'swiggy', 'uber', 'delivery', 'online'].some(p => paymentMethod.toLowerCase().includes(p));
-  
+  const isOnlineOrder = String(tableOrRoom || '').toLowerCase().includes('online') ||
+    Boolean(partnerName) ||
+    ['zomato', 'swiggy', 'uber', 'delivery', 'online'].some(p => paymentMethod.toLowerCase().includes(p));
+
   const onlineOrderTitle = partnerName ? `${partnerName.toUpperCase()} ORDER` :
-                           paymentMethod.includes('ZOMATO') ? 'ZOMATO ORDER' :
-                           paymentMethod.includes('SWIGGY') ? 'SWIGGY ORDER' :
-                           'ONLINE ORDER';
+    paymentMethod.includes('ZOMATO') ? 'ZOMATO ORDER' :
+      paymentMethod.includes('SWIGGY') ? 'SWIGGY ORDER' :
+        'ONLINE ORDER';
 
   const docDefinition = {
     content: [
@@ -188,7 +188,7 @@ export const createBillPDFDocDefinition = (billData, hotelInfo = {}) => {
         ],
         margin: [0, 0, 0, 15]
       },
-      
+
       // Horizontal Line
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: '#e2e8f0' }], margin: [0, 0, 0, 15] },
 
@@ -359,9 +359,7 @@ export const shareBillPDFViaWhatsApp = (billData, hotelInfo = {}, customerPhone 
         `${discountText}` +
         (roundOffVal > 0 ? `\n*Round Off:* +₹${formatAmount(roundOffVal)}` : '') +
         `\n*GRAND TOTAL:* ₹${formatAmount(totalVal)}\n` +
-        (billData.is_paid ? (billData.payment_method?.toLowerCase() === 'partial'
-          ? `*Payment:* PARTIAL (Cash: ₹${formatAmount(billData.cash_amount || 0)}, Online: ₹${formatAmount(billData.online_amount || 0)})\n\n`
-          : `*Payment:* ${(billData.payment_method || 'CASH').toUpperCase()}\n\n`) : `\n`) +
+        (billData.is_paid ? `*Payment:* ${(billData.payment_method || 'CASH').toUpperCase()}\n\n` : `\n`) +
         `*Thank You! Visit Again!*`;
 
       if (finalPhone) {

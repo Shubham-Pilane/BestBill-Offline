@@ -570,18 +570,6 @@ function formatBill(data) {
     builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
     builder.line('-', LINE_WIDTH);
 
-    if (data.paymentMethod) {
-      const pm = String(data.paymentMethod).toLowerCase();
-      if (pm === 'partial') {
-        const cAmt = Number(data.cashAmount || data.cash_amount || 0);
-        const oAmt = Number(data.onlineAmount || data.online_amount || 0);
-        builder.bold(true).text(mg + padText('PAYMENT: PARTIAL', LINE_WIDTH, 'left')).bold(false);
-        builder.text(mg + padText('  Cash:', LINE_WIDTH - TOT_LEN, 'left') + padText(cAmt.toFixed(2), TOT_LEN, 'right'));
-        builder.text(mg + padText('  Online:', LINE_WIDTH - TOT_LEN, 'left') + padText(oAmt.toFixed(2), TOT_LEN, 'right'));
-        builder.line('-', LINE_WIDTH);
-      }
-    }
-
     // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
     const brandBuffer = getBrandingRasterBuffer(is58mm);
     if (brandBuffer && brandBuffer.length > 0) {
@@ -855,18 +843,6 @@ function formatBill(data) {
     builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
   }
   builder.line('-', LINE_WIDTH);
-
-  if (data.paymentMethod) {
-    const pm = String(data.paymentMethod).toLowerCase();
-    if (pm === 'partial') {
-      const cAmt = Number(data.cashAmount || data.cash_amount || 0);
-      const oAmt = Number(data.onlineAmount || data.online_amount || 0);
-      builder.bold(true).text(mg + padText('PAYMENT: PARTIAL', LINE_WIDTH, 'left')).bold(false);
-      builder.text(mg + padText('  Cash:', LINE_WIDTH - TOT_LEN, 'left') + padText(cAmt.toFixed(2), TOT_LEN, 'right'));
-      builder.text(mg + padText('  Online:', LINE_WIDTH - TOT_LEN, 'left') + padText(oAmt.toFixed(2), TOT_LEN, 'right'));
-      builder.line('-', LINE_WIDTH);
-    }
-  }
 
   if (data.notes && String(data.notes).trim()) {
     const billNoteLines = wrapTextByWords('NOTE: ' + String(data.notes).trim(), LINE_WIDTH);

@@ -322,11 +322,6 @@ const BillingHistory = () => {
         }
         if (roundOffVal > 0) msg += `*Round Off:* +₹${roundOffVal.toFixed(2)}\n`;
         msg += `*GRAND TOTAL: ₹${parseFloat(selectedBill.final_amount).toFixed(2)}*\n`;
-        if (selectedBill.payment_method?.toLowerCase() === 'partial') {
-            msg += `*Payment: PARTIAL*\n`;
-            msg += `  • Cash: ₹${parseFloat(selectedBill.cash_amount || 0).toFixed(2)}\n`;
-            msg += `  • Online: ₹${parseFloat(selectedBill.online_amount || 0).toFixed(2)}\n`;
-        }
         msg += `\n*Visit Again!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}\n`;
         
         const cleanPhone = customerPhone.replace(/\D/g, '');
