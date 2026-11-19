@@ -545,12 +545,16 @@ function formatBill(data) {
       addedSubItems = true;
     }
 
-    if (data.discountPercentage > 0) {
-      const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal));
-      if (discAmt > 0) {
-        builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
-        addedSubItems = true;
-      }
+    const isAmountDisc = data.discountType === 'amount' || data.discount_type === 'amount';
+    const discAmt = (data.discountAmount !== undefined && data.discountAmount !== null)
+      ? parseFloat(data.discountAmount)
+      : ((data.discount_amount !== undefined && data.discount_amount !== null) ? parseFloat(data.discount_amount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal)));
+    if (isAmountDisc && discAmt > 0) {
+      builder.text(mg + padText(`Disc (Fixed):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
+    } else if (data.discountPercentage > 0 && discAmt > 0) {
+      builder.text(mg + padText(`Disc (${data.discountPercentage}%):`, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
+      addedSubItems = true;
     }
 
     if (roundOffVal > 0) {
@@ -565,6 +569,18 @@ function formatBill(data) {
     const totalText = 'TOTAL: Rs ' + Math.round(finalAmount);
     builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
     builder.line('-', LINE_WIDTH);
+
+    if (data.paymentMethod) {
+      const pm = String(data.paymentMethod).toLowerCase();
+      if (pm === 'partial') {
+        const cAmt = Number(data.cashAmount || data.cash_amount || 0);
+        const oAmt = Number(data.onlineAmount || data.online_amount || 0);
+        builder.bold(true).text(mg + padText('PAYMENT: PARTIAL', LINE_WIDTH, 'left')).bold(false);
+        builder.text(mg + padText('  Cash:', LINE_WIDTH - TOT_LEN, 'left') + padText(cAmt.toFixed(2), TOT_LEN, 'right'));
+        builder.text(mg + padText('  Online:', LINE_WIDTH - TOT_LEN, 'left') + padText(oAmt.toFixed(2), TOT_LEN, 'right'));
+        builder.line('-', LINE_WIDTH);
+      }
+    }
 
     // Add ESC/POS Bitmap Raster Branding Footer ("⚡ Powered by BestBill™")
     const brandBuffer = getBrandingRasterBuffer(is58mm);
@@ -802,13 +818,18 @@ function formatBill(data) {
     addedSubItems = true;
   }
 
-  if (data.discountPercentage > 0) {
-    const discAmt = data.discountAmount !== undefined ? parseFloat(data.discountAmount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal));
-    if (discAmt > 0) {
-      const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
-      builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
-      addedSubItems = true;
-    }
+  const isAmountDisc = data.discountType === 'amount' || data.discount_type === 'amount';
+  const discAmt = (data.discountAmount !== undefined && data.discountAmount !== null)
+    ? parseFloat(data.discountAmount)
+    : ((data.discount_amount !== undefined && data.discount_amount !== null) ? parseFloat(data.discount_amount) : ((subtotalVal + gstVal + cgstVal + sgstVal) - (finalAmount - roundOffVal)));
+  if (isAmountDisc && discAmt > 0) {
+    const discLabel = isMarathi ? `सूट (निश्चित):` : `Disc (Fixed):`;
+    builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
+  } else if (data.discountPercentage > 0 && discAmt > 0) {
+    const discLabel = isMarathi ? `सूट (${data.discountPercentage}%):` : `Disc (${data.discountPercentage}%):`;
+    builder.text(mg + padText(discLabel, LINE_WIDTH - TOT_LEN, 'right') + padText('-' + discAmt.toFixed(2), TOT_LEN, 'right'));
+    addedSubItems = true;
   }
 
   if (roundOffVal > 0) {
@@ -834,6 +855,18 @@ function formatBill(data) {
     builder.bold(true).text(mg + padText(totalText, LINE_WIDTH, 'right')).bold(false);
   }
   builder.line('-', LINE_WIDTH);
+
+  if (data.paymentMethod) {
+    const pm = String(data.paymentMethod).toLowerCase();
+    if (pm === 'partial') {
+      const cAmt = Number(data.cashAmount || data.cash_amount || 0);
+      const oAmt = Number(data.onlineAmount || data.online_amount || 0);
+      builder.bold(true).text(mg + padText('PAYMENT: PARTIAL', LINE_WIDTH, 'left')).bold(false);
+      builder.text(mg + padText('  Cash:', LINE_WIDTH - TOT_LEN, 'left') + padText(cAmt.toFixed(2), TOT_LEN, 'right'));
+      builder.text(mg + padText('  Online:', LINE_WIDTH - TOT_LEN, 'left') + padText(oAmt.toFixed(2), TOT_LEN, 'right'));
+      builder.line('-', LINE_WIDTH);
+    }
+  }
 
   if (data.notes && String(data.notes).trim()) {
     const billNoteLines = wrapTextByWords('NOTE: ' + String(data.notes).trim(), LINE_WIDTH);

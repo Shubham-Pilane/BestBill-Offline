@@ -44,8 +44,11 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const [billData, setBillData] = useState(null);
   const [customerPhone, setCustomerPhone] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
+  const [partialCashAmount, setPartialCashAmount] = useState('');
+  const [partialOnlineAmount, setPartialOnlineAmount] = useState('');
   const [selectedDeliveryPartner, setSelectedDeliveryPartner] = useState('');
   const [discount, setDiscount] = useState('');
+  const [discountType, setDiscountType] = useState('percentage');
   const [isSwapModalOpen, setSwapModalOpen] = useState(false);
   const [allTables, setAllTables] = useState(passedTables || []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,15 +126,23 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
     const cgstAmt = Number(((totalSub * cgstRate) / 100).toFixed(2));
     const sgstAmt = Number(((totalSub * sgstRate) / 100).toFixed(2));
     const preDisc = totalSub + gstAmt + cgstAmt + sgstAmt;
-    const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
-    const discAmt = Number((preDisc * (discPct / 100)).toFixed(2));
+    let discPct = 0;
+    let discAmt = 0;
+    if (discountType === 'amount') {
+      const rawAmt = Math.max(0, parseFloat(discount) || 0);
+      discAmt = Math.min(preDisc, rawAmt);
+      discPct = preDisc > 0 ? Number(((discAmt / preDisc) * 100).toFixed(2)) : 0;
+    } else {
+      discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
+      discAmt = Number((preDisc * (discPct / 100)).toFixed(2));
+    }
     const unrounded = Math.max(0, Number((preDisc - discAmt).toFixed(2)));
     const grandTotal = Math.ceil(unrounded);
     let roundOff = Number((grandTotal - unrounded).toFixed(2));
     if (roundOff < 0.001 || roundOff >= 1) roundOff = 0;
 
-    return { totalSub, gstRate, cgstRate, sgstRate, gstAmt, cgstAmt, sgstAmt, discPct, discAmt, unrounded, roundOff, grandTotal };
-  }, [orderItems, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage, discount]);
+    return { totalSub, gstRate, cgstRate, sgstRate, gstAmt, cgstAmt, sgstAmt, discountType, discPct, discAmt, unrounded, roundOff, grandTotal };
+  }, [orderItems, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage, discount, discountType]);
 
   const isOnlineCounter = String(table?.table_number || table?.id || '').toLowerCase().includes('online');
   const isTokenCounter = String(table?.table_number || table?.id || '').toLowerCase().includes('token');
@@ -417,10 +428,51 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
     }
   };
 
+  const validatePartialPayment = () => {
+    if (selectedPaymentMethod !== 'partial') return true;
+    const billTotal = parseFloat(billData?.final_amount || 0);
+    const cash = parseFloat(partialCashAmount || 0);
+    const online = parseFloat(partialOnlineAmount || 0);
+
+    if (isNaN(cash) || isNaN(online)) {
+      toast.error('Please enter valid numbers for Cash and Online amounts');
+      return false;
+    }
+    if (cash < 0 || online < 0) {
+      toast.error('Payment amounts cannot be negative');
+      return false;
+    }
+    if (cash > billTotal || online > billTotal) {
+      toast.error('Neither payment amount can exceed the total bill amount');
+      return false;
+    }
+    if (cash === 0 && online === 0) {
+      toast.error('At least one payment amount must be greater than zero');
+      return false;
+    }
+    const sum = Math.round((cash + online) * 100) / 100;
+    const roundedTotal = Math.round(billTotal * 100) / 100;
+    if (Math.abs(sum - roundedTotal) > 0.01) {
+      const diff = Math.round((roundedTotal - sum) * 100) / 100;
+      if (diff > 0) {
+        toast.error(`Total paid does not match bill total. ₹${diff.toFixed(2)} remaining`);
+      } else {
+        toast.error(`Total paid does not match bill total. ₹${Math.abs(diff).toFixed(2)} excess`);
+      }
+      return false;
+    }
+    return true;
+  };
+
   const generateBill = async () => {
     try {
-      const discPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
-      const res = await api.post(`/tables/${table.id}/bill`, { discount_percentage: discPct, notes: kitchenNotes });
+      const res = await api.post(`/tables/${table.id}/bill`, { 
+        discount_percentage: mobileCalculations.discPct,
+        discount_type: discountType,
+        discount_amount: mobileCalculations.discAmt,
+        discount_value: discount,
+        notes: kitchenNotes 
+      });
       setBillData(res.data);
       setShowBill(true);
       toast.success('Bill finalized!', {
@@ -462,8 +514,16 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   };
   const printToken = async () => {
     if (!billData) return;
+    if (selectedPaymentMethod === 'partial' && !validatePartialPayment()) return;
     try {
-      await api.post(`/bills/${billData.id}/print`, { paymentMethod: selectedPaymentMethod, isToken: true });
+      const cashVal = selectedPaymentMethod === 'partial' ? parseFloat(partialCashAmount || 0) : undefined;
+      const onlineVal = selectedPaymentMethod === 'partial' ? parseFloat(partialOnlineAmount || 0) : undefined;
+      await api.post(`/bills/${billData.id}/print`, { 
+        paymentMethod: selectedPaymentMethod, 
+        isToken: true,
+        cash_amount: cashVal,
+        online_amount: onlineVal
+      });
       toast.success('Token ticket sent to printer!');
     } catch (err) {
       console.error('Token print failed:', err);
@@ -473,8 +533,15 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
 
   const printBill = async () => {
     if (!billData) return;
+    if (selectedPaymentMethod === 'partial' && !validatePartialPayment()) return;
     try {
-      await api.post(`/bills/${billData.id}/print`, { paymentMethod: selectedPaymentMethod });
+      const cashVal = selectedPaymentMethod === 'partial' ? parseFloat(partialCashAmount || 0) : undefined;
+      const onlineVal = selectedPaymentMethod === 'partial' ? parseFloat(partialOnlineAmount || 0) : undefined;
+      await api.post(`/bills/${billData.id}/print`, { 
+        paymentMethod: selectedPaymentMethod,
+        cash_amount: cashVal,
+        online_amount: onlineVal
+      });
       toast.success('Bill finalized!');
       if (!billData.is_paid) {
         await confirmPayment(selectedPaymentMethod);
@@ -495,6 +562,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
 
   const settleWithoutPrint = async () => {
     if (!billData) return;
+    if (selectedPaymentMethod === 'partial' && !validatePartialPayment()) return;
     try {
       if (!billData.is_paid) {
         await confirmPayment(selectedPaymentMethod);
@@ -550,8 +618,31 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
           }, 1800);
           return;
        }
+       if (method === 'partial') {
+          if (!validatePartialPayment()) return;
+          const cashVal = parseFloat(partialCashAmount || 0);
+          const onlineVal = parseFloat(partialOnlineAmount || 0);
+          await api.put(`/tables/bill/${billData.id}/pay`, { 
+            method: 'partial',
+            cash_amount: cashVal,
+            online_amount: onlineVal
+          });
+          setBillData(prev => ({ 
+            ...prev, 
+            is_paid: true, 
+            payment_method: 'partial',
+            cash_amount: cashVal,
+            online_amount: onlineVal
+          }));
+          setIsSuccess(true);
+          toast.success('Transaction Completed');
+          setTimeout(() => {
+             onClose();
+          }, 1800);
+          return;
+       }
        await api.put(`/tables/bill/${billData.id}/pay`, { method });
-       setBillData(prev => ({ ...prev, is_paid: true }));
+       setBillData(prev => ({ ...prev, is_paid: true, payment_method: method }));
        setIsSuccess(true);
        toast.success('Transaction Completed');
        
@@ -1289,28 +1380,72 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 {/* Drawer Cart Footer - Compact Bottom Section */}
                 <div style={{ padding: '10px 16px', backgroundColor: 'var(--bg-card)', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>LOYALTY DISCOUNT (%)</span>
-                    <input 
-                       type="number" 
-                       min="0"
-                       max="100"
-                       value={discount} 
-                       placeholder="0"
-                       onFocus={e => e.target.select()}
-                       onChange={e => {
-                         const val = e.target.value;
-                         if (val === '') setDiscount('');
-                         else {
-                           const num = Math.max(0, Math.min(100, Number(val)));
-                           setDiscount(isNaN(num) ? '' : String(num));
-                         }
-                       }} 
-                       style={{ width: '40px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '12px' }} 
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase' }}>DISCOUNT</span>
+                      <div style={{ display: 'inline-flex', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('percentage')}
+                          style={{
+                            padding: '1px 6px',
+                            fontSize: '10px',
+                            fontWeight: 900,
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: discountType === 'percentage' ? '#0ea5e9' : 'transparent',
+                            color: discountType === 'percentage' ? '#ffffff' : 'var(--text-muted)'
+                          }}
+                        >
+                          %
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDiscountType('amount')}
+                          style={{
+                            padding: '1px 6px',
+                            fontSize: '10px',
+                            fontWeight: 900,
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: discountType === 'amount' ? '#0ea5e9' : 'transparent',
+                            color: discountType === 'amount' ? '#ffffff' : 'var(--text-muted)'
+                          }}
+                        >
+                          ₹
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      {discountType === 'amount' && <span style={{ color: '#0ea5e9', fontSize: '11px', fontWeight: 900 }}>₹</span>}
+                      <input 
+                         type="number" 
+                         min="0"
+                         max={discountType === 'percentage' ? 100 : undefined}
+                         step="any"
+                         value={discount} 
+                         placeholder="0"
+                         onFocus={e => e.target.select()}
+                         onChange={e => {
+                           const val = e.target.value;
+                           if (val === '') setDiscount('');
+                           else {
+                             if (discountType === 'percentage') {
+                               const num = Math.max(0, Math.min(100, Number(val)));
+                               setDiscount(isNaN(num) ? '' : String(num));
+                             } else {
+                               const num = Math.max(0, Number(val));
+                               setDiscount(isNaN(num) ? '' : String(num));
+                             }
+                           }
+                         }} 
+                         style={{ width: discountType === 'amount' ? '60px' : '40px', background: 'none', border: 'none', borderBottom: '2px solid #0ea5e9', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '12px' }} 
+                      />
+                      {discountType === 'percentage' && <span style={{ color: '#0ea5e9', fontSize: '11px', fontWeight: 900 }}>%</span>}
+                    </div>
                   </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: 900, color: 'var(--text-primary)' }}>Final Due</span>
-                    <span style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 1000 }}>₹{((orderItems.reduce((acc, i) => acc + (i.price * i.quantity), 0) * (1 + (user?.gst_percentage || 0)/100)) * (1 - (parseFloat(discount) || 0)/100)).toFixed(2)}</span>
+                    <span style={{ color: '#10b981', fontSize: '18px', fontWeight: 1000 }}>₹{mobileCalculations.grandTotal.toFixed(2)}</span>
                   </div>
 
                   <button 
@@ -1568,24 +1703,68 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>DISCOUNT (%)</span>
-                  <input 
-                    type="number" 
-                    min="0"
-                    max="100"
-                    value={discount} 
-                    placeholder="0"
-                    onFocus={e => e.target.select()}
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (val === '') setDiscount('');
-                      else {
-                        const num = Math.max(0, Math.min(100, Number(val)));
-                        setDiscount(isNaN(num) ? '' : String(num));
-                      }
-                    }} 
-                    style={{ width: '50px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '13px', borderRadius: '6px', padding: '2px 4px' }} 
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>DISCOUNT</span>
+                    <div style={{ display: 'inline-flex', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('percentage')}
+                        style={{
+                          padding: '1px 6px',
+                          fontSize: '10px',
+                          fontWeight: 900,
+                          border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: discountType === 'percentage' ? '#0ea5e9' : 'transparent',
+                          color: discountType === 'percentage' ? '#ffffff' : 'var(--text-muted)'
+                        }}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDiscountType('amount')}
+                        style={{
+                          padding: '1px 6px',
+                          fontSize: '10px',
+                          fontWeight: 900,
+                          border: 'none',
+                          cursor: 'pointer',
+                          backgroundColor: discountType === 'amount' ? '#0ea5e9' : 'transparent',
+                          color: discountType === 'amount' ? '#ffffff' : 'var(--text-muted)'
+                        }}
+                      >
+                        ₹
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    {discountType === 'amount' && <span style={{ color: '#0ea5e9', fontSize: '12px', fontWeight: 900 }}>₹</span>}
+                    <input 
+                      type="number" 
+                      min="0"
+                      max={discountType === 'percentage' ? 100 : undefined}
+                      step="any"
+                      value={discount} 
+                      placeholder="0"
+                      onFocus={e => e.target.select()}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '') setDiscount('');
+                        else {
+                          if (discountType === 'percentage') {
+                            const num = Math.max(0, Math.min(100, Number(val)));
+                            setDiscount(isNaN(num) ? '' : String(num));
+                          } else {
+                            const num = Math.max(0, Number(val));
+                            setDiscount(isNaN(num) ? '' : String(num));
+                          }
+                        }
+                      }} 
+                      style={{ width: discountType === 'amount' ? '65px' : '50px', backgroundColor: 'var(--bg-base)', border: '1px solid var(--bg-border)', color: 'var(--text-primary)', textAlign: 'center', fontWeight: 900, outline: 'none', fontSize: '13px', borderRadius: '6px', padding: '2px 4px' }} 
+                    />
+                    {discountType === 'percentage' && <span style={{ color: '#0ea5e9', fontSize: '12px', fontWeight: 900 }}>%</span>}
+                  </div>
                 </div>
 
                 {mobileCalculations.roundOff > 0 && (
@@ -1727,8 +1906,8 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                    {parseFloat(billData.sgst || 0) > 0 && (
                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800 }}><span>SGST {billData.sgst_percentage ? `(${billData.sgst_percentage}%)` : ''}</span><span>₹{parseFloat(billData.sgst).toFixed(2)}</span></div>
                    )}
-                   {parseFloat(billData.discount_amount || 0) > 0 && (
-                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#f87171' }}><span>DISCOUNT {billData.discount_percentage ? `(${billData.discount_percentage}%)` : ''}</span><span>-₹{parseFloat(billData.discount_amount).toFixed(2)}</span></div>
+                   {(parseFloat(billData.discount_amount || 0) > 0 || parseFloat(billData.discount_percentage || 0) > 0) && (
+                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#f87171' }}><span>DISCOUNT {billData.discount_type === 'amount' ? '(₹)' : (billData.discount_percentage ? `(${billData.discount_percentage}%)` : '')}</span><span>-₹{parseFloat(billData.discount_amount || 0).toFixed(2)}</span></div>
                    )}
                    {parseFloat(billData.round_off || 0) > 0 && (
                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}><span>ROUND OFF</span><span>+₹{parseFloat(billData.round_off).toFixed(2)}</span></div>
@@ -1800,6 +1979,34 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                                 }}
                               >
                                 Online
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPaymentMethod('partial');
+                                  if (!partialCashAmount && !partialOnlineAmount) {
+                                    const tot = parseFloat(billData?.final_amount || 0);
+                                    const half = Math.floor(tot / 2);
+                                    setPartialCashAmount(String(half));
+                                    setPartialOnlineAmount(String(Math.round((tot - half) * 100) / 100));
+                                  }
+                                }} 
+                                style={{ 
+                                  flex: 1, 
+                                  padding: '12px 6px', 
+                                  backgroundColor: selectedPaymentMethod === 'partial' ? '#8b5cf6' : 'var(--bg-card)', 
+                                  color: selectedPaymentMethod === 'partial' ? '#ffffff' : 'var(--text-secondary)', 
+                                  border: selectedPaymentMethod === 'partial' ? 'none' : '1px solid var(--border-color)', 
+                                  borderRadius: '10px', 
+                                  fontWeight: 900, 
+                                  cursor: 'pointer', 
+                                  fontSize: '12px', 
+                                  textTransform: 'uppercase', 
+                                  transition: 'all 0.2s',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {t('partial', 'Partial')}
                               </button>
                               <button 
                                 type="button"
@@ -1910,6 +2117,209 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                                   <button type="button" onClick={() => setShowAddPartnerInput(false)} style={{ padding: '8px', borderRadius: '8px', backgroundColor: 'var(--bg-border)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={14} /></button>
                                 </div>
                               )}
+                            </div>
+                          )}
+
+                          {selectedPaymentMethod === 'partial' && (
+                            <div style={{
+                              backgroundColor: 'var(--bg-card)',
+                              borderRadius: '16px',
+                              padding: '16px',
+                              border: '1.5px solid #8b5cf6',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '12px',
+                              boxShadow: '0 4px 16px rgba(139,92,246,0.1)'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 900, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                  {t('partial_payment', 'Partial Payment')}
+                                </span>
+                                <span style={{ fontSize: '12px', fontWeight: 900, color: 'var(--text-primary)' }}>
+                                  {t('bill_total', 'Bill Total')}: ₹{parseFloat(billData?.final_amount || 0).toFixed(2)}
+                                </span>
+                              </div>
+
+                              {/* Quick Split Buttons */}
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const tot = parseFloat(billData?.final_amount || 0);
+                                    const half = Math.floor(tot / 2);
+                                    setPartialCashAmount(String(half));
+                                    setPartialOnlineAmount(String(Math.round((tot - half) * 100) / 100));
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    borderRadius: '8px',
+                                    backgroundColor: 'rgba(139,92,246,0.12)',
+                                    color: '#8b5cf6',
+                                    border: '1px solid rgba(139,92,246,0.3)',
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  ⚡ {t('split_50_50', '50 / 50 Split')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const tot = parseFloat(billData?.final_amount || 0);
+                                    const cash = parseFloat(partialCashAmount || 0);
+                                    const rem = Math.max(0, Math.round((tot - cash) * 100) / 100);
+                                    setPartialOnlineAmount(String(rem));
+                                  }}
+                                  style={{
+                                    flex: 1,
+                                    padding: '6px 8px',
+                                    borderRadius: '8px',
+                                    backgroundColor: 'rgba(14,165,233,0.12)',
+                                    color: '#0ea5e9',
+                                    border: '1px solid rgba(14,165,233,0.3)',
+                                    fontSize: '11px',
+                                    fontWeight: 800,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Fill Online Rem.
+                                </button>
+                              </div>
+
+                              {/* Cash Amount Field */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#10b981' }}>
+                                    💵 {t('cash_amount', 'Cash Amount')} (₹)
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const tot = parseFloat(billData?.final_amount || 0);
+                                      const online = parseFloat(partialOnlineAmount || 0);
+                                      const rem = Math.max(0, Math.round((tot - online) * 100) / 100);
+                                      setPartialCashAmount(String(rem));
+                                    }}
+                                    style={{ fontSize: '10px', background: 'none', border: 'none', color: '#10b981', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
+                                  >
+                                    {t('fill_balance', 'Fill Balance')}
+                                  </button>
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={billData?.final_amount || undefined}
+                                  step="any"
+                                  placeholder="0.00"
+                                  value={partialCashAmount}
+                                  onChange={(e) => setPartialCashAmount(e.target.value)}
+                                  style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    border: '1px solid var(--border-color)',
+                                    backgroundColor: 'var(--bg-base)',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 800,
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                  }}
+                                />
+                              </div>
+
+                              {/* Online Amount Field */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <label style={{ fontSize: '11px', fontWeight: 800, color: '#0ea5e9' }}>
+                                    💳 {t('online_amount', 'Online Amount')} (₹)
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const tot = parseFloat(billData?.final_amount || 0);
+                                      const cash = parseFloat(partialCashAmount || 0);
+                                      const rem = Math.max(0, Math.round((tot - cash) * 100) / 100);
+                                      setPartialOnlineAmount(String(rem));
+                                    }}
+                                    style={{ fontSize: '10px', background: 'none', border: 'none', color: '#0ea5e9', fontWeight: 800, cursor: 'pointer', textDecoration: 'underline' }}
+                                  >
+                                    {t('fill_balance', 'Fill Balance')}
+                                  </button>
+                                </div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={billData?.final_amount || undefined}
+                                  step="any"
+                                  placeholder="0.00"
+                                  value={partialOnlineAmount}
+                                  onChange={(e) => setPartialOnlineAmount(e.target.value)}
+                                  style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    border: '1px solid var(--border-color)',
+                                    backgroundColor: 'var(--bg-base)',
+                                    color: 'var(--text-primary)',
+                                    fontWeight: 800,
+                                    fontSize: '14px',
+                                    outline: 'none',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                  }}
+                                />
+                              </div>
+
+                              {/* Summary & Difference Calculation Banner */}
+                              {(() => {
+                                const billTotal = parseFloat(billData?.final_amount || 0);
+                                const cash = parseFloat(partialCashAmount || 0);
+                                const online = parseFloat(partialOnlineAmount || 0);
+                                const totalPaid = Math.round((cash + online) * 100) / 100;
+                                const roundedTotal = Math.round(billTotal * 100) / 100;
+                                const diff = Math.round((roundedTotal - totalPaid) * 100) / 100;
+                                const isMatch = Math.abs(diff) < 0.01 && (cash > 0 || online > 0);
+                                const isUnder = diff > 0.009;
+                                const isOver = diff < -0.009;
+
+                                return (
+                                  <div style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '10px',
+                                    backgroundColor: isMatch ? 'rgba(16,185,129,0.1)' : isOver ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+                                    border: `1px solid ${isMatch ? '#10b981' : isOver ? '#ef4444' : '#f59e0b'}`,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '4px'
+                                  }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 800 }}>
+                                      <span style={{ color: 'var(--text-secondary)' }}>{t('total_paid', 'Total Paid')}:</span>
+                                      <span style={{ color: isMatch ? '#10b981' : isOver ? '#ef4444' : '#f59e0b', fontWeight: 900 }}>
+                                        ₹{totalPaid.toFixed(2)} / ₹{roundedTotal.toFixed(2)}
+                                      </span>
+                                    </div>
+                                    {isMatch ? (
+                                      <div style={{ color: '#10b981', fontSize: '11px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                        ✓ {t('amounts_match_ready', 'Amounts match! Ready to settle.')}
+                                      </div>
+                                    ) : isUnder ? (
+                                      <div style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 900 }}>
+                                        ⚠️ ₹{diff.toFixed(2)} {t('remaining_to_allocate', 'remaining to allocate')}
+                                      </div>
+                                    ) : isOver ? (
+                                      <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 900 }}>
+                                        ❌ ₹{Math.abs(diff).toFixed(2)} {t('excess_amount', 'excess amount (exceeds bill)')}
+                                      </div>
+                                    ) : (
+                                      <div style={{ color: '#f59e0b', fontSize: '11px', fontWeight: 800 }}>
+                                        Enter cash and online payment amounts
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
   

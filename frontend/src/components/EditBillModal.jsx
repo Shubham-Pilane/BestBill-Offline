@@ -29,10 +29,12 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
       is_manual: Boolean(item.is_manual || !item.menu_item_id)
     }))
   );
+  const initialDiscType = bill?.discount_type === 'amount' ? 'amount' : 'percentage';
+  const [discountType, setDiscountType] = useState(initialDiscType);
   const [discount, setDiscount] = useState(
-    bill?.discount_percentage !== undefined && bill?.discount_percentage !== null
-      ? String(bill.discount_percentage)
-      : '0'
+    initialDiscType === 'amount'
+      ? (bill?.discount_amount !== undefined && bill?.discount_amount !== null ? String(bill.discount_amount) : '0')
+      : (bill?.discount_percentage !== undefined && bill?.discount_percentage !== null ? String(bill.discount_percentage) : '0')
   );
   const [saving, setSaving] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -79,10 +81,12 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
         is_manual: Boolean(item.is_manual || !item.menu_item_id)
       }))
     );
+    const curType = bill.discount_type === 'amount' ? 'amount' : 'percentage';
+    setDiscountType(curType);
     setDiscount(
-      bill.discount_percentage !== undefined && bill.discount_percentage !== null
-        ? String(bill.discount_percentage)
-        : '0'
+      curType === 'amount'
+        ? (bill.discount_amount !== undefined && bill.discount_amount !== null ? String(bill.discount_amount) : '0')
+        : (bill.discount_percentage !== undefined && bill.discount_percentage !== null ? String(bill.discount_percentage) : '0')
     );
   }, [bill?.id]);
 
@@ -149,8 +153,16 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
     const cgstAmount = Number(((subtotal * cgstRate) / 100).toFixed(2));
     const sgstAmount = Number(((subtotal * sgstRate) / 100).toFixed(2));
     const initialTotal = subtotal + gstAmount + cgstAmount + sgstAmount;
-    const discountPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
-    const discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
+    let discountPct = 0;
+    let discountAmount = 0;
+    if (discountType === 'amount') {
+      const parsedAmt = Math.max(0, parseFloat(discount) || 0);
+      discountAmount = Number(Math.min(initialTotal, parsedAmt).toFixed(2));
+      discountPct = initialTotal > 0 ? Number(((discountAmount / initialTotal) * 100).toFixed(2)) : 0;
+    } else {
+      discountPct = Math.max(0, Math.min(100, parseFloat(discount) || 0));
+      discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
+    }
     const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
     const grandTotal = Math.ceil(unroundedTotal);
     let roundOff = Number((grandTotal - unroundedTotal).toFixed(2));
@@ -174,7 +186,7 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
       roundOff,
       grandTotal 
     };
-  }, [editItems, discount, bill, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage]);
+  }, [editItems, discount, discountType, bill, user?.gst_percentage, user?.cgst_percentage, user?.sgst_percentage]);
 
   const getDisplayName = (item) => {
     if (isMarathi) {
@@ -305,7 +317,10 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
 
     return {
       items: cleanItems,
-      discount_percentage: totals.discountPct
+      discount_percentage: totals.discountPct,
+      discount_type: discountType,
+      discount_amount: totals.discountAmount,
+      discount_value: totals.discountAmount
     };
   };
 
@@ -1222,7 +1237,41 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
                 )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', fontWeight: 800, color: 'var(--text-secondary)' }}>
-                  <span>{t('loyalty_discount', 'Discount (%)')}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{t('loyalty_discount', 'Discount')}</span>
+                    <div style={{ display: 'inline-flex', backgroundColor: 'var(--bg-base)', borderRadius: '6px', padding: '2px', border: '1px solid var(--bg-border)' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setDiscountType('percentage'); setDiscount('0'); }}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          backgroundColor: discountType === 'percentage' ? '#10b981' : 'transparent',
+                          color: discountType === 'percentage' ? 'white' : 'var(--text-muted)',
+                          transition: 'all 0.2s'
+                        }}
+                      >%</button>
+                      <button
+                        type="button"
+                        onClick={() => { setDiscountType('amount'); setDiscount('0'); }}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          backgroundColor: discountType === 'amount' ? '#10b981' : 'transparent',
+                          color: discountType === 'amount' ? 'white' : 'var(--text-muted)',
+                          transition: 'all 0.2s'
+                        }}
+                      >₹</button>
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {totals.discountAmount > 0 && (
                       <span style={{ color: '#f59e0b', fontWeight: 800 }}>-₹{totals.discountAmount.toFixed(2)}</span>
@@ -1230,15 +1279,16 @@ const EditBillModal = ({ bill, onClose, onBillUpdated }) => {
                     <input
                       type="number"
                       min="0"
-                      max="100"
+                      max={discountType === 'percentage' ? "100" : undefined}
                       value={discount}
                       onChange={e => {
                         const v = e.target.value;
                         if (v === '') setDiscount('');
-                        else setDiscount(String(Math.max(0, Math.min(100, Number(v) || 0))));
+                        else if (discountType === 'percentage') setDiscount(String(Math.max(0, Math.min(100, Number(v) || 0))));
+                        else setDiscount(String(Math.max(0, Number(v) || 0)));
                       }}
                       style={{
-                        width: '60px',
+                        width: discountType === 'amount' ? '75px' : '60px',
                         padding: '4px 6px',
                         borderRadius: '8px',
                         backgroundColor: 'var(--bg-base)',

@@ -96,6 +96,10 @@ const syncSchema = async () => {
                 round_off DECIMAL(10,2) DEFAULT 0,
                 final_amount DECIMAL(10,2) DEFAULT 0,
                 discount_percentage DECIMAL(5,2) DEFAULT 0,
+                discount_type VARCHAR(20) DEFAULT 'percentage',
+                discount_amount DECIMAL(10,2) DEFAULT 0,
+                cash_amount DECIMAL(10,2) DEFAULT 0,
+                online_amount DECIMAL(10,2) DEFAULT 0,
                 is_paid BOOLEAN DEFAULT false,
                 payment_method VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -350,6 +354,12 @@ const syncSchema = async () => {
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS sgst DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS round_off DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS cash_amount DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS online_amount DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20) DEFAULT 'percentage'",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0",
+            "UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash'",
+            "UPDATE bills SET online_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) IN ('upi', 'online', 'card')",
             "ALTER TABLE categories ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
             "ALTER TABLE tables ADD COLUMN IF NOT EXISTS menu_number INTEGER DEFAULT 1",
@@ -461,6 +471,30 @@ const syncSchema = async () => {
                 if (!billCols.includes('notes')) {
                     db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN notes TEXT DEFAULT ''");
                     console.log('[MIGRATION] Added notes column to bills');
+                }
+                if (!billCols.includes('cash_amount')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN cash_amount REAL DEFAULT 0");
+                    console.log('[MIGRATION] Added cash_amount column to bills');
+                }
+                if (!billCols.includes('online_amount')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN online_amount REAL DEFAULT 0");
+                    console.log('[MIGRATION] Added online_amount column to bills');
+                }
+                if (!billCols.includes('discount_type')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN discount_type TEXT DEFAULT 'percentage'");
+                    console.log('[MIGRATION] Added discount_type column to bills');
+                }
+                if (!billCols.includes('discount_amount')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN discount_amount REAL DEFAULT 0");
+                    console.log('[MIGRATION] Added discount_amount column to bills');
+                }
+                try {
+                    db.sqliteDb.exec(`
+                        UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash';
+                        UPDATE bills SET online_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) IN ('upi', 'online', 'card');
+                    `);
+                } catch (e) {
+                    console.warn('[MIGRATION] Backfill bills cash/online note:', e.message);
                 }
 
                 // Renumber all active menu items sequentially (1 to N) per hotel and menu

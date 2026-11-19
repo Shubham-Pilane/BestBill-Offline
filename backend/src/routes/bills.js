@@ -132,7 +132,7 @@ router.get('/:id', auth, async (req, res) => {
 // Edit / Update an existing bill's items, prices, quantities, discount, and totals
 router.put('/:id', auth, async (req, res) => {
   const { id } = req.params;
-  const { items, discount_percentage } = req.body || {};
+  const { items, discount_percentage, discount_type, discount_amount, discount_value } = req.body || {};
 
   if (!Array.isArray(items)) {
     return res.status(400).json({ message: 'Items array is required' });
@@ -253,10 +253,19 @@ router.put('/:id', auth, async (req, res) => {
     const cgst = Number(((subtotal * cgstRate) / 100).toFixed(2));
     const sgst = Number(((subtotal * sgstRate) / 100).toFixed(2));
     const initialTotal = subtotal + gst + cgst + sgst;
-    const discountPct = discount_percentage !== undefined
-      ? Math.max(0, Math.min(100, parseFloat(discount_percentage) || 0))
-      : Number(billRow.discount_percentage || 0);
-    const discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
+    const discType = discount_type || billRow.discount_type || 'percentage';
+    let discountPct = 0;
+    let discountAmount = 0;
+    if (discType === 'amount') {
+      const fixedAmt = discount_amount !== undefined ? parseFloat(discount_amount) : (discount_value !== undefined ? parseFloat(discount_value) : parseFloat(billRow.discount_amount || 0));
+      discountAmount = Math.max(0, Math.min(initialTotal, Number(fixedAmt || 0)));
+      discountPct = initialTotal > 0 ? Number(((discountAmount / initialTotal) * 100).toFixed(2)) : 0;
+    } else {
+      discountPct = discount_percentage !== undefined
+        ? Math.max(0, Math.min(100, parseFloat(discount_percentage) || 0))
+        : Number(billRow.discount_percentage || 0);
+      discountAmount = Number((initialTotal * (discountPct / 100)).toFixed(2));
+    }
     const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
     const finalAmount = Math.ceil(unroundedTotal);
     let roundOff = Number((finalAmount - unroundedTotal).toFixed(2));
@@ -266,9 +275,9 @@ router.put('/:id', auth, async (req, res) => {
 
     await client.query(
       `UPDATE bills
-       SET total_amount = $1, gst = $2, cgst = $3, sgst = $4, round_off = $5, final_amount = $6, discount_percentage = $7
-       WHERE id = $8`,
-      [subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, id]
+       SET total_amount = $1, gst = $2, cgst = $3, sgst = $4, round_off = $5, final_amount = $6, discount_percentage = $7, discount_type = $8, discount_amount = $9
+       WHERE id = $10`,
+      [subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, id]
     );
 
     // Keep linked credit record synchronized with updated bill total
@@ -303,10 +312,21 @@ router.put('/:id', auth, async (req, res) => {
 router.put('/:id/pay', auth, async (req, res) => {
     try {
         const { id } = req.params;
-        const { method } = req.body;
+        const { method, cash_amount, online_amount } = req.body || {};
+        let cashVal = parseFloat(cash_amount || 0);
+        let onlineVal = parseFloat(online_amount || 0);
+        if (method === 'cash') {
+          const bRes = await db.query('SELECT final_amount FROM bills WHERE id = $1', [id]);
+          cashVal = parseFloat(bRes.rows[0]?.final_amount || 0);
+          onlineVal = 0;
+        } else if (method === 'upi' || method === 'online') {
+          const bRes = await db.query('SELECT final_amount FROM bills WHERE id = $1', [id]);
+          onlineVal = parseFloat(bRes.rows[0]?.final_amount || 0);
+          cashVal = 0;
+        }
         const result = await db.query(
-            'UPDATE bills SET is_paid = true, payment_method = $1 WHERE id = $2 RETURNING *',
-            [method || 'upi', id]
+            'UPDATE bills SET is_paid = true, payment_method = $1, cash_amount = $2, online_amount = $3 WHERE id = $4 RETURNING *',
+            [method || 'upi', cashVal, onlineVal, id]
         );
         res.json(result.rows[0]);
     } catch (err) {
@@ -318,7 +338,7 @@ router.put('/:id/pay', auth, async (req, res) => {
 router.post('/:id/print', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { paymentMethod } = req.body || {};
+    const { paymentMethod, cash_amount, online_amount, cashAmount, onlineAmount } = req.body || {};
     const bill = await db.query(`
       SELECT b.*, o.room_id, o.table_id,
              r.guest_name, r.check_in_date, r.booking_days, r.total_cost as room_cost,
@@ -387,6 +407,25 @@ router.post('/:id/print', auth, async (req, res) => {
       guestName = billData.guest_name;
     }
 
+    let finalCash = parseFloat(cash_amount !== undefined ? cash_amount : (cashAmount !== undefined ? cashAmount : (billData.cash_amount || 0)));
+    let finalOnline = parseFloat(online_amount !== undefined ? online_amount : (onlineAmount !== undefined ? onlineAmount : (billData.online_amount || 0)));
+    if (paymentMethod === 'cash') {
+      finalCash = Number(billData.final_amount);
+      finalOnline = 0;
+    } else if (paymentMethod === 'upi' || paymentMethod === 'online') {
+      finalOnline = Number(billData.final_amount);
+      finalCash = 0;
+    }
+
+    if (paymentMethod) {
+      try {
+        await db.query(
+          'UPDATE bills SET payment_method = $1, cash_amount = $2, online_amount = $3 WHERE id = $4',
+          [paymentMethod, finalCash, finalOnline, id]
+        );
+      } catch (e) {}
+    }
+
     const pMethod = paymentMethod || billData.payment_method || 'upi';
     const isPaid = billData.is_paid || false;
     const showUPI = !isPaid && (pMethod === 'upi' || pMethod === 'online');
@@ -405,12 +444,17 @@ router.post('/:id/print', auth, async (req, res) => {
       roundOff: Number(billData.round_off || 0),
       finalAmount: Number(billData.final_amount),
       discountPercentage: Number(billData.discount_percentage || 0),
+      discountType: billData.discount_type || 'percentage',
+      discountAmount: Number(billData.discount_amount || 0),
       items: printItems,
       hotelName: billData.hotel_name,
       hotelPhone: billData.hotel_phone,
       hotelLocation: billData.hotel_location,
       hotelEmail: billData.hotel_email,
       hotelFssai: billData.fssai_number,
+      paymentMethod: pMethod,
+      cashAmount: finalCash,
+      onlineAmount: finalOnline,
       gst_percentage: Number(billData.gst_percentage || 0),
       cgst_percentage: Number(billData.cgst_percentage || 0),
       sgst_percentage: Number(billData.sgst_percentage || 0),

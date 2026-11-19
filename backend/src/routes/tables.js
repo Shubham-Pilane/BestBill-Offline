@@ -713,7 +713,7 @@ router.post('/:tableId/clear-order', auth, async (req, res) => {
 // Generate Bill
 router.post('/:tableId/bill', auth, async (req, res) => {
   const { tableId } = req.params;
-  const { discount_percentage, selected_discount_item_ids, notes } = req.body;
+  const { discount_percentage, discount_type, discount_amount, discount_value, selected_discount_item_ids, notes } = req.body;
   
   const client = await db.getClient();
   try {
@@ -748,29 +748,36 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     const cgst = Number(((subtotal * cgstRate) / 100).toFixed(2));
     const sgst = Number(((subtotal * sgstRate) / 100).toFixed(2));
     const initialTotal = subtotal + gst + cgst + sgst;
-    const discount = parseFloat(discount_percentage) || 0;
 
+    const discType = discount_type === 'amount' ? 'amount' : 'percentage';
     let discountAmount = 0;
-    if (discount > 0) {
-      if (Array.isArray(selected_discount_item_ids)) {
-        if (selected_discount_item_ids.length > 0) {
-          const selectedSet = new Set(selected_discount_item_ids.map(id => String(id)));
-          const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
-            const idStr = String(item.id || item.oi_id || '');
-            const menuIdStr = item.menu_item_id ? String(item.menu_item_id) : '';
-            if (selectedSet.has(idStr) || (menuIdStr && selectedSet.has(menuIdStr))) {
-              return sum + (parseFloat(item.price) * parseInt(item.quantity));
-            }
-            return sum;
-          }, 0);
-          const selectedTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
-          discountAmount = Number((selectedTotal * (discount / 100)).toFixed(2));
-        } else {
-          discountAmount = 0;
-        }
+    let discountPct = 0;
+
+    let targetBaseTotal = initialTotal;
+    if (Array.isArray(selected_discount_item_ids)) {
+      if (selected_discount_item_ids.length > 0) {
+        const selectedSet = new Set(selected_discount_item_ids.map(id => String(id)));
+        const selectedSubtotal = orderRes.rows.reduce((sum, item) => {
+          const idStr = String(item.id || item.oi_id || '');
+          const menuIdStr = item.menu_item_id ? String(item.menu_item_id) : '';
+          if (selectedSet.has(idStr) || (menuIdStr && selectedSet.has(menuIdStr))) {
+            return sum + (parseFloat(item.price) * parseInt(item.quantity));
+          }
+          return sum;
+        }, 0);
+        targetBaseTotal = selectedSubtotal * (1 + (gstRate + cgstRate + sgstRate) / 100);
       } else {
-        discountAmount = Number((initialTotal * (discount / 100)).toFixed(2));
+        targetBaseTotal = 0;
       }
+    }
+
+    if (discType === 'amount') {
+      const rawAmt = parseFloat(discount_amount !== undefined ? discount_amount : (discount_value !== undefined ? discount_value : 0)) || 0;
+      discountAmount = Math.min(targetBaseTotal, Math.max(0, rawAmt));
+      discountPct = targetBaseTotal > 0 ? Number(((discountAmount / targetBaseTotal) * 100).toFixed(2)) : 0;
+    } else {
+      discountPct = Math.max(0, Math.min(100, parseFloat(discount_percentage !== undefined ? discount_percentage : discount_value) || 0));
+      discountAmount = Number((targetBaseTotal * (discountPct / 100)).toFixed(2));
     }
 
     const unroundedTotal = Math.max(0, Number((initialTotal - discountAmount).toFixed(2)));
@@ -784,9 +791,9 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
 
     const billRes = await client.query(
-      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage, notes) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discount, notes || '']
+      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage, discount_type, discount_amount, notes) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, notes || '']
     );
 
     await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);
@@ -795,7 +802,9 @@ router.post('/:tableId/bill', auth, async (req, res) => {
 
     const responsePayload = {
       ...billRes.rows[0],
+      discount_type: discType,
       discount_amount: discountAmount,
+      discount_percentage: discountPct,
       subtotal: subtotal,
       total_amount: finalAmount,
       gst_percentage: gstRate,
@@ -896,11 +905,23 @@ router.delete('/:id', auth, async (req, res) => {
 // Mark bill as paid
 router.put('/bill/:billId/pay', auth, async (req, res) => {
   const { billId } = req.params;
-  const { method } = req.body;
+  const { method, cash_amount, online_amount } = req.body || {};
   try {
+     let cashVal = parseFloat(cash_amount || 0);
+     let onlineVal = parseFloat(online_amount || 0);
+     if (method === 'cash') {
+       const bRes = await db.query('SELECT final_amount FROM bills WHERE id = $1', [billId]);
+       cashVal = parseFloat(bRes.rows[0]?.final_amount || 0);
+       onlineVal = 0;
+     } else if (method === 'upi' || method === 'online') {
+       const bRes = await db.query('SELECT final_amount FROM bills WHERE id = $1', [billId]);
+       onlineVal = parseFloat(bRes.rows[0]?.final_amount || 0);
+       cashVal = 0;
+     }
+
      const result = await db.query(
-        'UPDATE bills SET is_paid = true, payment_method = $1 WHERE id = $2 RETURNING *',
-        [method, billId]
+        'UPDATE bills SET is_paid = true, payment_method = $1, cash_amount = $2, online_amount = $3 WHERE id = $4 RETURNING *',
+        [method || 'cash', cashVal, onlineVal, billId]
      );
      if (result.rows.length === 0) return res.status(404).json({ message: 'Bill record not found' });
      notifyUpdate(req.user.hotel_id, 'table-update');

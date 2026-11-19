@@ -49,8 +49,8 @@ async function getReportData(startDate, endDate) {
   const revRes = await db.query(
     `SELECT 
        COALESCE(SUM(final_amount), 0) as total_revenue,
-       COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN final_amount ELSE 0 END), 0) as cash_collection,
-       COALESCE(SUM(CASE WHEN payment_method IN ('upi', 'online') THEN final_amount ELSE 0 END), 0) as online_collection,
+       COALESCE(SUM(CASE WHEN LOWER(payment_method) = 'cash' THEN final_amount WHEN LOWER(payment_method) = 'partial' THEN COALESCE(cash_amount, 0) ELSE 0 END), 0) as cash_collection,
+       COALESCE(SUM(CASE WHEN LOWER(payment_method) IN ('upi', 'online', 'card') THEN final_amount WHEN LOWER(payment_method) = 'partial' THEN COALESCE(online_amount, 0) ELSE 0 END), 0) as online_collection,
        COUNT(*) as total_orders
      FROM bills
      WHERE date(created_at) >= date($1) AND date(created_at) <= date($2)`,
