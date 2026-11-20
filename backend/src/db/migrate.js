@@ -358,6 +358,7 @@ const syncSchema = async () => {
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS online_amount DECIMAL(10,2) DEFAULT 0",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type VARCHAR(20) DEFAULT 'percentage'",
             "ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(10,2) DEFAULT 0",
+            "ALTER TABLE bills ADD COLUMN IF NOT EXISTS bill_number INTEGER",
             "UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash'",
             "UPDATE bills SET online_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) IN ('upi', 'online', 'card')",
             "UPDATE bills SET online_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN 0 ELSE ROUND(final_amount - cash_amount, 2) END, cash_amount = CASE WHEN final_amount <= 0 THEN 0 WHEN cash_amount > final_amount THEN final_amount ELSE cash_amount END WHERE LOWER(payment_method) = 'partial' AND ROUND(COALESCE(cash_amount, 0) + COALESCE(online_amount, 0), 2) != ROUND(final_amount, 2)",
@@ -412,6 +413,28 @@ const syncSchema = async () => {
                 await db.query("UPDATE menu_items SET item_number = NULL WHERE is_deleted = 1 OR is_deleted IS TRUE");
             } catch (pgErr) {
                 console.error('[MIGRATION] PG menu renumber error:', pgErr.message);
+            }
+
+            try {
+                await db.query(`
+                    WITH numbered AS (
+                        SELECT b.id, 
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY COALESCE(t.hotel_id, r.hotel_id, 1), DATE(b.created_at) 
+                                   ORDER BY b.created_at ASC, b.id ASC
+                               ) as daily_no
+                        FROM bills b
+                        LEFT JOIN orders o ON b.order_id = o.id
+                        LEFT JOIN tables t ON o.table_id = t.id
+                        LEFT JOIN rooms r ON o.room_id = r.id
+                    )
+                    UPDATE bills 
+                    SET bill_number = numbered.daily_no
+                    FROM numbered
+                    WHERE bills.id = numbered.id AND (bills.bill_number IS NULL OR bills.bill_number = 0)
+                `);
+            } catch (pgBillErr) {
+                console.warn('[MIGRATION] PG bills daily bill_number backfill error:', pgBillErr.message);
             }
         }
 
@@ -489,6 +512,10 @@ const syncSchema = async () => {
                     db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN discount_amount REAL DEFAULT 0");
                     console.log('[MIGRATION] Added discount_amount column to bills');
                 }
+                if (!billCols.includes('bill_number')) {
+                    db.sqliteDb.exec("ALTER TABLE bills ADD COLUMN bill_number INTEGER");
+                    console.log('[MIGRATION] Added bill_number column to bills');
+                }
                 try {
                     db.sqliteDb.exec(`
                         UPDATE bills SET cash_amount = final_amount WHERE (cash_amount IS NULL OR cash_amount = 0) AND (online_amount IS NULL OR online_amount = 0) AND LOWER(payment_method) = 'cash';
@@ -497,6 +524,62 @@ const syncSchema = async () => {
                     `);
                 } catch (e) {
                     console.warn('[MIGRATION] Backfill bills cash/online note:', e.message);
+                }
+
+                // Daily contiguous numbering (1 to N) for bills per day per hotel
+                try {
+                    const unnumberedBills = db.sqliteDb.prepare(`
+                        SELECT b.id, b.created_at, COALESCE(t.hotel_id, r.hotel_id, 1) as hotel_id
+                        FROM bills b
+                        LEFT JOIN orders o ON b.order_id = o.id
+                        LEFT JOIN tables t ON o.table_id = t.id
+                        LEFT JOIN rooms r ON o.room_id = r.id
+                        WHERE b.bill_number IS NULL OR b.bill_number = 0
+                        ORDER BY b.created_at ASC, b.id ASC
+                    `).all();
+
+                    if (unnumberedBills.length > 0) {
+                        const existingBills = db.sqliteDb.prepare(`
+                            SELECT b.id, b.created_at, b.bill_number, COALESCE(t.hotel_id, r.hotel_id, 1) as hotel_id
+                            FROM bills b
+                            LEFT JOIN orders o ON b.order_id = o.id
+                            LEFT JOIN tables t ON o.table_id = t.id
+                            LEFT JOIN rooms r ON o.room_id = r.id
+                            WHERE b.bill_number IS NOT NULL AND b.bill_number > 0
+                        `).all();
+
+                        const dailyCounters = {};
+                        for (const eb of existingBills) {
+                            let dateKey = 'unknown';
+                            if (eb.created_at) {
+                                const d = new Date(eb.created_at);
+                                if (!isNaN(d.getTime())) {
+                                    dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                }
+                            }
+                            const groupKey = `${eb.hotel_id}_${dateKey}`;
+                            if (!dailyCounters[groupKey] || eb.bill_number > dailyCounters[groupKey]) {
+                                dailyCounters[groupKey] = eb.bill_number;
+                            }
+                        }
+
+                        const updateBillNumStmt = db.sqliteDb.prepare("UPDATE bills SET bill_number = ? WHERE id = ?");
+                        for (const b of unnumberedBills) {
+                            let dateKey = 'unknown';
+                            if (b.created_at) {
+                                const d = new Date(b.created_at);
+                                if (!isNaN(d.getTime())) {
+                                    dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                }
+                            }
+                            const groupKey = `${b.hotel_id}_${dateKey}`;
+                            dailyCounters[groupKey] = (dailyCounters[groupKey] || 0) + 1;
+                            updateBillNumStmt.run(dailyCounters[groupKey], b.id);
+                        }
+                        console.log(`[MIGRATION] Backfilled daily bill_number for ${unnumberedBills.length} bills.`);
+                    }
+                } catch (e) {
+                    console.warn('[MIGRATION] Backfill daily bill_number note:', e.message);
                 }
 
                 // Renumber all active menu items sequentially (1 to N) per hotel and menu

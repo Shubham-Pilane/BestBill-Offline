@@ -360,7 +360,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
     if (user?.hotel_phone) msg += `Phone: ${user.hotel_phone}\n`;
     if (user?.fssai_number) msg += `FSSI No: ${user.fssai_number}\n`;
     msg += `\n`;
-    msg += `Room: ${room.room_number}\nGuest: ${room.guest_name}\nBill No: #${billData.id}\n`;
+    msg += `Room: ${room.room_number}\nGuest: ${room.guest_name}\nBill No: #${billData.bill_number || billData.id}\n`;
     msg += `\n*Items:*\n• Room Charge: ₹${billData.room_charge}\n`;
     (billData.items || []).forEach(i => msg += `• ${i.name} x ${i.quantity} = ₹${(i.price * i.quantity).toFixed(2)}\n`);
     msg += `\n*GRAND TOTAL: ₹${parseFloat(billData.final_amount).toFixed(2)}*\n\n*Thank you for staying with us!* - ${(user?.hotel_name || 'BestBill').toUpperCase()}`;
@@ -846,7 +846,7 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                  <div style={{ borderTop: '2px dashed var(--border-rgba-05)', borderBottom: '2px dashed var(--border-rgba-05)', padding: '16px 0', marginBottom: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: 'white' }}>
                        <span>ROOM NO: {room?.room_number}</span>
-                       <span>BILL NO: #{billData?.id}</span>
+                       <span>BILL NO: #{billData?.bill_number || billData?.id}</span>
                     </div>
                     <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', fontWeight: 800 }}>GUEST: {room?.guest_name?.toUpperCase()}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontWeight: 800, marginTop: '4px' }}>

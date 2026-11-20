@@ -715,7 +715,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
     if (user?.fssai_number) msg += `FSSI No: ${user.fssai_number}\n`;
     msg += `\n`;
     msg += `Table No: ${table.table_numberByFloor || table.table_number}\n`;
-    msg += `Bill No: #${billData.id}\n`;
+    msg += `Bill No: #${billData.bill_number || billData.id}\n`;
     msg += `Date: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n`;
     msg += `\n*Items:*\n`;
     (billData.items || []).filter(i => Number(i.quantity !== undefined ? i.quantity : (i.qty !== undefined ? i.qty : 0)) > 0).forEach(i => msg += `• ${i.name} x ${i.quantity || i.qty} = ₹${(i.price * (i.quantity || i.qty)).toFixed(2)}\n`);
@@ -1384,7 +1384,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                 <div style={{ borderTop: '2px dashed var(--border-rgba-05)', borderBottom: '2px dashed var(--border-rgba-05)', padding: '16px 0', marginBottom: '24px' }}>
                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 900, color: 'white' }}>
                       <span>TABLE NO: {table.table_numberByFloor || table.table_number}</span>
-                      <span>BILL NO: #{billData.id}</span>
+                      <span>BILL NO: #{billData.bill_number || billData.id}</span>
                    </div>
                    <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)' }}>DATE: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}</div>
                 </div>

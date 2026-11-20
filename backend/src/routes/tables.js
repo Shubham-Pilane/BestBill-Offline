@@ -790,10 +790,36 @@ router.post('/:tableId/bill', auth, async (req, res) => {
     // Deduct stock from inventory for standard menu items
     await inventoryService.deductStockForOrder(orderId, req.user.hotel_id, client);
 
+    // Calculate daily sequential bill number (1 to N) for this hotel and date
+    let nextBillNumber = 1;
+    try {
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const numRes = await client.query(
+        `SELECT COALESCE(MAX(b.bill_number), 0) + 1 AS next_bill_no
+         FROM bills b
+         JOIN orders o ON b.order_id = o.id
+         LEFT JOIN tables t ON o.table_id = t.id
+         LEFT JOIN rooms r ON o.room_id = r.id
+         WHERE (t.hotel_id = $1 OR r.hotel_id = $1)
+           AND (
+             substr(b.created_at, 1, 10) = $2
+             OR date(b.created_at) = date($2)
+             OR date(b.created_at, 'localtime') = date($2)
+           )`,
+        [req.user.hotel_id, localDate]
+      );
+      if (numRes.rows.length > 0 && numRes.rows[0].next_bill_no) {
+        nextBillNumber = parseInt(numRes.rows[0].next_bill_no, 10);
+      }
+    } catch (numErr) {
+      console.warn('[TABLE BILL] Daily bill number calculation note:', numErr.message);
+    }
+
     const billRes = await client.query(
-      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage, discount_type, discount_amount, notes) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, notes || '']
+      `INSERT INTO bills (order_id, total_amount, gst, cgst, sgst, round_off, final_amount, discount_percentage, discount_type, discount_amount, notes, bill_number) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [orderId, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPct, discType, discountAmount, notes || '', nextBillNumber]
     );
 
     await client.query(`UPDATE orders SET status = 'completed' WHERE id = $1`, [orderId]);

@@ -654,16 +654,17 @@ function formatBill(data) {
     }
   }
 
+  const displayBillNo = data.billNumber || data.bill_number || data.billId || '';
   if (isMarathi) {
-    const billNoBuf = renderTextLineToRaster(`बिल क्र.: #${data.billId || ''}`, { ...paperOpt, align: 'left' });
+    const billNoBuf = renderTextLineToRaster(`बिल क्र.: #${displayBillNo}`, { ...paperOpt, align: 'left' });
     if (billNoBuf.length > 0) {
       builder.bufferList.push(billNoBuf);
       builder.bufferList.push(Buffer.from([0x0A]));
     } else {
-      builder.text(mg + padText(`Bill No: #${data.billId || ''}`, LINE_WIDTH));
+      builder.text(mg + padText(`Bill No: #${displayBillNo}`, LINE_WIDTH));
     }
   } else {
-    builder.text(mg + padText(`Bill No: #${data.billId || ''}`, LINE_WIDTH));
+    builder.text(mg + padText(`Bill No: #${displayBillNo}`, LINE_WIDTH));
   }
 
   const d = new Date();

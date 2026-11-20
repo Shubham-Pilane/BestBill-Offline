@@ -112,12 +112,14 @@ class PrintService {
   /**
    * Generates and spools a FINAL_BILL payload.
    */
-  sendFinalBill({ hotelId, billId, table, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPercentage, items, hotelName, hotelPhone, hotelLocation, upiId, isPaid, room_charge, booking_days, printerSize, gst_percentage, cgst_percentage, sgst_percentage }) {
+  sendFinalBill({ hotelId, billId, billNumber, table, subtotal, gst, cgst, sgst, roundOff, finalAmount, discountPercentage, items, hotelName, hotelPhone, hotelLocation, upiId, isPaid, room_charge, booking_days, printerSize, gst_percentage, cgst_percentage, sgst_percentage }) {
     const payload = {
       type: 'FINAL_BILL',
       printer: 'billing',
       hotelId: Number(hotelId),
-      billId: Number(billId),
+      billId: Number(billNumber || billId),
+      billNumber: Number(billNumber || billId),
+      rawBillId: Number(billId),
       table: String(table),
       subtotal: Number(subtotal),
       gst: Number(gst),
