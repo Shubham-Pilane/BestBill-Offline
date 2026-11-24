@@ -2,11 +2,23 @@ const express = require('express');
 const db = require('../db/db');
 const auth = require('../middleware/auth');
 const { notifyUpdate } = require('../socket');
+const printService = require('../services/printService');
 const router = express.Router();
 
-// Get active kitchen orders (Strictly Dine-in Table orders sent by waiter)
+// Get kitchen orders (KOT History & Live Display)
 router.get('/orders', auth, async (req, res) => {
   try {
+    const { filter } = req.query; // 'today', 'yesterday', 'all'
+    
+    let dateCondition = "AND date(o.kot_sent_at) = date('now', 'localtime')";
+    if (filter === 'yesterday') {
+      dateCondition = "AND date(o.kot_sent_at) = date('now', 'localtime', '-1 day')";
+    } else if (filter === 'all') {
+      dateCondition = "AND o.kot_sent_at >= datetime('now', '-30 days')";
+    } else if (filter === 'active') {
+      dateCondition = "AND date(o.kot_sent_at) = date('now', 'localtime') AND COALESCE(o.is_prepared, false) = false";
+    }
+
     const ordersResult = await db.query(
       `SELECT 
          o.id as order_id,
@@ -17,6 +29,7 @@ router.get('/orders', auth, async (req, res) => {
          o.source,
          o.waiter_name,
          o.kot_sent_at,
+         o.is_prepared,
          t.table_number,
          t.floor as table_floor
        FROM orders o
@@ -24,9 +37,9 @@ router.get('/orders', auth, async (req, res) => {
        WHERE t.hotel_id = $1
          AND o.status IN ('active', 'completed', 'cancelled')
          AND o.kot_sent_at IS NOT NULL
-         AND DATE(o.kot_sent_at) = CURRENT_DATE
-         AND COALESCE(o.is_prepared, false) = false
-       ORDER BY o.kot_sent_at DESC`,
+         ${dateCondition}
+       ORDER BY o.kot_sent_at DESC
+       LIMIT 200`,
       [req.user.hotel_id]
     );
 
@@ -36,12 +49,13 @@ router.get('/orders', auth, async (req, res) => {
 
     const orderIds = ordersResult.rows.map(o => o.order_id);
     
-    // Fetch items for all these active orders
+    // Fetch items for all these orders
     const itemsResult = await db.query(
-      `SELECT oi.id, oi.order_id, mi.name, oi.quantity, mi.price
+      `SELECT oi.id, oi.order_id, COALESCE(oi.custom_name, mi.name, 'Item') as name, mi.marathi_name, oi.quantity, COALESCE(oi.custom_price, mi.price, 0) as price, oi.notes
        FROM order_items oi
-       JOIN menu_items mi ON oi.menu_item_id = mi.id
-       WHERE oi.order_id IN (${orderIds.map((_, i) => `$${i + 1}`).join(', ')})`,
+       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+       WHERE oi.order_id IN (${orderIds.map((_, i) => `$${i + 1}`).join(', ')})
+         AND oi.quantity > 0`,
       orderIds
     );
 
@@ -54,7 +68,10 @@ router.get('/orders', auth, async (req, res) => {
       itemsByOrder[item.order_id].push({
         id: item.id,
         name: item.name,
-        quantity: item.quantity
+        marathi_name: item.marathi_name,
+        quantity: item.quantity,
+        price: item.price,
+        notes: item.notes
       });
     });
 
@@ -63,9 +80,7 @@ router.get('/orders', auth, async (req, res) => {
       const items = itemsByOrder[order.order_id] || [];
       
       // Calculate total amount for dine-in orders
-      const totalAmount = itemsResult.rows
-        .filter(item => item.order_id === order.order_id)
-        .reduce((sum, item) => sum + (item.quantity * item.price), 0);
+      const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.price), 0);
 
       return {
         ...order,
@@ -107,6 +122,77 @@ router.put('/orders/:orderId/prepare', auth, async (req, res) => {
   } catch (err) {
     console.error('Error preparing order:', err);
     res.status(500).json({ message: 'Error updating order status' });
+  }
+});
+
+// Reprint a specific KOT order
+router.post('/orders/:orderId/reprint', auth, async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const orderRes = await db.query(
+      `SELECT o.id as order_id, o.waiter_name, o.guest_note, o.kot_sent_at,
+              t.table_number, t.floor as table_floor
+       FROM orders o
+       JOIN tables t ON o.table_id = t.id
+       WHERE o.id = $1 AND t.hotel_id = $2`,
+      [orderId, req.user.hotel_id]
+    );
+
+    if (orderRes.rows.length === 0) {
+      return res.status(404).json({ message: 'KOT order not found' });
+    }
+
+    const orderRow = orderRes.rows[0];
+
+    const itemsRes = await db.query(
+      `SELECT oi.id, oi.quantity, oi.notes, COALESCE(oi.custom_name, mi.name, 'Item') as name,
+              mi.marathi_name
+       FROM order_items oi
+       LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id
+       WHERE oi.order_id = $1 AND oi.quantity > 0`,
+      [orderId]
+    );
+
+    if (itemsRes.rows.length === 0) {
+      return res.status(400).json({ message: 'No items found in this KOT to print' });
+    }
+
+    const userRes = await db.query(
+      'SELECT app_language, print_lang_kot FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    let printLangKot = (userRes && userRes.rows.length > 0) ? userRes.rows[0].print_lang_kot : 'en';
+    const appLang = (userRes && userRes.rows.length > 0) ? userRes.rows[0].app_language : 'en';
+    if (appLang === 'en') printLangKot = 'en';
+    if (appLang === 'mr') printLangKot = 'mr';
+
+    const printItems = itemsRes.rows.map(item => ({
+      name: printLangKot === 'mr' ? (item.marathi_name || item.name) : item.name,
+      quantity: item.quantity,
+      notes: item.notes || ''
+    }));
+
+    let tableNumber = orderRow.table_number;
+    let finalWaiter = orderRow.waiter_name || req.user.name || 'Staff';
+
+    printService.sendKOT({
+      hotelId: req.user.hotel_id,
+      table: `${tableNumber} (REPRINT)`,
+      floor: orderRow.table_floor || '',
+      waiter: finalWaiter,
+      items: printItems,
+      notes: orderRow.guest_note ? `${orderRow.guest_note}\n*** REPRINT KOT ***` : '*** REPRINT KOT ***',
+      lang: printLangKot,
+      isReprint: true
+    });
+
+    notifyUpdate(req.user.hotel_id, 'kitchen-update');
+
+    return res.json({ success: true, message: `KOT for Table ${tableNumber} reprinted successfully` });
+  } catch (err) {
+    console.error('Error reprinting KOT:', err);
+    res.status(500).json({ message: 'Error reprinting KOT order' });
   }
 });
 

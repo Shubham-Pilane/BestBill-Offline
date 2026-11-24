@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
 import { playInternalChime } from '../components/Layout';
@@ -7,18 +7,26 @@ import {
   Clock, 
   Flame, 
   Volume2, 
-  VolumeX,
-  AlertTriangle,
-  User,
-  Calendar,
-  Utensils,
-  ChevronDown,
-  ChevronUp
+  VolumeX, 
+  AlertTriangle, 
+  User, 
+  Calendar, 
+  Utensils, 
+  ChevronDown, 
+  ChevronUp,
+  Printer,
+  Search,
+  CheckCircle,
+  RefreshCw
 } from 'lucide-react';
 
 const KitchenKOT = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [dateFilter, setDateFilter] = useState('today'); // 'today', 'yesterday', 'all'
+    const [searchTerm, setSearchTerm] = useState('');
+    const [reprintingId, setReprintingId] = useState(null);
+    const [preparingId, setPreparingId] = useState(null);
     const [audioEnabled, setAudioEnabled] = useState(() => {
         return localStorage.getItem('kitchen_order_sound') === 'true';
     });
@@ -46,9 +54,11 @@ const KitchenKOT = () => {
         toast('Sound Notifications Muted', { icon: '🔕' });
     };
 
-    const fetchKitchenOrders = async () => {
+    const fetchKitchenOrders = async (currentFilter = dateFilter) => {
         try {
-            const res = await api.get('/kitchen/orders');
+            const res = await api.get('/kitchen/orders', {
+                params: { filter: currentFilter }
+            });
             setOrders(res.data);
             
             const currentCount = res.data.length;
@@ -70,10 +80,42 @@ const KitchenKOT = () => {
     };
 
     useEffect(() => {
-        fetchKitchenOrders();
-        const interval = setInterval(fetchKitchenOrders, 5000);
+        fetchKitchenOrders(dateFilter);
+        const interval = setInterval(() => {
+            fetchKitchenOrders(dateFilter);
+        }, 5000);
         return () => clearInterval(interval);
-    }, []);
+    }, [dateFilter]);
+
+    const handleReprintKot = async (orderId, tableNumber) => {
+        try {
+            setReprintingId(orderId);
+            const res = await api.post(`/kitchen/orders/${orderId}/reprint`);
+            toast.success(res.data?.message || `KOT for Table ${tableNumber} reprinted!`, {
+                icon: '🖨️',
+                style: { borderRadius: '12px', background: '#0ea5e9', color: '#fff', fontWeight: 800 }
+            });
+        } catch (err) {
+            console.error('Error reprinting KOT:', err);
+            toast.error(err.response?.data?.message || 'Failed to reprint KOT order');
+        } finally {
+            setReprintingId(null);
+        }
+    };
+
+    const handleMarkPrepared = async (orderId) => {
+        try {
+            setPreparingId(orderId);
+            await api.put(`/kitchen/orders/${orderId}/prepare`);
+            toast.success('Order marked as prepared!', { icon: '✅' });
+            await fetchKitchenOrders(dateFilter);
+        } catch (err) {
+            console.error('Error preparing order:', err);
+            toast.error('Failed to update status');
+        } finally {
+            setPreparingId(null);
+        }
+    };
 
     const formatDateTime = (timestamp) => {
         if (!timestamp) return 'N/A';
@@ -94,6 +136,20 @@ const KitchenKOT = () => {
         return `${day}/${month}/${year} ${displayHoursStr}:${minutes}:${seconds} ${ampm}`;
     };
 
+    const filteredOrders = useMemo(() => {
+        if (!searchTerm.trim()) return orders;
+        const q = searchTerm.trim().toLowerCase();
+        return orders.filter(o => {
+            const tableStr = String(o.table_number || '').toLowerCase();
+            const waiterStr = String(o.waiter_name || '').toLowerCase();
+            const hasItem = (o.items || []).some(item => 
+                String(item.name || '').toLowerCase().includes(q) ||
+                String(item.marathi_name || '').toLowerCase().includes(q)
+            );
+            return tableStr.includes(q) || waiterStr.includes(q) || hasItem;
+        });
+    }, [orders, searchTerm]);
+
     const themeColor = '#f59e0b'; // Warm orange flame/kitchen aesthetic
 
     if (loading) {
@@ -107,39 +163,117 @@ const KitchenKOT = () => {
     }
 
     return (
-        <div style={{display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', color: 'var(--text-primary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', color: 'var(--text-primary)' }}>
             {/* Header section */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
                 <div>
-                   <h2 style={{ fontSize: '22px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                       <ChefHat style={{ color: themeColor }} size={24} /> Kitchen Display (KOT)
-                   </h2>
-                   <p style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '13px', margin: '4px 0 0 0' }}>
-                       Live orders being prepared by the kitchen crew.
-                   </p>
+                    <h2 style={{ fontSize: '22px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                        <ChefHat style={{ color: themeColor }} size={24} /> Kitchen Display & KOT History
+                    </h2>
+                    <p style={{ color: 'var(--text-muted)', fontWeight: 500, fontSize: '13px', margin: '4px 0 0 0' }}>
+                        Live kitchen orders and reprint history for any past KOT ticket.
+                    </p>
                 </div>
                 
-                {/* SOUND TOGGLE */}
-                <button 
-                    onClick={audioEnabled ? disableSound : activateSound}
-                    style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '6px', 
-                        backgroundColor: audioEnabled ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-border)', 
-                        color: audioEnabled ? themeColor : 'var(--text-muted)', 
-                        border: `1px solid ${audioEnabled ? themeColor : 'var(--bg-border)'}`, 
-                        padding: '8px 16px', 
-                        borderRadius: '8px', 
-                        fontSize: '13px', 
-                        fontWeight: 600, 
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease'
-                    }}
-                >
-                    {audioEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-                    KITCHEN ALERT: {audioEnabled ? 'ON' : 'OFF'}
-                </button>
+                {/* Right controls */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <button 
+                        onClick={() => fetchKitchenOrders(dateFilter)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            backgroundColor: 'var(--bg-card)',
+                            color: 'var(--text-secondary)',
+                            border: '1px solid var(--bg-border)',
+                            padding: '8px 14px',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                        title="Refresh KOTs"
+                    >
+                        <RefreshCw size={14} /> Refresh
+                    </button>
+
+                    {/* SOUND TOGGLE */}
+                    <button 
+                        onClick={audioEnabled ? disableSound : activateSound}
+                        style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '6px', 
+                            backgroundColor: audioEnabled ? 'rgba(245, 158, 11, 0.15)' : 'var(--bg-border)', 
+                            color: audioEnabled ? themeColor : 'var(--text-muted)', 
+                            border: `1px solid ${audioEnabled ? themeColor : 'var(--bg-border)'}`, 
+                            padding: '8px 16px', 
+                            borderRadius: '8px', 
+                            fontSize: '13px', 
+                            fontWeight: 600, 
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {audioEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                        KITCHEN ALERT: {audioEnabled ? 'ON' : 'OFF'}
+                    </button>
+                </div>
+            </div>
+
+            {/* Filter Tabs & Search Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', backgroundColor: 'var(--bg-card)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--bg-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {[
+                        { id: 'today', label: "Today's KOTs" },
+                        { id: 'yesterday', label: 'Yesterday' },
+                        { id: 'all', label: 'All KOTs (30 Days)' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setDateFilter(tab.id)}
+                            style={{
+                                padding: '8px 16px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                border: dateFilter === tab.id ? '1px solid #0ea5e9' : '1px solid var(--bg-border)',
+                                backgroundColor: dateFilter === tab.id ? '#0ea5e9' : 'var(--bg-base)',
+                                color: dateFilter === tab.id ? '#ffffff' : 'var(--text-secondary)',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 260px', maxWidth: '380px', justifyContent: 'flex-end' }}>
+                    <div style={{ position: 'relative', width: '100%' }}>
+                        <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input 
+                            type="text"
+                            placeholder="Search Table, Waiter, Item..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '8px 12px 8px 36px',
+                                borderRadius: '8px',
+                                backgroundColor: 'var(--bg-base)',
+                                border: '1px solid var(--bg-border)',
+                                color: 'var(--text-primary)',
+                                fontSize: '13px',
+                                outline: 'none'
+                            }}
+                        />
+                    </div>
+                    <div style={{ whiteSpace: 'nowrap', fontSize: '13px', fontWeight: 700, color: '#0ea5e9', backgroundColor: 'rgba(14, 165, 233, 0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.2)' }}>
+                        Total: {filteredOrders.length}
+                    </div>
+                </div>
             </div>
 
             {/* Compact unified List view */}
@@ -147,23 +281,25 @@ const KitchenKOT = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Flame size={18} color={themeColor} />
                     <h3 style={{ margin: 0, fontWeight: 600, fontSize: '16px' }}>
-                        Active Kitchen Orders ({orders.length})
+                        KOT Queue & History ({filteredOrders.length})
                     </h3>
                 </div>
 
-                {orders.length === 0 ? (
+                {filteredOrders.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '60px 20px', backgroundColor: 'var(--bg-card)', borderRadius: '12px', border: '2px dashed var(--bg-border)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
                         <div style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(245, 158, 11, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ChefHat size={30} style={{ color: 'var(--text-muted)' }} />
                         </div>
                         <div>
-                            <h4 style={{margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>All Caught Up!</h4>
-                            <p style={{ color: 'var(--text-muted)', fontWeight: 500, margin: 0, fontSize: '13px' }}>No active waiter KOT orders are waiting in the kitchen.</p>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>No KOT Orders Found</h4>
+                            <p style={{ color: 'var(--text-muted)', fontWeight: 500, margin: 0, fontSize: '13px' }}>
+                                {searchTerm ? 'No orders match your search criteria.' : 'No KOT tickets recorded for this time range.'}
+                            </p>
                         </div>
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {orders.map(order => {
+                        {filteredOrders.map(order => {
                             const isExpanded = !!expandedOrders[order.order_id];
                             return (
                                 <div 
@@ -196,37 +332,108 @@ const KitchenKOT = () => {
                                                 width: '10px', 
                                                 height: '10px', 
                                                 borderRadius: '50%', 
-                                                backgroundColor: themeColor,
-                                                boxShadow: `0 0 8px ${themeColor}`
+                                                backgroundColor: order.is_prepared ? '#10b981' : themeColor,
+                                                boxShadow: `0 0 8px ${order.is_prepared ? '#10b981' : themeColor}`
                                             }} />
                                             <div>
-                                                <h4 style={{margin: 0, fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
+                                                <h4 style={{ margin: 0, fontWeight: 700, fontSize: '16px', color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
                                                     TABLE {order.table_number}
                                                 </h4>
-                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                                                    Location: {order.table_floor}
-                                                </span>
+                                                {order.table_floor && (
+                                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                                        Location: {order.table_floor}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* Order Metadata */}
-                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                        {/* Order Metadata & Action Buttons */}
+                                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                            {/* Status Badge */}
+                                            {order.is_prepared ? (
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    <CheckCircle size={11} /> Prepared
+                                                </span>
+                                            ) : (
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: themeColor, fontSize: '11px', fontWeight: 700, backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                                    <Flame size={11} /> Active
+                                                </span>
+                                            )}
+
                                             {order.status !== 'active' && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '4px 10px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                                                    <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cleared</span>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--bg-border)' }}>
+                                                    <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>Billed</span>
                                                 </div>
                                             )}
+
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-rgba-05)' }}>
                                                 <User size={12} color="#0ea5e9" style={{ flexShrink: 0 }} />
-                                                <span>Waiter: <span style={{color: 'var(--text-primary)' }}>{order.waiter_name || 'Waiter'}</span></span>
+                                                <span>Waiter: <span style={{ color: 'var(--text-primary)' }}>{order.waiter_name || 'Waiter'}</span></span>
                                             </div>
+
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.03)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-rgba-05)' }}>
                                                 <Calendar size={12} style={{ flexShrink: 0 }} />
-                                                <span>Sent: <span style={{color: 'var(--text-primary)' }}>{formatDateTime(order.kot_sent_at)}</span></span>
+                                                <span>Sent: <span style={{ color: 'var(--text-primary)' }}>{formatDateTime(order.kot_sent_at)}</span></span>
                                             </div>
-                                            <div style={{ fontSize: '15px', color: '#10b981', fontWeight: 600, marginRight: '4px' }}>
+
+                                            <div style={{ fontSize: '15px', color: '#10b981', fontWeight: 700, marginRight: '4px' }}>
                                                  ₹{parseFloat(order.total_amount || 0).toFixed(0)}
                                             </div>
+
+                                            {/* Dedicated REPRINT Button */}
+                                            <button
+                                                onClick={() => handleReprintKot(order.order_id, order.table_number)}
+                                                disabled={reprintingId === order.order_id}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '6px',
+                                                    backgroundColor: reprintingId === order.order_id ? 'rgba(14, 165, 233, 0.3)' : 'rgba(14, 165, 233, 0.15)',
+                                                    color: '#0ea5e9',
+                                                    border: '1px solid rgba(14, 165, 233, 0.4)',
+                                                    padding: '6px 14px',
+                                                    borderRadius: '6px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 800,
+                                                    cursor: reprintingId === order.order_id ? 'wait' : 'pointer',
+                                                    transition: 'all 0.2s ease',
+                                                    outline: 'none',
+                                                    boxShadow: '0 2px 6px rgba(14, 165, 233, 0.15)'
+                                                }}
+                                                title="Reprint this KOT ticket to kitchen printer"
+                                            >
+                                                <Printer size={13} />
+                                                <span>{reprintingId === order.order_id ? 'Printing...' : 'Reprint'}</span>
+                                            </button>
+
+                                            {/* Mark Prepared button if active */}
+                                            {!order.is_prepared && (
+                                                <button
+                                                    onClick={() => handleMarkPrepared(order.order_id)}
+                                                    disabled={preparingId === order.order_id}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                                        color: '#10b981',
+                                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                                        padding: '6px 12px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '12px',
+                                                        fontWeight: 700,
+                                                        cursor: preparingId === order.order_id ? 'wait' : 'pointer',
+                                                        transition: 'all 0.2s ease',
+                                                        outline: 'none'
+                                                    }}
+                                                    title="Mark order as prepared in kitchen"
+                                                >
+                                                    <CheckCircle size={12} />
+                                                    <span>Mark Prepared</span>
+                                                </button>
+                                            )}
+
+                                            {/* View Details Toggle */}
                                             <button
                                                 onClick={() => toggleExpand(order.order_id)}
                                                 style={{

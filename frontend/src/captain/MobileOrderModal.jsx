@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -53,6 +53,9 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const [allTables, setAllTables] = useState(passedTables || []);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
+  const searchInputRef = useRef(null);
+  const suggestionRefs = useRef([]);
   const [syncingItems, setSyncingItems] = useState(new Set());
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editPriceValue, setEditPriceValue] = useState('');
@@ -290,6 +293,15 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
       setSuggestions([]);
     }
   }, [allItems, currentPage, selectedCategory, searchQuery, orderItems]);
+
+  // Keep first search suggestion automatically highlighted whenever results change
+  useEffect(() => {
+    if (suggestions.length > 0) {
+      setSelectedSuggestionIndex(0);
+    } else {
+      setSelectedSuggestionIndex(-1);
+    }
+  }, [suggestions]);
 
   const togglePinItem = async (e, item) => {
     e.stopPropagation();
@@ -685,6 +697,48 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
     setCurrentPage(1);
   };
 
+  const handleSearchKeyDown = (e) => {
+    if (suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => {
+        const nextIdx = prev < suggestions.length - 1 ? prev + 1 : 0;
+        const el = suggestionRefs.current[nextIdx];
+        if (el) el.scrollIntoView({ block: 'nearest' });
+        return nextIdx;
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => {
+        const nextIdx = prev > 0 ? prev - 1 : suggestions.length - 1;
+        const el = suggestionRefs.current[nextIdx];
+        if (el) el.scrollIntoView({ block: 'nearest' });
+        return nextIdx;
+      });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const chosenIdx = selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length
+        ? selectedSuggestionIndex
+        : 0;
+      const targetItem = suggestions[chosenIdx];
+      if (targetItem) {
+        addToOrder(targetItem);
+        setSearchQuery('');
+        setSuggestions([]);
+        setSelectedSuggestionIndex(0);
+        setTimeout(() => {
+          if (searchInputRef.current) searchInputRef.current.focus();
+        }, 10);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSearchQuery('');
+      setSuggestions([]);
+      setSelectedSuggestionIndex(0);
+    }
+  };
+
   const shareViaWhatsApp = async () => {
     if (!customerPhone) {
       toast.error('Please enter a phone number first');
@@ -806,10 +860,12 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   <Search size={16} />
                 </div>
                 <input 
+                   ref={searchInputRef}
                    type="text" 
                    placeholder="Search Menu..."
                    value={searchQuery}
                    onChange={handleSearchChange}
+                   onKeyDown={handleSearchKeyDown}
                    style={{
                      width: '100%', 
                      padding: '12px 40px 12px 44px', 
@@ -825,7 +881,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 />
                 {searchQuery && (
                   <button 
-                    onClick={() => { setSearchQuery(''); setSuggestions([]); }}
+                    onClick={() => { setSearchQuery(''); setSuggestions([]); setSelectedSuggestionIndex(0); }}
                     style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255, 255, 255, 0.5)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
                   >
                     <X size={16} />
@@ -835,15 +891,49 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 {/* Suggestions Dropdown */}
                 {suggestions.length > 0 && (
                   <div className="search-suggestions-scrollbar" style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-card)', borderRadius: '16px', marginTop: '6px', boxShadow: '0 20px 50px rgba(0,0,0,0.8)', zIndex: 100, border: '1px solid var(--border-color)', overflowY: 'auto', maxHeight: '280px' }}>
-                    {suggestions.map(s => (
-                      <div key={s.id} onClick={() => { addToOrder(s); setSearchQuery(''); setSuggestions([]); }} style={{ padding: '12px 18px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)', color: 'var(--text-primary)', fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Plus size={14} color="#0ea5e9" />
-                          <span>{s.item_number ? `${s.item_number} - ` : ''}{s.name}</span>
+                    {suggestions.map((s, idx) => {
+                      const isSelected = idx === selectedSuggestionIndex;
+                      return (
+                        <div 
+                          key={s.id} 
+                          ref={el => suggestionRefs.current[idx] = el}
+                          onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                          onClick={() => { 
+                            addToOrder(s); 
+                            setSearchQuery(''); 
+                            setSuggestions([]); 
+                            setSelectedSuggestionIndex(0);
+                            setTimeout(() => {
+                              if (searchInputRef.current) searchInputRef.current.focus();
+                            }, 10);
+                          }} 
+                          style={{ 
+                            padding: '12px 18px', 
+                            cursor: 'pointer', 
+                            borderBottom: '1px solid var(--border-color)', 
+                            color: isSelected ? '#ffffff' : 'var(--text-primary)', 
+                            fontWeight: 800, 
+                            display: 'flex', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center',
+                            transition: 'all 0.15s ease',
+                            backgroundColor: isSelected ? '#0ea5e9' : 'transparent',
+                            borderLeft: isSelected ? '5px solid #38bdf8' : '5px solid transparent'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Plus size={14} color={isSelected ? '#ffffff' : '#0ea5e9'} />
+                            <span>
+                              {s.item_number ? `${s.item_number} - ` : ''}
+                              {user?.app_language === 'mr' ? (s.marathi_name || s.name) : s.name}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ color: isSelected ? '#ffffff' : '#10b981', fontWeight: 900 }}>₹{s.price}</span>
+                          </div>
                         </div>
-                        <span style={{ color: '#10b981' }}>₹{s.price}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {suggestions.length > 4 && (
                       <div style={{
                         position: 'sticky',
