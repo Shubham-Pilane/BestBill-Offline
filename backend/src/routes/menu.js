@@ -478,7 +478,7 @@ router.post('/items/bulk', auth, async (req, res) => {
     let updatedCount = 0;
 
     for (const item of items) {
-      if (!item.name || !item.price || !item.category) continue;
+      if (!item.name || item.price === undefined || item.price === null || item.price === '' || isNaN(Number(item.price)) || !item.category) continue;
       
       const catName = item.category.trim();
       const marathiCatName = item.marathi_category ? item.marathi_category.trim() : null;
