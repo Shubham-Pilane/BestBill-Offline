@@ -83,6 +83,32 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
   const [editingNoteItemId, setEditingNoteItemId] = useState(null);
   const [itemNoteInput, setItemNoteInput] = useState('');
   const [currentFilteredItems, setCurrentFilteredItems] = useState([]);
+  const receiptScrollRef = useRef(null);
+  const [canScrollReceiptDown, setCanScrollReceiptDown] = useState(false);
+
+  const checkReceiptScroll = () => {
+    if (receiptScrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = receiptScrollRef.current;
+      setCanScrollReceiptDown(scrollHeight - scrollTop - clientHeight > 30);
+    }
+  };
+
+  const scrollToReceiptBottom = () => {
+    if (receiptScrollRef.current) {
+      receiptScrollRef.current.scrollTo({ top: receiptScrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (showBill && billData) {
+      const t = setTimeout(checkReceiptScroll, 150);
+      window.addEventListener('resize', checkReceiptScroll);
+      return () => {
+        clearTimeout(t);
+        window.removeEventListener('resize', checkReceiptScroll);
+      };
+    }
+  }, [showBill, billData]);
 
   const handleSaveItemNote = async (itemId, notes) => {
     const trimmedNotes = String(notes || '').trim();
@@ -489,7 +515,14 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
       setShowBill(true);
       toast.success('Bill finalized!', {
         icon: '🧾',
-        style: { borderRadius: '16px', background: 'var(--bg-card)', color: 'var(--text-primary)', fontWeight: 900 }
+        style: { 
+          borderRadius: '16px', 
+          background: 'var(--bg-card)', 
+          color: 'var(--text-primary)', 
+          fontWeight: 900,
+          border: '1px solid var(--border-color, #e2e8f0)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)'
+        }
       });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Billing failed');
@@ -923,7 +956,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Plus size={14} color={isSelected ? '#ffffff' : '#0ea5e9'} />
-                            <span>
+                            <span style={{ textTransform: 'uppercase' }}>
                               {s.item_number ? `${s.item_number} - ` : ''}
                               {user?.app_language === 'mr' ? (s.marathi_name || s.name) : s.name}
                             </span>
@@ -1325,7 +1358,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                             </div>
                           ) : (
                             <>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', wordBreak: 'break-word' }}>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', wordBreak: 'break-word', textTransform: 'uppercase' }}>
                                 {item.item_number ? `${item.item_number} - ` : ''}{item.name}
                                 {item.notes && String(item.notes).trim() ? <span style={{ color: '#f59e0b', fontWeight: 700, marginLeft: '6px' }}>({String(item.notes).trim()})</span> : null}
                               </div>
@@ -1625,7 +1658,7 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                             </div>
                           ) : (
                             <>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '14px', wordBreak: 'break-word' }}>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '14px', wordBreak: 'break-word', textTransform: 'uppercase' }}>
                                 {item.item_number ? `${item.item_number} - ` : ''}{item.name}
                                 {item.notes && String(item.notes).trim() ? <span style={{ color: '#f59e0b', fontWeight: 700, marginLeft: '6px' }}>({String(item.notes).trim()})</span> : null}
                               </div>
@@ -1925,8 +1958,13 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
       {/* Bill & Settlement Modal */}
       {showBill && billData && (
         <div className="bill-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(10px)' }}>
-          <div className="bill-container" style={{ width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--bg-card)', borderRadius: '32px', overflow: 'hidden', display: 'flex', flexDirection: isMobile ? 'column' : 'row', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.8)', border: '1px solid var(--border-color)', position: 'relative' }}>
-             <div className="bill-preview-scroll" style={{ flex: 1, padding: '32px', borderRight: '1px solid var(--border-color)', backgroundColor: billData.is_paid ? '#10b981' : 'var(--bg-card)', transition: 'all 0.6s', overflowY: 'auto', position: 'relative' }}>
+          <div className="bill-container" style={{ width: '100%', maxWidth: '850px', height: '90vh', maxHeight: '90vh', minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '32px', overflow: 'hidden', display: 'flex', flexDirection: isMobile ? 'column' : 'row', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.8)', border: '1px solid var(--border-color)', position: 'relative' }}>
+             <div 
+               ref={receiptScrollRef}
+               onScroll={checkReceiptScroll}
+               className="bill-preview-scroll" 
+               style={{ flex: 1, height: '100%', minHeight: 0, padding: '28px 32px', borderRight: isMobile ? 'none' : '1px solid var(--border-color)', backgroundColor: billData.is_paid ? '#10b981' : 'var(--bg-card)', transition: 'all 0.6s', overflowY: 'auto', position: 'relative', WebkitOverflowScrolling: 'touch' }}
+             >
 
                 {isSuccess && (
                    <div style={{ position: 'absolute', inset: 0, backgroundColor: '#10b981', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s ease-out' }}>
@@ -2006,8 +2044,12 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                 </div>
 
                  {!billData.is_paid && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', margin: '20px 0 10px 0' }}>
-                      <ChevronsDown size={28} style={{ animation: 'bounce 1.5s infinite', opacity: 0.8 }} />
+                    <div 
+                      onClick={scrollToReceiptBottom}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', margin: '20px 0 10px 0', cursor: 'pointer', opacity: canScrollReceiptDown ? 0 : 0.85, transition: 'opacity 0.2s' }}
+                      title="Scroll down to Modify Invoice"
+                    >
+                      <ChevronsDown size={28} style={{ animation: 'bounce 1.5s infinite' }} />
                     </div>
                  )}
 
@@ -2019,6 +2061,38 @@ const MobileOrderModal = ({ table, onClose, initialMenu, allTables: passedTables
                   )}
                 </div>
               </div>
+
+              {/* Floating Bouncing Down Arrow when more items are below */}
+              {!billData.is_paid && canScrollReceiptDown && (
+                <button
+                  type="button"
+                  onClick={scrollToReceiptBottom}
+                  style={{
+                    position: 'absolute',
+                    bottom: isMobile ? '80px' : '16px',
+                    left: isMobile ? '50%' : 'calc((100% - 340px) / 2)',
+                    transform: 'translateX(-50%)',
+                    zIndex: 100,
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid rgba(56, 189, 248, 0.45)',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
+                    color: '#0ea5e9',
+                    backdropFilter: 'blur(6px)',
+                    outline: 'none'
+                  }}
+                  title="Scroll down to Modify Invoice"
+                >
+                  <ChevronsDown size={24} style={{ animation: 'bounce 1.2s infinite' }} />
+                </button>
+              )}
 
               {/* Settlement Right Side */}
               <div style={{ width: isMobile ? '100%' : '340px', padding: isMobile ? '20px' : '28px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto', borderTop: isMobile ? '1px solid var(--border-color)' : 'none' }}>

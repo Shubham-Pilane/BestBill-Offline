@@ -264,7 +264,7 @@ router.post('/items', auth, async (req, res) => {
   const hotelId = req.user.hotel_id;
   const menuNum = parseInt(menu_number) || 1;
   try {
-    const lowercaseName = name.trim().toLowerCase();
+    const uppercaseName = name ? name.trim().toUpperCase() : '';
 
     // Auto-assign item_number if not provided (MAX + 1)
     let assignedItemNumber = item_number !== undefined && item_number !== null && item_number !== '' ? parseInt(item_number, 10) : null;
@@ -279,7 +279,7 @@ router.post('/items', auth, async (req, res) => {
     // Create the hotel-specific menu item directly
     const newItem = await db.query(
       'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number, item_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-      [hotelId, category_id, lowercaseName, marathi_name || null, price, description, is_available ?? true, menuNum, assignedItemNumber]
+      [hotelId, category_id, uppercaseName, marathi_name || null, price, description, is_available ?? true, menuNum, assignedItemNumber]
     );
     res.status(201).json(newItem.rows[0]);
   } catch (err) {
@@ -346,12 +346,12 @@ router.put('/items/:id', auth, async (req, res) => {
   const { name, price, category_id, description, is_available, marathi_name, item_number } = req.body;
   const { id } = req.params;
   try {
-    const lowercaseName = name ? name.trim().toLowerCase() : '';
+    const uppercaseName = name ? name.trim().toUpperCase() : '';
     const parsedItemNumber = item_number !== undefined && item_number !== null && item_number !== '' ? parseInt(item_number, 10) : null;
     
     const updated = await db.query(
       'UPDATE menu_items SET name = $1, marathi_name = $2, price = $3, category_id = $4, description = $5, is_available = $6, item_number = COALESCE($7, item_number) WHERE id = $8 RETURNING *',
-      [lowercaseName, marathi_name || null, price, category_id, description, is_available, parsedItemNumber, id]
+      [uppercaseName, marathi_name || null, price, category_id, description, is_available, parsedItemNumber, id]
     );
     res.json(updated.rows[0]);
   } catch (err) {
@@ -510,7 +510,8 @@ router.post('/items/bulk', auth, async (req, res) => {
         categoriesMap.set(catKey, { id: categoryId, name: catName, marathi_name: marathiCatName, is_deleted: 0, menu_number: menuNum });
       }
 
-      const lowercaseName = item.name.trim().toLowerCase();
+      const uppercaseName = item.name.trim().toUpperCase();
+      const lowercaseName = uppercaseName.toLowerCase();
 
       if (existingItemsMap.has(lowercaseName)) {
         const existingItem = existingItemsMap.get(lowercaseName);
@@ -527,8 +528,8 @@ router.post('/items/bulk', auth, async (req, res) => {
 
         if (hasPriceChanged || hasCategoryChanged || hasMarathiNameChanged || wasDeleted || needsNumber) {
           await db.query(
-            'UPDATE menu_items SET category_id = $1, marathi_name = $2, price = $3, description = $4, is_deleted = 0, is_available = true, item_number = $5 WHERE id = $6',
-            [categoryId, newMarathiName, newPrice, item.description || existingItem.description || '', itemNumberToSet, existingItem.id]
+            'UPDATE menu_items SET name = $1, category_id = $2, marathi_name = $3, price = $4, description = $5, is_deleted = 0, is_available = true, item_number = $6 WHERE id = $7',
+            [uppercaseName, categoryId, newMarathiName, newPrice, item.description || existingItem.description || '', itemNumberToSet, existingItem.id]
           );
           if (needsNumber) existingItem.item_number = itemNumberToSet;
           updatedCount++;
@@ -539,7 +540,7 @@ router.post('/items/bulk', auth, async (req, res) => {
         const assignedNumber = nextItemNumber++;
         await db.query(
           'INSERT INTO menu_items (hotel_id, category_id, name, marathi_name, price, description, is_available, menu_number, item_number) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
-          [hotelId, categoryId, lowercaseName, newMarathiName, parseFloat(item.price), item.description || '', true, menuNum, assignedNumber]
+          [hotelId, categoryId, uppercaseName, newMarathiName, parseFloat(item.price), item.description || '', true, menuNum, assignedNumber]
         );
         createdCount++;
       }

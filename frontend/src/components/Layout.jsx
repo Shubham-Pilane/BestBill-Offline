@@ -152,7 +152,7 @@ const Layout = ({ children }) => {
         style: {
           borderRadius: '12px',
           background: 'var(--bg-card)',
-          color: '#fff',
+          color: 'var(--text-primary)',
           border: '1px solid #ef4444',
           fontWeight: '900',
           fontSize: '14px'
@@ -166,7 +166,7 @@ const Layout = ({ children }) => {
         style: {
           borderRadius: '12px',
           background: 'var(--bg-card)',
-          color: '#fff',
+          color: 'var(--text-primary)',
           border: '1px solid #ef4444',
           fontWeight: '900',
           fontSize: '14px'
@@ -180,7 +180,7 @@ const Layout = ({ children }) => {
         style: {
           borderRadius: '12px',
           background: 'var(--bg-card)',
-          color: '#fff',
+          color: 'var(--text-primary)',
           border: '1px solid #ef4444',
           fontWeight: '900',
           fontSize: '14px'

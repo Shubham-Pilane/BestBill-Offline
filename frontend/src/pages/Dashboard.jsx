@@ -681,7 +681,7 @@ const Dashboard = () => {
                 gap: '8px',
                 backgroundColor: '#0ea5e9',
                 color: 'white',
-                padding: '10px 20px',
+                padding: '10px 16px',
                 borderRadius: '12px',
                 fontWeight: 800,
                 fontSize: '13px',
@@ -690,11 +690,12 @@ const Dashboard = () => {
                 boxShadow: '0 4px 12px rgba(14, 165, 233, 0.15)',
                 transition: 'all 0.2s',
                 justifyContent: 'center',
-                width: '180px'
+                width: '180px',
+                whiteSpace: 'nowrap'
               }}
             >
-              <PlusCircle size={16} />
-              Create New...
+              <PlusCircle size={16} style={{ flexShrink: 0 }} />
+              Create Tables
               <ChevronDown 
                 size={14} 
                 style={{ 

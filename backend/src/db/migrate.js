@@ -622,6 +622,9 @@ const syncSchema = async () => {
                 // Clear item_number for deleted items so they do not hold numbers
                 db.sqliteDb.exec("UPDATE menu_items SET item_number = NULL WHERE is_deleted = 1 OR is_deleted IS TRUE");
 
+                // Ensure all menu item names are stored in capital letters (uppercase)
+                db.sqliteDb.exec("UPDATE menu_items SET name = UPPER(name) WHERE name IS NOT NULL");
+
                 // Backfill sequence for order_items if 0 or null
                 db.sqliteDb.exec("UPDATE order_items SET sequence = id WHERE sequence IS NULL OR sequence = 0");
             } catch (e) {

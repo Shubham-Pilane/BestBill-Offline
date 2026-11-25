@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, User, Calendar, Bed, MessageCircle } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, Utensils, Trash2, ChevronRight, ChevronsDown, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, User, Calendar, Bed, MessageCircle } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
@@ -33,6 +33,32 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
   const [editingPriceId, setEditingPriceId] = useState(null);
   const [editPriceValue, setEditPriceValue] = useState('');
   const [syncingItems, setSyncingItems] = useState(new Set());
+  const receiptScrollRef = useRef(null);
+  const [canScrollReceiptDown, setCanScrollReceiptDown] = useState(false);
+
+  const checkReceiptScroll = () => {
+    if (receiptScrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = receiptScrollRef.current;
+      setCanScrollReceiptDown(scrollHeight - scrollTop - clientHeight > 30);
+    }
+  };
+
+  const scrollToReceiptBottom = () => {
+    if (receiptScrollRef.current) {
+      receiptScrollRef.current.scrollTo({ top: receiptScrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (showBill && billData) {
+      const t = setTimeout(checkReceiptScroll, 150);
+      window.addEventListener('resize', checkReceiptScroll);
+      return () => {
+        clearTimeout(t);
+        window.removeEventListener('resize', checkReceiptScroll);
+      };
+    }
+  }, [showBill, billData]);
   const isOccupied = room.status === 'occupied';
   
   const calculateDaysBetween = (startStr, endStr) => {
@@ -263,7 +289,17 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
       });
       setBillData(res.data);
       setShowBill(true);
-      toast.success('Bill finalized!', { icon: '🧾' });
+      toast.success('Bill finalized!', { 
+        icon: '🧾',
+        style: { 
+          borderRadius: '16px', 
+          background: 'var(--bg-card)', 
+          color: 'var(--text-primary)', 
+          fontWeight: 900,
+          border: '1px solid var(--border-color, #e2e8f0)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)'
+        }
+      });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Billing failed');
     }
@@ -822,8 +858,13 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
 
       {showBill && billData && (
         <div className="bill-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-             <div style={{width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--bg-card)', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative' }}>
-                <div style={{ flex: 1, padding: '48px', borderRight: '1px solid var(--border-rgba-05)', backgroundColor: billData?.is_paid ? '#10b981' : '#0f172a', overflowY: 'auto', position: 'relative', transition: 'all 0.6s' }}>
+             <div style={{ width: '100%', maxWidth: '850px', height: '90vh', maxHeight: '90vh', minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '32px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative' }}>
+                <div 
+                  ref={receiptScrollRef}
+                  onScroll={checkReceiptScroll}
+                  className="bill-preview-scroll"
+                  style={{ flex: 1, height: '100%', minHeight: 0, padding: '28px 36px', borderRight: '1px solid var(--border-rgba-05)', backgroundColor: billData?.is_paid ? '#10b981' : '#0f172a', overflowY: 'auto', position: 'relative', transition: 'all 0.6s', WebkitOverflowScrolling: 'touch' }}
+                >
                  {isSuccess && (
                     <div style={{ position: 'absolute', inset: 0, backgroundColor: '#10b981', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s ease-out' }}>
                        <div style={{width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
@@ -911,10 +952,55 @@ const RoomOrderModal = ({ room, onClose, onRefresh, initialMenu }) => {
                  </div>
 
                  {!billData?.is_paid && (
-                   <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '32px', padding: '20px', borderRadius: '24px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
+                   <div 
+                     onClick={() => {
+                       const btn = document.querySelector('.btn-modify-invoice');
+                       if (btn) btn.scrollIntoView({ behavior: 'smooth' });
+                     }}
+                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', margin: '20px 0 10px 0', cursor: 'pointer', opacity: canScrollReceiptDown ? 0 : 0.85, transition: 'opacity 0.2s' }}
+                     title="Scroll down to Modify Invoice"
+                   >
+                     <ChevronsDown size={28} style={{ animation: 'bounce 1.5s infinite' }} />
+                   </div>
+                 )}
+
+                 {!billData?.is_paid && (
+                   <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', marginTop: '16px', padding: '16px', borderRadius: '18px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
                  )}
               </div>
-              <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+
+              {/* Floating Bouncing Down Arrow when more items are below */}
+              {!billData?.is_paid && canScrollReceiptDown && (
+                <button
+                  type="button"
+                  onClick={scrollToReceiptBottom}
+                  style={{
+                    position: 'absolute',
+                    bottom: '16px',
+                    left: 'calc((100% - 380px) / 2)',
+                    transform: 'translateX(-50%)',
+                    zIndex: 100,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    border: '1px solid rgba(56, 189, 248, 0.45)',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
+                    color: '#38bdf8',
+                    backdropFilter: 'blur(6px)',
+                    outline: 'none'
+                  }}
+                  title="Scroll down to Modify Invoice"
+                >
+                  <ChevronsDown size={24} style={{ animation: 'bounce 1.2s infinite' }} />
+                </button>
+              )}
+              <div style={{ width: '380px', height: '100%', minHeight: 0, padding: '32px', backgroundColor: 'var(--bg-base)', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                  <div style={{ textAlign: 'center', backgroundColor: 'var(--bg-card)', padding: '24px', borderRadius: '32px', border: '1px solid var(--bg-border)' }}>
                     <div style={{ backgroundColor: 'white', padding: '16px', borderRadius: '20px', display: 'inline-block', marginBottom: '16px' }}>
                       <QRCodeCanvas id="upi-qr-canvas" value={upiLink} size={180} />

@@ -177,7 +177,18 @@ function App() {
 
               <Route path="/guest/order/:hotelId" element={<GuestPortal />} />
             </Routes>
-            <Toaster position="top-right" />
+            <Toaster 
+              position="top-right" 
+              toastOptions={{
+                style: {
+                  background: 'var(--bg-card)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color, #e2e8f0)',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                  fontWeight: 700
+                }
+              }}
+            />
           </Router>
         </AuthProvider>
       </ThemeProvider>

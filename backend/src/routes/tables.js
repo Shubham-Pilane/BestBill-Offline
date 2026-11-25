@@ -362,7 +362,7 @@ router.post('/:tableId/order', auth, async (req, res) => {
 // Add Manual / "Other" Item to order
 router.post('/:tableId/order/manual-item', auth, async (req, res) => {
   const { tableId } = req.params;
-  const { name = 'Other', price = 0 } = req.body || {};
+  const { name = 'OTHER', price = 0 } = req.body || {};
   try {
     let orderRes = await db.query(`SELECT id FROM orders WHERE table_id = $1 AND status = 'active'`, [tableId]);
     let orderId;
@@ -381,7 +381,7 @@ router.post('/:tableId/order/manual-item', auth, async (req, res) => {
 
     await db.query(
       `INSERT INTO order_items (order_id, menu_item_id, quantity, max_quantity, is_manual, custom_name, custom_price, sequence, notes) VALUES ($1, NULL, 1, 1, true, $2, $3, $4, '')`,
-      [orderId, (name || 'Other').trim(), parseFloat(price) || 0, nextSeq]
+      [orderId, (name || 'OTHER').trim().toUpperCase(), parseFloat(price) || 0, nextSeq]
     );
 
     const query2 = `
@@ -415,7 +415,7 @@ router.put('/:tableId/order/items/:itemId/custom', auth, async (req, res) => {
     let idx = 1;
     if (name !== undefined) {
       updates.push(`custom_name = $${idx++}`);
-      params.push((name || 'Other').trim());
+      params.push((name || 'OTHER').trim().toUpperCase());
     }
     if (price !== undefined) {
       updates.push(`custom_price = $${idx++}`);

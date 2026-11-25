@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
-import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2, Pin, FileText } from 'lucide-react';
+import { X, Plus, Minus, Receipt, Send, MessageSquare, MessageCircle, Utensils, Trash2, ChevronRight, ChevronsDown, IndianRupee, Clock, CheckCircle, Phone, ArrowLeft, RefreshCcw, Wallet, Printer, Search, Edit2, Pin, FileText } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -71,6 +71,37 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
   const [vendors, setVendors] = useState([]);
   const [cancelOrdersEnabled, setCancelOrdersEnabled] = useState(false);
   const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const receiptScrollRef = useRef(null);
+  const [canScrollReceiptDown, setCanScrollReceiptDown] = useState(false);
+
+  const checkReceiptScroll = () => {
+    if (receiptScrollRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = receiptScrollRef.current;
+      const canScroll = scrollHeight > clientHeight && (scrollHeight - scrollTop - clientHeight > 15);
+      setCanScrollReceiptDown(canScroll);
+    }
+  };
+
+  const scrollToReceiptBottom = () => {
+    if (receiptScrollRef.current) {
+      receiptScrollRef.current.scrollTo({ top: receiptScrollRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    if (showBill && billData) {
+      const t1 = setTimeout(checkReceiptScroll, 50);
+      const t2 = setTimeout(checkReceiptScroll, 200);
+      const t3 = setTimeout(checkReceiptScroll, 500);
+      window.addEventListener('resize', checkReceiptScroll);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        window.removeEventListener('resize', checkReceiptScroll);
+      };
+    }
+  }, [showBill, billData]);
   const [settleWithoutPrintEnabled, setSettleWithoutPrintEnabled] = useState(() => {
     return typeof window !== 'undefined' && localStorage.getItem('cfg_settle_without_print') === 'true';
   });
@@ -279,9 +310,9 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
   const addManualItem = async () => {
     try {
-      const res = await api.post(`/tables/${table.id}/order/manual-item`, { name: 'Other', price: 0 });
+      const res = await api.post(`/tables/${table.id}/order/manual-item`, { name: 'OTHER', price: 0 });
       setOrderItems(res.data.items);
-      toast.success('Added Manual Item ("Other")', { icon: '✨' });
+      toast.success('Added Manual Item ("OTHER")', { icon: '✨' });
     } catch (err) {
       toast.error('Failed to add manual item');
     }
@@ -529,7 +560,14 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
       setShowBill(true);
       toast.success('Bill finalized!', {
         icon: '🧾',
-        style: { borderRadius: '16px', background: 'var(--bg-card)', color: '#fff', fontWeight: 900 }
+        style: { 
+          borderRadius: '16px', 
+          background: 'var(--bg-card)', 
+          color: 'var(--text-primary)', 
+          fontWeight: 900,
+          border: '1px solid var(--border-color, #e2e8f0)',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)'
+        }
       });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Billing failed');
@@ -916,7 +954,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <Plus size={15} color={isSelected ? '#ffffff' : '#0ea5e9'} />
-                            <span style={{ fontSize: '14px' }}>
+                            <span style={{ fontSize: '14px', textTransform: 'uppercase' }}>
                               {s.item_number ? <span style={{ opacity: 0.9, marginRight: '4px' }}>{s.item_number} -</span> : ''}
                               {user?.app_language === 'mr' ? (s.marathi_name || s.name) : s.name}
                             </span>
@@ -1124,7 +1162,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                               }}
                               onBlur={(e) => handleUpdateCustomItem(item.id, e.target.value, item.price)}
                               placeholder="Item Name (e.g. Chips)"
-                              style={{ width: '100%', backgroundColor: 'var(--bg-base)', border: '1px solid #0ea5e9', color: 'var(--text-primary)', borderRadius: '6px', padding: '3px 6px', fontSize: '13px', fontWeight: 800, outline: 'none' }}
+                              style={{ width: '100%', backgroundColor: 'var(--bg-base)', border: '1px solid #0ea5e9', color: 'var(--text-primary)', borderRadius: '6px', padding: '3px 6px', fontSize: '13px', fontWeight: 800, outline: 'none', textTransform: 'uppercase' }}
                             />
                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span style={{ color: '#10b981', fontSize: '12px', fontWeight: 800 }}>₹</span>
@@ -1146,7 +1184,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                           </div>
                         ) : (
                           <>
-                            <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{color: 'var(--text-primary)', fontWeight: 800, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
                               {item.item_number ? `${item.item_number} - ` : ''}{user?.app_language === 'mr' ? (item.marathi_name || item.name) : item.name}
                               {item.notes && String(item.notes).trim() ? <span style={{ color: '#f59e0b', fontWeight: 700, marginLeft: '6px' }}>({String(item.notes).trim()})</span> : null}
                             </div>
@@ -1448,8 +1486,13 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
 
       {showBill && billData && (
         <div className="bill-modal-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', backdropFilter: 'blur(10px)' }}>
-          <div className="bill-container" style={{width: '100%', maxWidth: '850px', maxHeight: '90vh', backgroundColor: 'var(--bg-card)', borderRadius: '40px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative' }}>
-             <div style={{ flex: 1, padding: '48px', borderRight: '1px solid var(--border-rgba-05)', backgroundColor: billData.is_paid ? '#10b981' : '#0f172a', transition: 'all 0.6s', overflowY: 'auto', position: 'relative' }}>
+          <div className="bill-container" style={{ width: '100%', maxWidth: '850px', height: '90vh', maxHeight: '90vh', minHeight: 0, backgroundColor: 'var(--bg-card)', borderRadius: '32px', overflow: 'hidden', display: 'flex', boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)', border: '1px solid var(--border-rgba-05)', position: 'relative' }}>
+             <div 
+               ref={receiptScrollRef}
+               onScroll={checkReceiptScroll}
+               className="bill-preview-scroll"
+               style={{ flex: 1, height: '100%', minHeight: 0, padding: '28px 36px', borderRight: '1px solid var(--border-rgba-05)', backgroundColor: billData.is_paid ? '#10b981' : '#0f172a', transition: 'all 0.6s', overflowY: 'auto', position: 'relative', WebkitOverflowScrolling: 'touch' }}
+             >
                 {isSuccess && (
                    <div style={{ position: 'absolute', inset: 0, backgroundColor: '#10b981', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s ease-out' }}>
                       <div style={{width: '120px', height: '120px', borderRadius: '50%', backgroundColor: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981', marginBottom: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
@@ -1486,7 +1529,7 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                    {billData.items.map((i, idx) => (
                       <div key={idx} style={{ marginBottom: '8px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 60px 100px', fontSize: '15px', fontWeight: 800, color: 'white' }}>
-                          <span>
+                          <span style={{ textTransform: 'uppercase' }}>
                             {user?.app_language === 'mr' ? (allItems.find(item => item.name === i.name)?.marathi_name || i.name) : i.name}
                             {i.notes && String(i.notes).trim() ? <span style={{ color: '#fbbf24', fontStyle: 'italic', marginLeft: '6px' }}>({String(i.notes).trim()})</span> : null}
                           </span>
@@ -1526,15 +1569,60 @@ const OrderModal = ({ table, onClose, initialMenu, allTables: passedTables, floo
                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '42px', fontWeight: 1000, color: '#10b981', borderTop: '4px double var(--border-rgba-05)', marginTop: '12px', paddingTop: '12px' }}><span>TOTAL</span><span>₹{parseFloat(billData.final_amount || 0).toFixed(2)}</span></div>
                 </div>
 
-                <div style={{ marginTop: '48px' }}>
+                {!billData.is_paid && (
+                  <div 
+                    onClick={() => {
+                      const btn = document.querySelector('.btn-modify-invoice');
+                      if (btn) btn.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', margin: '20px 0 10px 0', cursor: 'pointer', opacity: canScrollReceiptDown ? 0 : 0.85, transition: 'opacity 0.2s' }}
+                    title="Scroll down to Modify Invoice"
+                  >
+                    <ChevronsDown size={28} style={{ animation: 'bounce 1.5s infinite' }} />
+                  </div>
+                )}
+
+                <div style={{ marginTop: '16px' }}>
                   {!billData.is_paid ? (
-                    <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', padding: '20px', borderRadius: '24px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
+                    <button onClick={rollbackBill} className="btn-modify-invoice" style={{ width: '100%', padding: '16px', borderRadius: '18px', border: '1px solid #475569', backgroundColor: '#334155', color: 'white', fontWeight: 900, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)', transition: 'background-color 0.2s' }}>MODIFY INVOICE</button>
                   ) : (
-                    <div style={{textAlign: 'center', padding: '24px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '24px', color: '#10b981', fontWeight: 950, fontSize: '20px' }}>SUCCESSFULLY SETTLED</div>
+                    <div style={{textAlign: 'center', padding: '18px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '18px', color: '#10b981', fontWeight: 950, fontSize: '18px' }}>SUCCESSFULLY SETTLED</div>
                   )}
                 </div>
               </div>
-              <div style={{ width: '380px', padding: '36px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
+
+              {/* Floating Bouncing Down Arrow when more items are below */}
+              {!billData.is_paid && canScrollReceiptDown && (
+                <button
+                  type="button"
+                  onClick={scrollToReceiptBottom}
+                  style={{
+                    position: 'absolute',
+                    bottom: '16px',
+                    left: 'calc((100% - 380px) / 2)',
+                    transform: 'translateX(-50%)',
+                    zIndex: 100,
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    border: '1px solid rgba(56, 189, 248, 0.45)',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 6px 18px rgba(0, 0, 0, 0.45)',
+                    color: '#38bdf8',
+                    backdropFilter: 'blur(6px)',
+                    outline: 'none'
+                  }}
+                  title="Scroll down to Modify Invoice"
+                >
+                  <ChevronsDown size={24} style={{ animation: 'bounce 1.2s infinite' }} />
+                </button>
+              )}
+              <div style={{ width: '380px', height: '100%', minHeight: 0, padding: '32px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                      {!billData.is_paid && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
