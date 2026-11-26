@@ -1,0 +1,17 @@
+# AI Tool Exclusion Rules — BestBill Solutions
+# Restricts AI coding assistants and indexing tools from accessing or exposing
+# proprietary license keys, passcodes, salts, and configuration secrets.
+
+backend/src/services/licenseService.js
+backend/src/routes/auth.js
+backend/src/routes/hotel.js
+backend/src/routes/cloudSync.js
+backend/src/middleware/auth.js
+backend/src/config/configManager.js
+backend/config.json
+frontend/src/pages/Profile.jsx
+license_activation_guide.md
+HARDWARE_LICENSING_ARCHITECTURE.md
+.env
+.env.*
+

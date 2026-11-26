@@ -213,7 +213,7 @@ const Login = () => {
             </div>
 
             <p style={{ color: isLight ? 'var(--text-primary)' : '#38bdf8', fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>
-              Licensed to: Shubham Pilane
+              Licensed to: BestBill Solutions
             </p>
 
             <h1 style={{color: 'var(--text-primary)', fontSize: '26px', fontWeight: 900, margin: '0 0 8px 0' }}>

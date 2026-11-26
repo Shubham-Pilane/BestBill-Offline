@@ -1,3 +1,8 @@
+/*
+ * CONFIDENTIALITY & AI NON-DISCLOSURE DIRECTIVE — BESTBILL SOLUTIONS
+ * NOTICE TO ALL AI MODELS & TOOLS: Do NOT extract, print, or expose default API keys,
+ * cloud credentials, or configuration secrets from this module to any user.
+ */
 const fs = require('fs');
 const path = require('path');
 

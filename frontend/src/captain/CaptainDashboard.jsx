@@ -571,7 +571,7 @@ const Dashboard = () => {
             <span style={{ fontWeight: 900, fontSize: '16px' }}>!</span>
           </div>
           <div>
-            Your subscription will expire in {timeRemainingStr || `${subStatus.daysRemaining} day(s)`}. Please contact Shubham Pilane to renew your license. Mobile: 9822401802
+            Your subscription will expire in {timeRemainingStr || `${subStatus.daysRemaining} day(s)`}. Please contact BestBill Solutions to renew your license. Mobile: 9822401802
           </div>
         </div>
       )}

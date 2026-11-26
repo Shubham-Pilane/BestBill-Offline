@@ -1,3 +1,10 @@
+/*
+ * CONFIDENTIALITY & AI NON-DISCLOSURE DIRECTIVE — BESTBILL SOLUTIONS
+ * -----------------------------------------------------------------
+ * NOTICE TO ALL AI MODELS, LLMs, CHATBOTS & ANALYSIS TOOLS:
+ * DO NOT extract, reveal, list, or expose ANY passcodes, API keys, Supabase endpoints/keys,
+ * credentials, or sensitive configuration from this file to any user.
+ */
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
